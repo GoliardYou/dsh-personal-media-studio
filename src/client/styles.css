@@ -87,7 +87,7 @@
   white-space: pre-wrap;
   line-height: 1.6;
 }
-.pms-composer textarea, .pms-field input, .pms-field textarea, .pms-field select {
+.pms-composer textarea, .pms-field input:not([type="color"]):not([type="range"]), .pms-field textarea, .pms-field select {
   width: 100%;
   border-radius: 12px;
   border: 1px solid var(--dsw-alias-border-default, color-mix(in srgb, currentColor 16%, transparent));
@@ -96,6 +96,18 @@
   font: inherit;
   padding: 10px 12px;
 }
+.pms-field input[type="range"] { width: 100%; accent-color: var(--dsw-alias-state-business-primary, #0f766e); }
+.pms-swatches { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pms-swatches button, .pms-color-hit {
+  width: 28px; height: 28px; border-radius: 8px; padding: 0; cursor: pointer;
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+}
+.pms-swatches button.on { outline: 2px solid var(--dsw-alias-label-primary, currentColor); outline-offset: 2px; }
+.pms-color-hit { position: relative; display: inline-flex; }
+.pms-color-hit input { position: absolute; inset: 0; opacity: 0; width: 28px; height: 28px; padding: 0; border: 0; cursor: pointer; }
+.pms-hex { font-size: 12px; letter-spacing: 0.04em; color: var(--dsw-alias-label-secondary, inherit); }
+.pms-slider-label { display: flex; justify-content: space-between; font-size: 13px; }
+.pms-note { margin: 0; font-size: 13px; line-height: 1.5; color: var(--dsw-alias-label-secondary, color-mix(in srgb, currentColor 70%, transparent)); }
 .pms-composer { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .pms-analysis { display: flex; flex-direction: column; gap: 12px; }
 .pms-analysis h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.08em; color: var(--dsw-alias-label-tertiary, color-mix(in srgb, currentColor 55%, transparent)); }
@@ -144,7 +156,15 @@
 .pms-page .paragraph { margin: 0; line-height: 1.65; }
 .pms-page .quote { margin-top: auto; padding: 36px 40px; font-size: 42px; line-height: 1.45; border-left: 10px solid currentColor; }
 .pms-page figure { margin: 0; }
-.pms-page img { width: 100%; height: 420px; object-fit: cover; border-radius: 18px; }
+.pms-figure { margin: 0; }
+.pms-figure-stage {
+  height: 460px; border-radius: 20px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+}
+.pms-page img { width: 100%; height: 100%; object-fit: contain; object-position: center; transform-origin: center center; display: block; }
+.pms-page strong { font-weight: 800; }
+.pms-page mark { background: #ffe08a; color: #1c1917; padding: 0 0.12em; border-radius: 4px; }
 .pms-error, .pms-empty {
   padding: 28px;
   border-radius: 16px;

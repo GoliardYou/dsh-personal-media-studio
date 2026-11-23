@@ -104,6 +104,21 @@ function statusLabel(status: string) {
   return map[status] ?? status
 }
 
+function maturityLabel(maturity: string) {
+  const map: Record<string, string> = { seed: '种子阶段', exploring: '构思中', forming: '逐渐成形', mature: '可生产' }
+  return map[maturity] ?? maturity
+}
+
+function roleLabel(role: string) {
+  const map: Record<string, string> = { cover: '封面', content: '内页', quote: '金句' }
+  return map[role] ?? role
+}
+
+function relationLabel(status: string) {
+  const map: Record<string, string> = { suggested: '待确认', accepted: '已采纳', rejected: '已拒绝', replaced: '已替换' }
+  return map[status] ?? status
+}
+
 export const inject = ['slots', 'layout']
 
 export function apply(ctx: ClientCtx) {
@@ -228,7 +243,7 @@ function Home({ cards, libraryCount, onOpen }: { cards: CardRow[], libraryCount:
             </div>
             <h2>{card.title}</h2>
             <p>{card.latestThesis || '还没有写过。点开就能直接说。'}</p>
-            <div className="pms-meta"><span>成熟度 {card.maturity}</span></div>
+            <div className="pms-meta"><span>{maturityLabel(card.maturity)}</span></div>
           </button>
         ))}
       </div>
@@ -339,7 +354,9 @@ function CardWorkspace({ cardId, onShelved, onDeleted, onProduce }: { cardId: st
             </div>
             <div>
               <h3>还缺什么</h3>
-              <ul>{analysis.gaps.map(item => <li key={item}>{item}</li>)}</ul>
+              {analysis.gaps.length > 0
+                ? <ul>{analysis.gaps.map(item => <li key={item}>{item}</li>)}</ul>
+                : <p className="pms-note">这段已经有具体例子，也碰到了相反的看法。</p>}
             </div>
             <div>
               <h3>视角与反视角</h3>
@@ -359,7 +376,7 @@ function CardWorkspace({ cardId, onShelved, onDeleted, onProduce }: { cardId: st
                 </div>
               ))}
             </div>
-            <p>成熟度建议：{analysis.maturity}。要不要进入生产，由你决定。</p>
+            <p>成熟度建议：{maturityLabel(analysis.maturity)}。要不要进入生产，由你决定。</p>
           </>
         )}
       </aside>
@@ -391,7 +408,7 @@ function Production({ cardId, onReview }: { cardId: string, onReview: () => void
         <section className="pms-col">
           {project.pages.map(page => (
             <article key={page.id} style={{ marginBottom: 16 }}>
-              <div className="pms-kicker">{page.kicker} · {page.role}</div>
+              <div className="pms-kicker">{page.kicker && page.kicker !== roleLabel(page.role) ? `${page.kicker} · ${roleLabel(page.role)}` : roleLabel(page.role)}</div>
               <h3>{page.title}</h3>
               {page.blocks.filter(block => block.type === 'paragraph').map(block => <p key={block.id}>{spanText(block.spans, block.text)}</p>)}
               {page.blocks.filter(block => block.type === 'quote').map(block => <blockquote key={block.id}>「{block.text}」</blockquote>)}
@@ -405,7 +422,7 @@ function Production({ cardId, onReview }: { cardId: string, onReview: () => void
             <div key={relation.id} className="pms-asset" data-testid="asset-relation">
               {/\.(png|jpe?g|webp|gif)$/i.test(relation.source_path) ? <img alt="" src={assetUrl(String(relation.asset_id))} /> : <div className="pms-ph" />}
               <div>
-                <strong>{relation.status}</strong>
+                <span className={relation.status === 'accepted' ? 'pms-badge' : 'pms-badge warn'}>{relationLabel(relation.status)}</span>
                 <small>{relation.source_path}</small>
                 <span>{relation.rationale}</span>
                 <div className="pms-row">
@@ -512,7 +529,7 @@ function Workbench({ cardId }: { cardId: string }) {
             onClick={() => setCurrent(index)}
           >
             <strong>{index + 1}. {item.title}</strong>
-            <div className="pms-meta">{item.role}</div>
+            <div className="pms-meta">{roleLabel(item.role)}</div>
           </button>
         ))}
         <button className="pms-btn" data-testid="add-page" onClick={() => commit([...pages, { id: crypto.randomUUID(), ordinal: pages.length, role: 'content', kicker: '补页', title: '新的一页', blocks: [{ id: crypto.randomUUID(), type: 'paragraph', spans: [{ text: '在这里写下这一页只说一件事。' }] }], style: {} }])}>加一页</button>
@@ -530,8 +547,10 @@ function Workbench({ cardId }: { cardId: string }) {
               onBlur={event => updatePage({ title: event.currentTarget.innerText })}
             >{page.title}</h2>
             {page.blocks.map(block => block.type === 'image' ? (
-              <figure key={block.id}>
-                <img alt={block.caption || ''} src={assetUrl(block.assetId || '')} style={{ objectPosition: `${block.crop?.x ?? 50}% ${block.crop?.y ?? 50}%`, transform: `scale(${block.crop?.scale ?? 1})` }} />
+              <figure key={block.id} className="pms-figure">
+                <div className="pms-figure-stage" style={{ background: theme.quote }}>
+                  <img alt={block.caption || ''} src={assetUrl(block.assetId || '')} style={imageFrame(block.crop)} />
+                </div>
               </figure>
             ) : (
               <EditableBlock key={block.id} block={block} quoteBg={theme.quote} accent={page.style.accent || theme.accent} bodySize={page.style.bodySize ?? 36} onCommit={next => updatePage({ blocks: page.blocks.map(item => item.id === block.id ? next : item) })} />
@@ -553,26 +572,27 @@ function Workbench({ cardId }: { cardId: string }) {
             <option value="opinion">个人观点风</option>
           </select>
         </div>
-        <div className="pms-field">
-          <label>背景</label>
-          <input type="color" value={page.style.background || theme.paper} onChange={event => updatePage({ style: { ...page.style, background: event.target.value } })} />
-        </div>
-        <div className="pms-field">
-          <label>强调色</label>
-          <input type="color" value={page.style.accent || theme.accent} onChange={event => updatePage({ style: { ...page.style, accent: event.target.value } })} />
-        </div>
+        <ColorField label="背景" value={page.style.background || theme.paper} presets={['#f6f1e7', '#fffaf3', '#0b1220', '#fff7f2', '#1c1917']} onChange={color => updatePage({ style: { ...page.style, background: color } })} />
+        <ColorField label="强调色" value={page.style.accent || theme.accent} presets={['#c4552a', '#3ee0c5', '#d4533a', '#1c1917', '#f6f1e7']} onChange={color => updatePage({ style: { ...page.style, accent: color } })} />
         <div className="pms-row">
           <button className="pms-btn" onClick={() => document.execCommand('bold')}>加黑</button>
           <button className="pms-btn" onClick={() => document.execCommand('hiliteColor', false, '#ffe08a')}>高亮</button>
         </div>
-        {page.blocks.filter(block => block.type === 'image').map(block => (
-          <div key={block.id} className="pms-field">
-            <label>图片裁切 {block.caption}</label>
-            <input type="range" min={0} max={100} value={block.crop?.x ?? 50} onChange={event => updatePage({ blocks: page.blocks.map(item => item.id === block.id ? { ...item, crop: { x: Number(event.target.value), y: item.crop?.y ?? 50, scale: item.crop?.scale ?? 1 } } : item) })} />
-            <input type="range" min={0} max={100} value={block.crop?.y ?? 50} onChange={event => updatePage({ blocks: page.blocks.map(item => item.id === block.id ? { ...item, crop: { x: item.crop?.x ?? 50, y: Number(event.target.value), scale: item.crop?.scale ?? 1 } } : item) })} />
-            <input type="range" min={100} max={180} value={Math.round((block.crop?.scale ?? 1) * 100)} onChange={event => updatePage({ blocks: page.blocks.map(item => item.id === block.id ? { ...item, crop: { x: item.crop?.x ?? 50, y: item.crop?.y ?? 50, scale: Number(event.target.value) / 100 } } : item) })} />
-          </div>
-        ))}
+        {page.blocks.filter(block => block.type === 'image').map(block => {
+          const crop = block.crop ?? { x: 50, y: 50, scale: 1 }
+          const setCrop = (next: { x: number, y: number, scale: number }) => updatePage({ blocks: page.blocks.map(item => item.id === block.id ? { ...item, crop: next } : item) })
+          return (
+            <div key={block.id} className="pms-field">
+              <span className="pms-slider-label"><span>横向偏移 X</span><span>{crop.x}</span></span>
+              <input aria-label="横向偏移 X" type="range" min={0} max={100} value={crop.x} onChange={event => setCrop({ ...crop, x: Number(event.target.value) })} />
+              <span className="pms-slider-label"><span>纵向偏移 Y</span><span>{crop.y}</span></span>
+              <input aria-label="纵向偏移 Y" type="range" min={0} max={100} value={crop.y} onChange={event => setCrop({ ...crop, y: Number(event.target.value) })} />
+              <span className="pms-slider-label"><span>缩放比例</span><span>{crop.scale.toFixed(2)}</span></span>
+              <input aria-label="缩放比例" type="range" min={100} max={200} value={Math.round(crop.scale * 100)} onChange={event => setCrop({ ...crop, scale: Number(event.target.value) / 100 })} />
+              <button className="pms-btn" type="button" onClick={() => setCrop({ x: 50, y: 50, scale: 1 })}>重置裁切</button>
+            </div>
+          )
+        })}
         <div className="pms-field">
           <label>让模型改这一页，采用前先看建议</label>
           <textarea rows={3} value={instruction} onChange={event => setInstruction(event.target.value)} />
@@ -605,6 +625,33 @@ function VersionList({ draftId, token, onRestore }: { draftId: string, token: st
       {rows.slice(0, 5).map(row => <button key={row.id} className="pms-btn" onClick={() => void rpc('restoreVersion', { versionId: row.id }).then(onRestore)}>{row.label}</button>)}
     </div>
   )
+}
+
+function imageFrame(crop?: { x: number, y: number, scale: number }) {
+  const frame = crop ?? { x: 50, y: 50, scale: 1 }
+  return { transform: `translate(${((frame.x - 50) * 0.7).toFixed(2)}%, ${((frame.y - 50) * 0.7).toFixed(2)}%) scale(${frame.scale})` }
+}
+
+function ColorField({ label, value, presets, onChange }: { label: string, value: string, presets: string[], onChange: (color: string) => void }) {
+  return (
+    <div className="pms-field">
+      <label>{label}</label>
+      <div className="pms-swatches">
+        {presets.map(color => (
+          <button key={color} type="button" className={color.toLowerCase() === value.toLowerCase() ? 'on' : ''} style={{ background: color }} aria-label={`${label} ${color}`} onClick={() => onChange(color)} />
+        ))}
+        <label className="pms-color-hit">
+          <input aria-label={`${label}自定义`} type="color" value={toHex(value)} onChange={event => onChange(event.target.value)} />
+          <span style={{ background: value }} />
+        </label>
+        <span className="pms-hex">{toHex(value)}</span>
+      </div>
+    </div>
+  )
+}
+
+function toHex(color: string) {
+  return /^#[0-9a-fA-F]{6}$/.test(color) ? color.toLowerCase() : color
 }
 
 function EditableBlock({ block, quoteBg, accent, bodySize, onCommit }: { block: Block, quoteBg: string, accent: string, bodySize: number, onCommit: (block: Block) => void }) {

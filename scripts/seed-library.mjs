@@ -43,48 +43,47 @@ async function poster(file, svg) {
 }
 
 await poster(join(root, 'images', '澄白Mini-产品主视觉.png'), `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500">
-  <rect width="1200" height="1500" fill="#f4efe6"/>
-  <rect x="330" y="360" width="540" height="760" rx="48" fill="#f7f7f5" stroke="#1c1917" stroke-width="8"/>
-  <rect x="430" y="470" width="340" height="80" rx="16" fill="#1c1917"/>
-  <circle cx="600" cy="760" r="120" fill="#c4552a"/>
-  <rect x="520" y="980" width="160" height="28" rx="8" fill="#d6d3d1"/>
-  <text x="80" y="180" font-size="72" font-family="${font}" fill="#1c1917">澄白 Mini</text>
-  <text x="80" y="250" font-size="32" font-family="${font}" fill="#6b6258">便携咖啡机 · 产品主视觉</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="720">
+  <rect width="1600" height="720" fill="#f4efe6"/>
+  <rect x="860" y="120" width="520" height="480" rx="36" fill="#fbfbfa" stroke="#1c1917" stroke-width="8"/>
+  <rect x="980" y="210" width="280" height="64" rx="14" fill="#1c1917"/>
+  <circle cx="1120" cy="390" r="92" fill="#c4552a"/>
+  <rect x="1040" y="520" width="160" height="22" rx="8" fill="#d6d3d1"/>
+  <text x="120" y="280" font-size="84" font-family="${font}" fill="#1c1917">澄白 Mini</text>
+  <text x="120" y="360" font-size="36" font-family="${font}" fill="#6b6258">便携咖啡机 · 暖白机身</text>
+  <text x="120" y="430" font-size="28" font-family="${font}" fill="#6b6258">产品主视觉，画面居中铺满</text>
 </svg>`)
 
 await poster(join(root, 'images', '澄白Mini-杯壁细节.png'), `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500">
-  <rect width="1200" height="1500" fill="#efe6da"/>
-  <ellipse cx="600" cy="980" rx="280" ry="40" fill="#ddd4c6"/>
-  <path d="M430 920c40-220 300-220 340 0" fill="none" stroke="#c4552a" stroke-width="18"/>
-  <rect x="470" y="860" width="260" height="180" rx="20" fill="#faf7f2" stroke="#1c1917" stroke-width="6"/>
-  <text x="80" y="180" font-size="64" font-family="${font}" fill="#1c1917">杯壁上的第一滴</text>
-  <text x="80" y="250" font-size="30" font-family="${font}" fill="#6b6258">细节图 · 出水与杯口</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="720">
+  <rect width="1600" height="720" fill="#efe6da"/>
+  <ellipse cx="1080" cy="520" rx="260" ry="28" fill="#ddd4c6"/>
+  <rect x="940" y="250" width="280" height="250" rx="24" fill="#faf7f2" stroke="#1c1917" stroke-width="6"/>
+  <path d="M980 250c40-90 220-90 200 0" fill="none" stroke="#c4552a" stroke-width="14"/>
+  <text x="120" y="300" font-size="72" font-family="${font}" fill="#1c1917">杯壁上的第一滴</text>
+  <text x="120" y="380" font-size="34" font-family="${font}" fill="#6b6258">细节图 · 出水与杯口</text>
 </svg>`)
 
 await poster(join(root, 'images', '差评原话-评论截图.png'), `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600">
-  <rect width="1200" height="1600" fill="#111111"/>
-  <rect x="180" y="80" width="840" height="1440" rx="48" fill="#fffaf6"/>
-  <text x="230" y="180" font-size="28" font-family="${font}" fill="#be123c">小红书 · 评论截图</text>
-  <text x="230" y="280" font-size="42" font-family="${font}" fill="#1c1917">看着好看，出水太慢</text>
-  <text x="230" y="360" font-size="32" font-family="${font}" fill="#44403c">赶时间根本没用。</text>
-  <rect x="230" y="460" width="700" height="160" rx="20" fill="#fff1f2"/>
-  <text x="260" y="530" font-size="30" font-family="${font}" fill="#9f1239">差评原话被保留在笔记里</text>
-  <text x="260" y="580" font-size="26" font-family="${font}" fill="#9f1239">来源：一次差评的原话.md</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="720">
+  <rect width="1600" height="720" fill="#f7f1ea"/>
+  <rect x="80" y="70" width="1440" height="580" rx="28" fill="#fffaf6" stroke="#eadfd4" stroke-width="2"/>
+  <text x="140" y="160" font-size="28" font-family="${font}" fill="#be123c">评论</text>
+  <text x="140" y="280" font-size="64" font-family="${font}" fill="#1c1917">看着好看，出水太慢</text>
+  <text x="140" y="370" font-size="48" font-family="${font}" fill="#44403c">赶时间根本没用。</text>
+  <text x="140" y="500" font-size="28" font-family="${font}" fill="#9f1239">差评原话被留在笔记里</text>
+  <text x="140" y="560" font-size="24" font-family="${font}" fill="#a8a29e">来源：一次差评的原话.md</text>
 </svg>`)
 
 await poster(join(root, 'images', '读者私信-慢是句子.png'), `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600">
-  <rect width="1200" height="1600" fill="#e7f0ea"/>
-  <text x="80" y="120" font-size="40" font-family="${font}" fill="#14532d">读者私信</text>
-  <rect x="80" y="200" width="760" height="180" rx="28" fill="#ffffff"/>
-  <text x="120" y="280" font-size="32" font-family="${font}" fill="#1c1917">我反而喜欢那 40 秒。</text>
-  <text x="120" y="340" font-size="28" font-family="${font}" fill="#44403c">像把自己的早晨按了暂停。</text>
-  <rect x="280" y="460" width="820" height="180" rx="28" fill="#166534"/>
-  <text x="320" y="540" font-size="32" font-family="${font}" fill="#f0fdf4">所以慢不是缺陷，</text>
-  <text x="320" y="590" font-size="32" font-family="${font}" fill="#f0fdf4">是这台机器的句子。</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="720">
+  <rect width="1600" height="720" fill="#e7f0ea"/>
+  <text x="100" y="120" font-size="32" font-family="${font}" fill="#14532d">读者私信</text>
+  <rect x="100" y="180" width="980" height="160" rx="28" fill="#ffffff"/>
+  <text x="140" y="250" font-size="40" font-family="${font}" fill="#1c1917">我反而喜欢那 40 秒。</text>
+  <text x="140" y="305" font-size="32" font-family="${font}" fill="#44403c">像把自己的早晨按了暂停。</text>
+  <rect x="360" y="390" width="1140" height="180" rx="28" fill="#166534"/>
+  <text x="410" y="470" font-size="40" font-family="${font}" fill="#f0fdf4">所以慢不是缺陷，是这台机器的句子。</text>
 </svg>`)
 
 console.log(root)

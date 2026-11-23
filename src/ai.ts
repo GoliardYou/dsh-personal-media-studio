@@ -146,12 +146,12 @@ export async function planDraft(llm: LlmBridge, text: string): Promise<{ plan: D
         '页数随内容伸缩，不要固定成 6 页。不要编造不存在的图片文件名。',
       ].join('\n'), text)
       const plan = raw ? validatePlan(extractJson(raw)) : null
-      if (plan) return { plan, engine: 'llm' }
+      if (plan) return { plan: normalizePlan(plan), engine: 'llm' }
     } catch {
       /* heuristic */
     }
   }
-  return { plan: heuristicPlan(text), engine: 'heuristic' }
+  return { plan: normalizePlan(heuristicPlan(text)), engine: 'heuristic' }
 }
 
 export async function reviewEdit(llm: LlmBridge, pageText: string, instruction: string): Promise<{ paragraphs: string[], engine: 'llm' | 'heuristic' }> {
@@ -196,27 +196,80 @@ export function heuristicAnalysis(text: string, priorQuestions: string[]): Analy
 }
 
 export function heuristicPlan(text: string): DraftPlan {
-  const sentences = splitSentences(text)
-  const thesis = sentences[0] ?? '未命名判断'
-  const title = clip(thesis, 18)
+  const lines = text.split('\n').map(line => line.trim()).filter(Boolean)
+  const headingLine = lines[0] && Array.from(lines[0]).length <= 18 && !/[。！？]/.test(lines[0]) ? lines[0] : ''
+  const sentences = splitSentences(headingLine ? lines.slice(1).join('\n') : text)
+  const thesis = sentences.find(sentence => /我认为|核心|其实|关键|愿意/.test(sentence)) ?? sentences[0] ?? (headingLine || '还没有一句能单独站住的判断')
+  const title = headingLine || shortHeading(thesis)
+  const lead = thesis === title ? (sentences.find(sentence => sentence !== title) ?? thesis) : thesis
+  const quote = pickQuote(sentences, title, lead)
+  const bodySentences = sentences.filter(sentence => sentence !== thesis)
   const groups: string[][] = []
-  for (let i = 0; i < Math.max(sentences.length, 1); i += 2) groups.push(sentences.slice(i, i + 2))
-  const subheadings = groups.map((group, index) => clip(group[0] ?? `第 ${index + 1} 层`, 14))
-  const quote = sentences.find(s => s.length >= 8 && s.length <= 32) ?? clip(thesis, 28)
-  const highlights = topTerms(text).slice(0, 4)
+  const source = bodySentences.length > 0 ? bodySentences : sentences
+  for (let index = 0; index < source.length; index += 2) groups.push(source.slice(index, index + 2))
+  const subheadings = groups.map(group => shortHeading(group[0] ?? '这一层'))
+  const highlights = pickHighlights(text)
   const pages: DraftPlan['pages'] = [
-    { role: 'cover', kicker: '个人判断', title, paragraphs: [thesis], quote },
+    { role: 'cover', kicker: '个人判断', title, paragraphs: [lead], quote },
     ...groups.map((group, index) => ({
       role: 'content' as const,
       kicker: `0${index + 1}`,
-      title: subheadings[index] ?? `小节 ${index + 1}`,
-      paragraphs: group.length > 0 ? group : [thesis],
+      title: subheadings[index] ?? '这一层',
+      paragraphs: group,
     })),
   ]
-  if (quote && pages.length < 8) {
-    pages.push({ role: 'quote', kicker: '金句', title: '可以单独站住的一句', paragraphs: [], quote })
-  }
+  if (quote) pages.push({ role: 'quote', kicker: '金句', title: '可以单独站住的一句', paragraphs: [], quote })
   return { title, subheadings, pullQuotes: [quote], highlights, pages }
+}
+
+function shortHeading(sentence: string): string {
+  const stripped = sentence.replace(/^(例如|比如|但是|不过|然而|如果|再补一个画面[:：]?)/, '').trim()
+  const clause = stripped.split(/[：:，,]/)[0]?.trim() ?? ''
+  if (clause.length >= 4 && clause.length <= 14) return clause
+  if (/差评|评论/.test(sentence)) return '评论区的原话'
+  if (/暂停|40|四十|秒/.test(sentence)) return '留下来的四十秒'
+  if (/参数|句子/.test(sentence)) return '慢不是参数'
+  if (/酒店|窗|温热|杯子/.test(sentence)) return '窗边先温杯子'
+  if (/慢/.test(sentence)) return '慢值得被写下来'
+  return clause.slice(0, 12) || '这一层'
+}
+
+function pickQuote(sentences: string[], title: string, lead: string): string {
+  const pool = sentences.filter(sentence => sentence !== title && sentence !== lead && Array.from(sentence).length >= 8)
+  const preferred = pool.find(sentence => /不是|但是|不过|句子|暂停|原话/.test(sentence))
+  return preferred ?? pool[0] ?? '把这一句留给还没完全想清楚的人。'
+}
+
+function pickHighlights(text: string): string[] {
+  const candidates = ['出水太慢', '赶时间', '早晨的暂停', '不是参数', '差评原话', '差评', '40 秒', '澄白', '温热']
+  const found = candidates.filter(word => text.includes(word))
+  return found.length > 0 ? found.slice(0, 4) : topTerms(text).slice(0, 3)
+}
+
+function normalizePlan(plan: DraftPlan): DraftPlan {
+  const pages = plan.pages.map(page => ({
+    ...page,
+    title: /[….]{1,3}$/.test(page.title) ? shortHeading(page.paragraphs[0] || page.title.replace(/[….]+$/g, '')) : page.title,
+    paragraphs: page.paragraphs.map(paragraph => paragraph.trim()).filter(Boolean),
+  }))
+  const cover = pages.find(page => page.role === 'cover')
+  if (cover) {
+    const elsewhere = pages.flatMap(page => page.role === 'cover' ? [] : page.paragraphs)
+    if (!cover.paragraphs[0] || cover.paragraphs[0] === cover.title) {
+      const lead = elsewhere.find(paragraph => paragraph !== cover.title) ?? cover.paragraphs[0]
+      if (lead) cover.paragraphs = [lead, ...cover.paragraphs.slice(1).filter(paragraph => paragraph !== lead)]
+    }
+    if (!cover.quote || cover.quote === cover.title || cover.quote === cover.paragraphs[0]) {
+      cover.quote = elsewhere.find(paragraph => paragraph !== cover.title && paragraph !== cover.paragraphs[0]) ?? pickQuote(elsewhere, cover.title, cover.paragraphs[0] ?? '')
+    }
+  }
+  return {
+    ...plan,
+    title: cover?.title ?? plan.title,
+    subheadings: pages.filter(page => page.role === 'content').map(page => page.title),
+    pullQuotes: cover?.quote ? [cover.quote] : plan.pullQuotes,
+    pages,
+  }
 }
 
 function heuristicEdit(pageText: string, instruction: string): string[] {

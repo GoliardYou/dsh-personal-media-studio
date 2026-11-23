@@ -70,7 +70,16 @@ export function renderPageHtml(page: PageModel, template: TemplateId, assets: Re
     padding: 36px 40px; font-size: 42px; line-height: 1.45; border-left: 10px solid ${accent};
   }
   figure { margin: 8px 0 0; }
-  img { width: 100%; height: 420px; object-fit: cover; border-radius: 18px; display: block; background: ${theme.quoteBg}; }
+  .stage {
+    height: 460px; border-radius: 20px; overflow: hidden;
+    background: ${theme.quoteBg};
+    border: 1px solid ${accent}55;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stage img {
+    width: 100%; height: 100%; object-fit: contain; object-position: center;
+    transform-origin: center center; display: block; background: transparent;
+  }
   figcaption { color: ${theme.muted}; font-size: 24px; margin-top: 12px; }
   .rule { height: 1px; background: ${accent}; opacity: 0.45; }
 </style>
@@ -92,7 +101,9 @@ function renderBlock(block: Block, images: Map<string, RenderAsset>, bodySize: n
     if (!asset) return `<p class="paragraph">素材缺失</p>`
     const crop = block.crop ?? { x: 50, y: 50, scale: 1 }
     const src = dataUrl(asset.absPath)
-    return `<figure><img alt="${escapeHtml(asset.title)}" src="${src}" style="object-position:${crop.x}% ${crop.y}%; transform: scale(${crop.scale}); transform-origin: center;" /><figcaption>${escapeHtml(block.caption || asset.title)}</figcaption></figure>`
+    const shiftX = ((crop.x - 50) * 0.7).toFixed(2)
+    const shiftY = ((crop.y - 50) * 0.7).toFixed(2)
+    return `<figure><div class="stage"><img alt="${escapeHtml(asset.title)}" src="${src}" style="transform: translate(${shiftX}%, ${shiftY}%) scale(${crop.scale})" /></div><figcaption>${escapeHtml(block.caption || asset.title)}</figcaption></figure>`
   }
   if (block.type === 'quote') {
     return `<blockquote class="quote">${escapeHtml(block.text ?? spansToText(block.spans))}</blockquote>`
@@ -132,7 +143,8 @@ export function renderPageSvg(page: PageModel, template: TemplateId, assets: Ren
       const asset = assets.find(item => item.id === block.assetId)
       if (asset && y < 1400) {
         const href = dataUrl(asset.absPath)
-        lines.push(`<image href="${href}" x="88" y="${y}" width="1066" height="460" preserveAspectRatio="xMidYMid slice" />`)
+        lines.push(`<rect x="88" y="${y}" width="1066" height="460" rx="20" fill="${theme.quoteBg}" />`)
+        lines.push(`<image href="${href}" x="88" y="${y}" width="1066" height="460" preserveAspectRatio="xMidYMid meet" />`)
         y += 500
       }
       continue

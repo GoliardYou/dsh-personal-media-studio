@@ -147,6 +147,14 @@ describe('production and export', () => {
     const produced = await studio.startProduction(id, studio.issueIntent(id, 'produce'))
     expect(produced?.pages.length).toBeGreaterThanOrEqual(2)
     expect(produced?.pages.length).not.toBe(6)
+    const cover = produced!.pages.find(page => page.role === 'cover')!
+    const lead = cover.blocks.find(block => block.type === 'paragraph')?.spans?.map(span => span.text).join('')
+    const quote = cover.blocks.find(block => block.type === 'quote')?.text
+    expect(cover.title).not.toBe(lead)
+    expect(quote).not.toBe(cover.title)
+    expect(quote).not.toBe(lead)
+    expect(produced!.pages.every(page => !page.title.includes('…'))).toBe(true)
+    expect(JSON.stringify(produced!.pages)).toContain('"text":"出水太慢"')
     expect(produced?.relations.length).toBeGreaterThan(0)
     const relation = produced!.relations[0] as { id: string, source_path: string, asset_id: string }
     expect(relation.source_path.startsWith(library)).toBe(true)
