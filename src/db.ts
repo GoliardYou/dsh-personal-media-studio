@@ -1,0 +1,292 @@
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
+
+const MIGRATION = `
+PRAGMA journal_mode = WAL;
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version INTEGER PRIMARY KEY,
+  applied_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS assets (
+  id TEXT PRIMARY KEY,
+  root TEXT NOT NULL,
+  rel_path TEXT NOT NULL,
+  abs_path TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  mime TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  bytes INTEGER NOT NULL,
+  width INTEGER,
+  height INTEGER,
+  thumb_path TEXT,
+  title TEXT NOT NULL DEFAULT '',
+  text_content TEXT NOT NULL DEFAULT '',
+  mtime_ms INTEGER NOT NULL,
+  ocr_text TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  UNIQUE(root, rel_path)
+);
+CREATE INDEX IF NOT EXISTS idx_assets_sha ON assets(sha256);
+CREATE INDEX IF NOT EXISTS idx_assets_kind ON assets(kind);
+
+CREATE TABLE IF NOT EXISTS asset_chunks (
+  id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+  ordinal INTEGER NOT NULL,
+  heading TEXT NOT NULL DEFAULT '',
+  text TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS asset_tags (
+  asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+  tag TEXT NOT NULL,
+  PRIMARY KEY (asset_id, tag)
+);
+
+CREATE TABLE IF NOT EXISTS asset_embeddings (
+  id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+  chunk_id TEXT,
+  model TEXT NOT NULL,
+  dim INTEGER NOT NULL,
+  vector BLOB NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS topics (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS cards (
+  id TEXT PRIMARY KEY,
+  topic_id TEXT REFERENCES topics(id),
+  title TEXT NOT NULL,
+  status TEXT NOT NULL,
+  maturity TEXT NOT NULL DEFAULT 'seed',
+  input_version INTEGER NOT NULL DEFAULT 0,
+  source TEXT NOT NULL,
+  deleted_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS interactions (
+  id TEXT PRIMARY KEY,
+  card_id TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  body TEXT NOT NULL,
+  attachments_json TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ai_analyses (
+  id TEXT PRIMARY KEY,
+  card_id TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  input_version INTEGER NOT NULL,
+  engine TEXT NOT NULL,
+  thesis TEXT NOT NULL DEFAULT '',
+  stories_json TEXT NOT NULL DEFAULT '[]',
+  gaps_json TEXT NOT NULL DEFAULT '[]',
+  perspectives_json TEXT NOT NULL DEFAULT '[]',
+  related_assets_json TEXT NOT NULL DEFAULT '[]',
+  maturity TEXT NOT NULL,
+  summary TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ai_suggestions (
+  id TEXT PRIMARY KEY,
+  card_id TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  analysis_id TEXT,
+  kind TEXT NOT NULL,
+  text TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS jobs (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  card_id TEXT,
+  input_version INTEGER,
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 3,
+  run_after TEXT NOT NULL,
+  locked_at TEXT,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, run_after);
+
+CREATE TABLE IF NOT EXISTS projects (
+  id TEXT PRIMARY KEY,
+  card_id TEXT NOT NULL REFERENCES cards(id),
+  status TEXT NOT NULL,
+  template TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS drafts (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  body_md TEXT NOT NULL,
+  structure_json TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS draft_pages (
+  id TEXT PRIMARY KEY,
+  draft_id TEXT NOT NULL REFERENCES drafts(id) ON DELETE CASCADE,
+  ordinal INTEGER NOT NULL,
+  role TEXT NOT NULL,
+  title TEXT NOT NULL,
+  blocks_json TEXT NOT NULL,
+  style_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS asset_relations (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  draft_page_id TEXT,
+  asset_id TEXT NOT NULL REFERENCES assets(id),
+  status TEXT NOT NULL,
+  rationale TEXT NOT NULL DEFAULT '',
+  source_path TEXT NOT NULL,
+  crop_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS style_profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  template TEXT NOT NULL,
+  tokens_json TEXT NOT NULL,
+  builtin INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS versions (
+  id TEXT PRIMARY KEY,
+  draft_id TEXT NOT NULL REFERENCES drafts(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  snapshot_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS exports (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  version_id TEXT,
+  dir TEXT NOT NULL,
+  manifest_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS content_fts USING fts5(
+  entity_type UNINDEXED,
+  entity_id UNINDEXED,
+  body,
+  tokenize = 'trigram'
+);
+`
+
+export class StudioDb {
+  readonly db: DatabaseSync
+
+  constructor(filename: string) {
+    mkdirSync(dirname(filename), { recursive: true })
+    this.db = new DatabaseSync(filename)
+    this.db.exec(MIGRATION)
+    this.markMigration()
+    this.seedStyles()
+  }
+
+  private markMigration() {
+    const row = this.db.prepare('SELECT version FROM schema_migrations WHERE version = 1').get() as { version: number } | undefined
+    if (!row) {
+      this.db.prepare('INSERT INTO schema_migrations(version, applied_at) VALUES (1, ?)').run(new Date().toISOString())
+    }
+  }
+
+  private seedStyles() {
+    const count = this.db.prepare('SELECT COUNT(*) AS n FROM style_profiles').get() as { n: number }
+    if (count.n > 0) return
+    const insert = this.db.prepare('INSERT INTO style_profiles(id, name, template, tokens_json, builtin) VALUES (?, ?, ?, ?, 1)')
+    const styles = [
+      ['knowledge', '知识分享风', 'knowledge', { paper: '#f6f1e7', ink: '#1c1917', accent: '#c4552a' }],
+      ['tech', '科技专业风', 'tech', { paper: '#0b1220', ink: '#e8eef9', accent: '#3ee0c5' }],
+      ['opinion', '个人观点风', 'opinion', { paper: '#fff7f2', ink: '#3b2416', accent: '#d4533a' }],
+    ] as const
+    for (const [id, name, template, tokens] of styles) insert.run(id, name, template, JSON.stringify(tokens))
+  }
+
+  tx(fn: () => void) {
+    this.db.exec('BEGIN')
+    try {
+      fn()
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  indexText(entityType: string, entityId: string, body: string) {
+    this.db.prepare('DELETE FROM content_fts WHERE entity_id = ? AND entity_type = ?').run(entityId, entityType)
+    const text = body.replace(/\s+/g, ' ').trim()
+    if (!text) return
+    this.db.prepare('INSERT INTO content_fts(entity_type, entity_id, body) VALUES (?, ?, ?)').run(entityType, entityId, text)
+  }
+
+  searchText(query: string, limit = 20): Array<{ entity_type: string, entity_id: string, snippet: string }> {
+    const q = query.trim()
+    if (!q) return []
+    const chars = Array.from(q).length
+    if (chars < 3) {
+      return this.db.prepare(
+        `SELECT entity_type, entity_id, substr(body, 1, 80) AS snippet
+         FROM content_fts WHERE body LIKE ? LIMIT ?`,
+      ).all(`%${q.replace(/[%_]/g, '')}%`, limit) as Array<{ entity_type: string, entity_id: string, snippet: string }>
+    }
+    const phrase = `"${q.replace(/"/g, ' ')}"`
+    try {
+      return this.db.prepare(
+        `SELECT entity_type, entity_id, snippet(content_fts, 2, '', '', '…', 16) AS snippet
+         FROM content_fts WHERE content_fts MATCH ? LIMIT ?`,
+      ).all(phrase, limit) as Array<{ entity_type: string, entity_id: string, snippet: string }>
+    } catch {
+      return this.db.prepare(
+        `SELECT entity_type, entity_id, substr(body, 1, 80) AS snippet
+         FROM content_fts WHERE body LIKE ? LIMIT ?`,
+      ).all(`%${q}%`, limit) as Array<{ entity_type: string, entity_id: string, snippet: string }>
+    }
+  }
+
+  backup(dest: string) {
+    mkdirSync(dirname(dest), { recursive: true })
+    const bytes = this.db.serialize()
+    writeFileSync(dest, bytes)
+  }
+
+  close() {
+    this.db.close()
+  }
+}

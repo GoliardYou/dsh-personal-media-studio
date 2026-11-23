@@ -1,0 +1,233 @@
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { Context, Service } from '@deepseek-ai/cordis'
+import sharp from 'sharp'
+import { StudioDb } from '../src/db.ts'
+import { apply, Config } from '../src/index.ts'
+import { PAGE_H, PAGE_W } from '../src/render.ts'
+import { StudioRuntime } from '../src/runtime.ts'
+import type { StudioConfig } from '../src/config.ts'
+
+const dirs: string[] = []
+function temp() {
+  const dir = mkdtempSync(join(tmpdir(), 'pms-'))
+  dirs.push(dir)
+  return dir
+}
+afterEach(() => {
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
+
+function config(dir: string, library: string, engine: StudioConfig['render']['engine'] = 'sharp'): StudioConfig {
+  return {
+    dataDir: join(dir, 'data'),
+    libraryRoots: [library],
+    excludeGlobs: ['**/.git/**', '**/node_modules/**'],
+    exportDir: join(dir, 'exports'),
+    watch: false,
+    llm: { provider: '', model: '' },
+    privacy: { sendImagesToCloud: false },
+    ocr: { command: '' },
+    render: { engine },
+  }
+}
+
+function seed(library: string) {
+  execFileSync(process.execPath, ['scripts/seed-library.mjs', library], { cwd: process.cwd(), stdio: 'pipe' })
+}
+
+async function openStudio(dir: string, library: string, engine?: StudioConfig['render']['engine']) {
+  const ctx = { llm: { listProviders: () => [], stream: async function* () {} } } as unknown as Context
+  return StudioRuntime.open(ctx, config(dir, library, engine))
+}
+
+describe('database', () => {
+  it('migrates the 17 business tables and searches Chinese with FTS5', () => {
+    const db = new StudioDb(join(temp(), 'studio.sqlite'))
+    const names = (db.db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all() as Array<{ name: string }>).map(row => row.name)
+    for (const table of ['assets', 'asset_chunks', 'asset_tags', 'asset_embeddings', 'topics', 'cards', 'interactions', 'ai_analyses', 'ai_suggestions', 'jobs', 'projects', 'drafts', 'draft_pages', 'asset_relations', 'style_profiles', 'versions', 'exports']) {
+      expect(names).toContain(table)
+    }
+    expect((db.db.prepare(`SELECT COUNT(*) AS n FROM schema_migrations`).get() as { n: number }).n).toBe(1)
+    expect((db.db.prepare(`SELECT COUNT(*) AS n FROM style_profiles`).get() as { n: number }).n).toBe(3)
+    db.indexText('asset', 'a1', '个人媒体工作室的选题卡片与金句提取')
+    const hit = db.searchText('金句提')
+    expect(hit.some(row => row.entity_id === 'a1')).toBe(true)
+    const backup = join(temp(), 'backup.sqlite')
+    db.backup(backup)
+    expect(statSync(backup).size).toBeGreaterThan(1000)
+    db.close()
+  })
+})
+
+describe('library and cards', () => {
+  it('scans, dedups by sha256, and keeps thoughts append-only', async () => {
+    const dir = temp()
+    const library = join(dir, 'library')
+    seed(library)
+    const { copyFileSync } = await import('node:fs')
+    copyFileSync(join(library, 'notes', '澄白便携咖啡机-卖点.md'), join(library, 'notes', '卖点-副本.md'))
+    const studio = await openStudio(dir, library)
+    const count = studio.db.db.prepare(`SELECT COUNT(*) AS n FROM assets WHERE deleted_at IS NULL`).get() as { n: number }
+    expect(count.n).toBe(7)
+    const hashes = studio.db.db.prepare(`SELECT sha256, COUNT(*) AS n FROM assets WHERE deleted_at IS NULL GROUP BY sha256 HAVING n > 1`).all()
+    expect(hashes).toEqual([])
+    const cards = studio.listCards()
+    expect(cards.length).toBeGreaterThanOrEqual(5)
+    const created = studio.createCard('我的慢咖啡')
+    const id = created.card.id as string
+    studio.appendThought(id, '我认为慢是这台澄白咖啡机真正的句子。例如评论区有人说出水太慢。但是赶时间的人会把慢当成失败。')
+    studio.appendThought(id, '再补一句：酒店窗边的 40 秒。')
+    const detail = studio.getCard(id)
+    expect(detail.interactions).toHaveLength(2)
+    expect(detail.interactions[0].body).toContain('我认为慢')
+    expect(detail.interactions[1].body).toContain('40 秒')
+    await studio.drain()
+    const analyzed = studio.getCard(id)
+    expect((analyzed.analysis as { thesis?: string } | null)?.thesis).toBeTruthy()
+    expect(analyzed.suggestions.filter(item => item.kind === 'question').length).toBeGreaterThan(0)
+    const asked = analyzed.suggestions.map(item => item.text)
+    studio.appendThought(id, '补充一个相反的人：她把这 40 秒当成暂停。')
+    await studio.drain()
+    const again = studio.getCard(id)
+    const fresh = again.suggestions.filter(item => !asked.includes(item.text))
+    expect(again.suggestions.every(item => asked.includes(item.text) || fresh.includes(item))).toBe(true)
+    expect(new Set(again.suggestions.map(item => item.fingerprint)).size).toBe(again.suggestions.length)
+    studio.deleteCard(id)
+    const ids = () => studio.listCards().map(card => String((card as { id?: string }).id))
+    expect(ids()).not.toContain(id)
+    studio.restoreCard(id)
+    expect(ids()).toContain(id)
+    const found = studio.searchAssets('差评')
+    expect(found.some(hit => hit.sourcePath.endsWith('一次差评的原话.md'))).toBe(true)
+    await studio.dispose()
+  })
+})
+
+describe('jobs', () => {
+  it('skips stale input versions and recovers a running job', async () => {
+    const dir = temp()
+    const library = join(dir, 'library')
+    seed(library)
+    const studio = await openStudio(dir, library)
+    const id = studio.createCard('版本守卫').card.id as string
+    studio.appendThought(id, '第一句还很短。')
+    const queued = studio.db.db.prepare(`SELECT id, input_version FROM jobs WHERE card_id = ? AND status = 'queued'`).get(id) as { id: string, input_version: number }
+    studio.db.db.prepare(`UPDATE cards SET input_version = input_version + 1 WHERE id = ?`).run(id)
+    await studio.drain()
+    const skipped = studio.db.db.prepare(`SELECT status, error FROM jobs WHERE id = ?`).get(queued.id) as { status: string, error: string }
+    expect(skipped.status).toBe('skipped')
+    expect(skipped.error).toContain('stale')
+    studio.db.db.prepare(`UPDATE jobs SET status = 'running', locked_at = ? WHERE card_id = ?`).run(new Date().toISOString(), id)
+    await studio.dispose()
+    const reopened = await openStudio(dir, library)
+    const recovered = reopened.db.db.prepare(`SELECT status FROM jobs WHERE card_id = ? ORDER BY created_at DESC LIMIT 1`).get(id) as { status: string }
+    expect(recovered.status).not.toBe('running')
+    await reopened.dispose()
+  })
+})
+
+describe('production and export', () => {
+  it('refuses promotion without a user intent, then exports traced 1242x1660 pages', async () => {
+    const dir = temp()
+    const library = join(dir, 'library')
+    seed(library)
+    const studio = await openStudio(dir, library)
+    const id = studio.createCard('差评与慢').card.id as string
+    studio.appendThought(id, '我认为澄白咖啡机的慢值得被写成判断。例如评论区差评说出水太慢。但是把 40 秒留下来的人，会把它当成早晨的暂停。')
+    await studio.drain()
+    expect(() => studio.promote(id, 'forged-by-model')).toThrow(/明确确认/)
+    expect((studio.getCard(id).card.status)).not.toBe('ready_for_production')
+    const intent = studio.issueIntent(id, 'promote')
+    studio.promote(id, intent)
+    expect(studio.getCard(id).card.status).toBe('ready_for_production')
+    const produced = await studio.startProduction(id, studio.issueIntent(id, 'produce'))
+    expect(produced?.pages.length).toBeGreaterThanOrEqual(2)
+    expect(produced?.pages.length).not.toBe(6)
+    expect(produced?.relations.length).toBeGreaterThan(0)
+    const relation = produced!.relations[0] as { id: string, source_path: string, asset_id: string }
+    expect(relation.source_path.startsWith(library)).toBe(true)
+    studio.decideAsset(relation.id, 'accepted', undefined, { x: 30, y: 40, scale: 1.1 })
+    const saved = studio.decideAsset(relation.id, 'accepted')
+    expect(saved.relationId).toBe(relation.id)
+    const exported = await studio.exportProject(id)
+    const manifest = JSON.parse(readFileSync(join(exported.dir, 'manifest.json'), 'utf8')) as { knowledge: string, files: string[] }
+    expect(manifest.files.some(file => file.endsWith('.png'))).toBe(true)
+    const png = readFileSync(join(exported.dir, manifest.files.find((file: string) => file.endsWith('.png'))!))
+    const meta = await sharp(png).metadata()
+    expect(meta.width).toBe(PAGE_W)
+    expect(meta.height).toBe(PAGE_H)
+    expect(readFileSync(join(exported.dir, 'body.md'), 'utf8')).toContain('澄白')
+    expect(readFileSync(join(exported.dir, 'assets.json'), 'utf8')).toContain(relation.source_path)
+    expect(readFileSync(manifest.knowledge, 'utf8')).toContain('回写')
+    await studio.dispose()
+  })
+})
+
+describe('cordis plugin', () => {
+  it('loads tools and fetch routes, then drops them on dispose and restart', async () => {
+    class FakeTools extends Service {
+      defs = new Map<string, { name: string, execute: (args: Record<string, string>) => Promise<unknown> }>()
+      constructor(ctx: Context) { super(ctx, 'tools') }
+      register(definition: { name: string, execute: (args: Record<string, string>) => Promise<unknown> }) {
+        this.defs.set(definition.name, definition)
+        const name = definition.name
+        return this.ctx.effect(() => () => { this.defs.delete(name) })
+      }
+    }
+    class FakeLlm extends Service {
+      constructor(ctx: Context) { super(ctx, 'llm') }
+      listProviders() { return [] as Array<{ id: string, name: string }> }
+      async *stream() { yield { type: 'finish', reason: { kind: 'stop' } } }
+    }
+    class FakeConnection extends Service {
+      routes: unknown[] = []
+      constructor(ctx: Context) { super(ctx, 'connection') }
+      get fetch() {
+        const owner = this.ctx
+        return {
+          register: (route: unknown) => {
+            this.routes.push(route)
+            return owner.effect(() => () => {
+              const index = this.routes.indexOf(route)
+              if (index >= 0) this.routes.splice(index, 1)
+            })
+          },
+        }
+      }
+    }
+    const dir = temp()
+    const library = join(dir, 'library')
+    seed(library)
+    const ctx = new Context()
+    await ctx.plugin(FakeTools)
+    await ctx.plugin(FakeLlm)
+    await ctx.plugin(FakeConnection)
+    const fiber = await ctx.plugin({
+      name: 'personal-media-studio',
+      inject: ['tools', 'llm', 'connection'],
+      Config,
+      apply,
+    }, config(dir, library))
+    const toolService = ctx.tools as unknown as FakeTools
+    expect(toolService.defs.has('media_promote_card')).toBe(true)
+    expect(toolService.defs.has('media_list_cards')).toBe(true)
+    const connection = (ctx as unknown as { connection: FakeConnection }).connection
+    expect(connection.routes).toHaveLength(2)
+    const promote = toolService.defs.get('media_promote_card')!
+    const card = toolService.defs.get('media_create_card')!
+    const created = JSON.parse(String(await card.execute({ title: '工具创建' }))) as { card: { card: { id: string } } }
+    const cardId = created.card.card.id
+    const refused = JSON.parse(String(await promote.execute({ card_id: cardId, intent_id: 'nope' }))) as { ok: boolean, error?: { code: string } }
+    expect(refused.ok).toBe(false)
+    expect(refused.error?.code).toBe('user_intent_required')
+    await fiber.restart()
+    expect((ctx.tools as unknown as FakeTools).defs.has('media_shelve_card')).toBe(true)
+    await fiber.dispose()
+    expect((ctx.tools as unknown as FakeTools).defs.size).toBe(0)
+    expect((ctx as unknown as { connection: FakeConnection }).connection.routes).toHaveLength(0)
+  })
+})

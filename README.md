@@ -1,3 +1,79 @@
-# New repo
+# 个人媒体工作室
 
-This repo was created by a Cursor cloud agent.
+这是一个跑在 **DeepSeek Harness（DSH）** 里的原生插件，不是独立网页。打开 DSH Web 的侧栏「个人媒体工作室」，中央就是选题卡，而不是空白对话框。
+
+你选一张卡，把判断、故事和犹豫写进去；暂存后立刻换下一张。分析在后台进行：核心判断、案例、缺口、正反视角、追问，以及本地素材库里对得上的文件。原文只追加，不覆盖。只有你自己点「进入内容生产」之后，才会整理标题、小标题、金句、加黑，并匹配真实本地图片。最终审定是三栏所见即所得，导出 1242×1660 的 PNG、正文、结构和带来源的素材清单，再把成稿回写进素材库。
+
+## 环境
+
+- Node.js `>=24.9.0`（本仓库在 `v24.22.3` 上验证）
+- `@deepseek-ai/dsh@0.2.2-rc.5`（`engines.dsh`：`>=0.2.2-rc.5 <0.3.0`）
+- 导出优先用本机 Chrome / Chromium；没有浏览器时用 Sharp 把 SVG 栅格成同样尺寸的 PNG
+
+## 安装到 DSH
+
+```bash
+npm install
+npm run build
+dsh plugin --profile web add /你的路径/dsh-personal-media-studio
+```
+
+然后在个人配置里覆盖素材目录。Profile 的 `cordis.patch.yml` 会整行替换插件配置，所以要把需要的键写全：
+
+```yaml
+- id: personal-media-studio
+  name: dsh-personal-media-studio
+  config:
+    libraryRoots:
+      - ~/素材库
+    excludeGlobs:
+      - "**/.git/**"
+      - "**/node_modules/**"
+    llm:
+      provider: ""    # 留空则使用带标记的本地预览引擎
+      model: ""
+    privacy:
+      sendImagesToCloud: false
+    ocr:
+      command: ""     # 可选，例如 paddleocr 可执行文件；参数是图片路径，标准输出为文字
+    render:
+      engine: auto    # auto | playwright | sharp
+```
+
+```bash
+dsh web --no-open
+```
+
+侧栏图标打开全页工作台。未配置模型时，顶部徽标是「本地预览引擎」，整条流程仍然可以走完。配好 DSH 里已经注册的 `llm.provider` 与 `llm.model` 后，后台任务改走 `ctx.llm.stream`，四个角色（访谈、写作、素材、审定，加上选题）共用这一对 provider/model。
+
+数据在 `$DSH_HOME/personal-media-studio/studio.sqlite`（或 `dataDir`），不写进会话日志。
+
+## 开发
+
+```bash
+npm test          # vitest：迁移、中文 FTS、去重、卡片生命周期、任务版本守卫、导出、Cordis 热重载
+npm run typecheck
+npm run build
+```
+
+仓库里的 `examples/library` 是一套中文演示素材（产品图、评论截图、笔记）。生成命令：
+
+```bash
+node scripts/seed-library.mjs examples/library
+```
+
+接口核对记录在 `docs/research/verified-dsh-0.2.2-rc.5.md`。
+
+## 架构
+
+| 层 | 位置 | 作用 |
+| --- | --- | --- |
+| Host 插件 | `src/index.ts` | Cordis `apply`，注入 `tools`、`llm`、`connection` |
+| 服务 | `PersonalMediaStudioService` | Web 与 `media_*` 工具调用同一 `StudioRuntime` |
+| 存储 | `node:sqlite` | 17 张业务表、FTS5 trigram、本地向量 |
+| 素材 | Chokidar + Sharp | 只读扫描、SHA-256 去重、缩略图、可选 OCR 命令 |
+| 任务 | `jobs` 表 | 与界面解耦，重试，输入版本过期则跳过，启动时恢复 `running` |
+| 通道 | `connection.fetch` | `POST /api/personal-media-studio/rpc` |
+| 界面 | `src/client/app.tsx` | `main` 槽全页 + `sidebar.panellist` 图标 |
+
+推进生产和开始生产必须由界面签发一次性 intent。模型工具可以读卡、追加、搁置、搜索素材；自己编造的 intent 会被拒绝。

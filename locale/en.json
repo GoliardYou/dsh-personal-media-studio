@@ -1,0 +1,6 @@
+{
+  "name": "Personal Media Studio",
+  "panel": "Topics and cards",
+  "engine.heuristic": "Local preview engine",
+  "engine.llm": "Model connected"
+}

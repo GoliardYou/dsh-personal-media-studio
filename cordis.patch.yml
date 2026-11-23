@@ -1,0 +1,6 @@
+# Personal Media Studio bundle layer.
+# Inserts one Host row. The same package's dsh.client declaration
+# attaches the browser workbench to this row (ui-schedule pattern).
+- insert:
+    - id: personal-media-studio
+      name: dsh-personal-media-studio

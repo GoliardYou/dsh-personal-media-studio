@@ -1,0 +1,6 @@
+{
+  "name": "个人媒体工作室",
+  "panel": "选题与卡片",
+  "engine.heuristic": "本地预览引擎",
+  "engine.llm": "已连接模型"
+}
