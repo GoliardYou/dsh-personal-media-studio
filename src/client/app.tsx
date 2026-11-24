@@ -165,7 +165,7 @@ function assetUrl(id: string) {
  * 灵感：默认只留一行「一句话 + 原始素材」。
  * 展开后按原文排版，图片点开看大图；这里不做任何改写、摘要或截断。
  */
-function Inspiration({ data, variant = 'card' }: { data: CardInspiration, variant?: 'card' | 'sheet' }) {
+function Inspiration({ data }: { data: CardInspiration }) {
   const [open, setOpen] = useState(false)
   const [viewer, setViewer] = useState<InspirationImage | null>(null)
   // 只在展示层整理空白与断行；data 里的原文不做任何改写。
@@ -188,11 +188,11 @@ function Inspiration({ data, variant = 'card' }: { data: CardInspiration, varian
 
   return (
     <>
-      <section className={`pms-inspiration pms-inspiration--${variant}`} data-testid="inspiration">
+      <section className="pms-inspiration" data-testid="inspiration">
         <div className="pms-inspiration__line">
           <span className="pms-inspiration__label">灵感</span>
           <span className="pms-inspiration__lead" title={lead}>{lead}</span>
-          {variant === 'card' && Number(data.askCount) > 0 && <span className="pms-inspiration__meta">{data.askCount} 人问过</span>}
+          {Number(data.askCount) > 0 && <span className="pms-inspiration__meta">{data.askCount} 人问过</span>}
           <button type="button" className="pms-inspiration__toggle" aria-expanded={open} onClick={() => setOpen(value => !value)} data-testid="inspiration-toggle">{open ? '收起' : '原始素材'}</button>
         </div>
         {open && (
@@ -424,6 +424,11 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
       location.hash = `#pms/${stage}`
       return
     }
+    // 选题只有一个卡片入口：旧链接 #pms/topics/<id> 直接转到聚焦工作台。
+    if (stage === 'topics' && route.cardId) {
+      location.hash = `#pms/topics/focus/${route.cardId}`
+      return
+    }
     setCardId(route.cardId)
   }, [stage])
 
@@ -436,7 +441,13 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
         return
       }
       const route = readRoute(stage)
-      if (route.stage === stage) setCardId(route.cardId)
+      if (route.stage === stage) {
+        if (stage === 'topics' && route.cardId) {
+          location.hash = `#pms/topics/focus/${route.cardId}`
+          return
+        }
+        setCardId(route.cardId)
+      }
       setFocusStart(null)
     }
     window.addEventListener('hashchange', onHash)
@@ -486,7 +497,7 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
             </span>
           )}
           {cardId && <button className="pms-btn pms-btn--sm" onClick={() => { go(stage, null); void refresh() }}>{stage === 'topics' ? '返回选题' : '返回列表'}</button>}
-          {stage === 'topics' && !cardId && <NewCard onCreated={id => { void refresh(); go('topics', id) }} />}
+          {stage === 'topics' && !cardId && <NewCard onCreated={id => { void refresh().then(() => enterFocus(id)) }} />}
         </div>
       </header>
       )}
@@ -504,9 +515,8 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
             pool={boot.pool ?? { total: 0, topics: [] }}
             view={topicView}
             onView={setTopicView}
-            onOpen={id => go('topics', id)}
+            onOpen={id => enterFocus(id)}
             onChanged={() => { void refresh() }}
-            onFocus={id => { if (id) enterFocus(id) }}
           />
         )}
         {!loading && !error && stage === 'topics' && !cardId && focusStart && boot && (
@@ -527,24 +537,16 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
         {!loading && !error && stage === 'render' && !cardId && (
           <StageList testId="render-center" rowTestId="render-row" empty="还没有定稿。生产改稿里确认文字之后，稿件会送到这里渲染。" rows={boot?.stages?.render ?? []} onOpen={id => go('render', id)} />
         )}
-        {stage === 'topics' && cardId && (
-          <CardWorkspace
+        {stage === 'drafts' && cardId && (
+          <ArticleStudio
             cardId={cardId}
-            onFocus={id => enterFocus(id)}
-            onShelved={() => { go('topics', null); void refresh() }}
-            onDeleted={id => {
-              notify({
-                title: '卡片已删除',
-                undo: { label: '撤销', run: () => { void rpc('restoreCard', { cardId: id }).then(() => refresh()) } },
-              })
+            onBack={() => {
+              notify({ title: '已退回选题看板' })
               go('topics', null)
               void refresh()
             }}
-            onMature={() => { go('drafts', cardId); void refresh() }}
+            onRender={() => { go('render', cardId); void refresh() }}
           />
-        )}
-        {stage === 'drafts' && cardId && (
-          <ArticleStudio cardId={cardId} onBack={() => { go('topics', cardId); void refresh() }} onRender={() => { go('render', cardId); void refresh() }} />
         )}
         {stage === 'render' && cardId && (
           <XhsStage cardId={cardId} onReturn={() => { go('drafts', cardId); void refresh() }} />
@@ -828,7 +830,7 @@ function topicTabId(view: TopicView) {
   return `pms-topic-tab-${view}`
 }
 
-/** 选题页两个数据视图共用一组分段控件；「开始处理」是单独的推进动作，不占 tab。 */
+/** 选题页两个数据视图共用一组分段控件；点卡片或“放到看板上”都进入同一张工作台。 */
 function TopicTabs({ view, boardCount, poolCount, onBoard, onPool }: {
   view: TopicView,
   boardCount: number,
@@ -848,7 +850,7 @@ function TopicTabs({ view, boardCount, poolCount, onBoard, onPool }: {
   )
 }
 
-function Home({ cards, libraryCount, pool, view, onView, onOpen, onChanged, onFocus }: {
+function Home({ cards, libraryCount, pool, view, onView, onOpen, onChanged }: {
   cards: CardRow[],
   libraryCount: number,
   pool: { total: number, topics: PoolTopic[] },
@@ -856,7 +858,6 @@ function Home({ cards, libraryCount, pool, view, onView, onOpen, onChanged, onFo
   onView: (view: 'board' | 'pool') => void,
   onOpen: (id: string) => void,
   onChanged: () => void,
-  onFocus: (id?: string) => void,
 }) {
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState(pool.topics)
@@ -885,15 +886,6 @@ function Home({ cards, libraryCount, pool, view, onView, onOpen, onChanged, onFo
           本地素材 {libraryCount} 条 · {view === 'board' ? '还没写、但一直有人问的方向' : '同类问题并成一个方向'}
         </span>
         <span className="pms-spacer" />
-        {view === 'board' && (
-          <button
-            className="pms-btn pms-btn--sm pms-btn--primary"
-            type="button"
-            data-testid="start-focus"
-            disabled={cards.length === 0}
-            onClick={() => onFocus(cards[0]?.id)}
-          >开始处理</button>
-        )}
         {view === 'pool' && (
           <form
             className="pms-row"
@@ -971,240 +963,15 @@ function Home({ cards, libraryCount, pool, view, onView, onOpen, onChanged, onFo
   )
 }
 
-function CardWorkspace({ cardId, onFocus, onShelved, onDeleted, onMature }: { cardId: string, onFocus: (id: string) => void, onShelved: () => void, onDeleted: (id: string) => void, onMature: () => void }) {
-  const [detail, setDetail] = useState<CardDetail | null>(null)
-  const [body, setBody] = useState(() => readDraft(cardId))
-  const bodyRef = useRef(body)
-  const [error, setError] = useState('')
-  const [pollError, setPollError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [assets, setAssets] = useState<AssetHit[]>([])
-  const [linked, setLinked] = useState<string[]>([])
-  const [analysisOpen, setAnalysisOpen] = useState(false)
-  const [confirmMature, setConfirmMature] = useState(false)
-
-  function updateBody(next: string) {
-    bodyRef.current = next
-    setBody(next)
-  }
-
-  // 离开卡片时把未提交的输入留下；与聚焦视图共用同一个草稿 key。
-  useEffect(() => () => { writeDraft(cardId, bodyRef.current) }, [cardId])
-
-  useEffect(() => {
-    let alive = true
-    let timer = 0
-    let failures = 0
-    const load = async () => {
-      if (document.hidden) return
-      try {
-        const next = await rpc<CardDetail>('getCard', { cardId })
-        if (!alive) return
-        setDetail(next)
-        if (failures > 0) { setPollError(''); failures = 0 }
-      } catch (err) {
-        if (!alive) return
-        failures += 1
-        setPollError(failures === 1
-          ? (err instanceof Error ? err.message : String(err))
-          : `后台整理暂时读不到，正在重试（第 ${failures} 次）。`)
-      } finally {
-        if (alive) timer = window.setTimeout(() => { void load() }, failures === 0 ? 1200 : Math.min(1200 * 2 ** failures, 12000))
-      }
-    }
-    void load()
-    return () => { alive = false; window.clearTimeout(timer) }
-  }, [cardId])
-
-  async function save(shelve: boolean) {
-    if (busy) return
-    setBusy(true)
-    setError('')
-    try {
-      const hasInput = body.trim().length > 0 || linked.length > 0
-      if (shelve) {
-        // 原子推进：原话和状态一起落库，焦点页与卡页走同一条路径。
-        if (hasInput) {
-          await rpc('advanceCard', { cardId, body, attachmentAssetIds: linked, action: 'shelve', clientOpId: clientOpId(`${cardId}:shelve`) })
-        } else {
-          await rpc('shelve', { cardId })
-        }
-        writeDraft(cardId, '')
-        bodyRef.current = ''
-        setBody('')
-        onShelved()
-        return
-      }
-      if (hasInput) await rpc('appendThought', { cardId, body, attachmentAssetIds: linked })
-      writeDraft(cardId, '')
-      bodyRef.current = ''
-      setBody('')
-      setLinked([])
-      setDetail(await rpc<CardDetail>('getCard', { cardId }))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function mature() {
-    if (busy) return
-    setBusy(true)
-    setError('')
-    try {
-      const hasInput = body.trim().length > 0 || linked.length > 0
-      if (hasInput) {
-        // 与聚焦视图同一条原子路径：原话和成熟状态一起落库，失败重试不会重复追加。
-        await rpc('advanceCard', { cardId, body, attachmentAssetIds: linked, action: 'mature', clientOpId: clientOpId(`${cardId}:mature`) })
-      } else {
-        await rpc('markMature', { cardId })
-      }
-      writeDraft(cardId, '')
-      bodyRef.current = ''
-      setBody('')
-      onMature()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (!detail) return <div className="pms-empty">{error || '正在打开卡片…'}</div>
-  const analysis = detail.analysis
-  const pending = detail.job?.status === 'queued' || detail.job?.status === 'running'
-  return (
-    <div className="pms-view pms-view--padded" data-testid="card-workspace">
-      <div className={`pms-workarea ${analysisOpen ? 'pms-workarea--analysis' : 'pms-workarea--solo'}`}>
-        <section className="pms-workarea__main">
-          {/* 卡头固定：标题与状态在滚动时始终可见，避免长对话里失去定位 */}
-          <div className="pms-card-head">
-            <div>
-              <h2>{detail.card.title}</h2>
-              <div className="pms-row" style={{ marginTop: 'var(--pms-space-2)' }}>
-                <span className="pms-badge">{statusLabel(String(detail.card.status))}</span>
-                <span className="pms-badge">{detail.interactions.length} 条原话</span>
-              </div>
-            </div>
-            <div className="pms-card-head__actions">
-              <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" data-testid="enter-focus" onClick={() => onFocus(cardId)}>进入聚焦</button>
-              <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" data-testid="analysis-toggle" aria-expanded={analysisOpen} onClick={() => setAnalysisOpen(open => !open)}>
-                后台分析{pending && <span className="pms-pending-dot" aria-label="正在整理" />}
-              </button>
-              <button className="pms-btn pms-btn--sm pms-btn--danger" data-testid="delete-card" onClick={() => { void rpc('deleteCard', { cardId }).then(() => onDeleted(cardId)) }}>删除</button>
-            </div>
-          </div>
-
-          <div className="pms-scroll pms-scroll--flush">
-            <div className="pms-stack">
-              {detail.inspiration && <Inspiration key={detail.card.id} data={detail.inspiration} />}
-              <div className="pms-timeline" data-testid="expressions">
-                {detail.interactions.length === 0 && <div className="pms-empty">这里会按时间保留你写过的每一句，分析不会覆盖原文。</div>}
-                {detail.interactions.map(item => <article key={item.id} className="pms-thought" data-testid="thought">{item.body}</article>)}
-              </div>
-            </div>
-          </div>
-
-          {/* 输入区固定在视口底部：这是最高频动作，不该沉在长列表末尾 */}
-          <div className="pms-composer-bar">
-            <div className="pms-composer">
-              <textarea data-testid="thought-input" rows={3} value={body} placeholder="把判断、场景、犹豫都写在这里。保存是追加，不是覆盖。" onChange={event => updateBody(event.target.value)} />
-              {assets.length > 0 && (
-                <div className="pms-picker-list">
-                  {assets.map(asset => (
-                    <label key={asset.assetId} className="pms-asset">
-                      <input type="checkbox" checked={linked.includes(asset.assetId)} onChange={() => setLinked(list => list.includes(asset.assetId) ? list.filter(id => id !== asset.assetId) : [...list, asset.assetId])} />
-                      <span>{asset.title}<small>{asset.sourcePath}</small></span>
-                    </label>
-                  ))}
-                </div>
-              )}
-              {(error || pollError) && <div className="pms-error">{error || pollError}</div>}
-              <div className="pms-row">
-                <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={() => { void rpc<AssetHit[]>('searchAssets', { query: body || detail.card.title }).then(setAssets).catch(err => setError(err instanceof Error ? err.message : String(err))) }}>关联素材</button>
-                {linked.length > 0 && <span className="pms-meta">已关联 {linked.length} 条</span>}
-                <span className="pms-spacer" />
-                <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" disabled={busy || (body.trim().length === 0 && linked.length === 0)} onClick={() => void save(false)}>保存原话</button>
-                <button className="pms-btn pms-btn--sm pms-btn--outline-accent" data-testid="shelve" disabled={busy} onClick={() => void save(true)}>暂存，回看板</button>
-                <button className="pms-btn pms-btn--sm pms-btn--primary" data-testid="promote" disabled={busy || (!detail.interactions.length && !body.trim() && linked.length === 0)} title={detail.interactions.length || body.trim() || linked.length ? '把写下的内容一并收好，送去改稿' : '先写一句，或关联一条素材，再标为成熟'} onClick={() => setConfirmMature(true)}>标为成熟并送去改稿</button>
-              </div>
-            </div>
-          </div>
-        </section>
-        {analysisOpen && (
-        <aside className="pms-workarea__side pms-panel pms-analysis" data-testid="analysis-panel">
-          <div className="pms-drawer__head">
-            <h3>后台分析</h3>
-            <div className="pms-row">
-              {pending ? <span className="pms-badge pms-badge--warn" data-testid="analysis-pending">整理中</span> : null}
-              <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={() => setAnalysisOpen(false)}>收起</button>
-            </div>
-          </div>
-          {pending && <p>正在后台整理这张卡，你可以先去看别的。</p>}
-        {!analysis && <p>搁置或保存之后，这里会出现核心判断、缺口、相反视角和追问。</p>}
-        {analysis && (
-          <>
-            <span className={analysis.engine === 'llm' ? 'pms-badge' : 'pms-badge warn'}>{analysis.engine === 'llm' ? '模型分析' : '本地预览引擎'}</span>
-            <div>
-              <h3>核心判断</h3>
-              <p data-testid="analysis-thesis">{analysis.thesis}</p>
-            </div>
-            <div>
-              <h3>故事与案例</h3>
-              <ul>{analysis.stories.map(item => <li key={item}>{item}</li>)}</ul>
-            </div>
-            <div>
-              <h3>还缺什么</h3>
-              {analysis.gaps.length > 0
-                ? <ul>{analysis.gaps.map(item => <li key={item}>{item}</li>)}</ul>
-                : <p className="pms-note">这段已经有具体例子，也碰到了相反的看法。</p>}
-            </div>
-            <div>
-              <h3>视角与反视角</h3>
-              <ul>{analysis.perspectives.map(item => <li key={item.stance}><strong>{item.stance}</strong> — {item.counter}</li>)}</ul>
-            </div>
-            <div>
-              <h3>继续问</h3>
-              <ul data-testid="questions">{detail.suggestions.filter(item => item.kind === 'question').map(item => <li key={item.id}>{item.text}</li>)}</ul>
-            </div>
-            <div>
-              <h3>相关本地素材</h3>
-              {analysis.relatedAssets.length === 0 && <p>库里还没有和这段话对得上的文件。</p>}
-              {analysis.relatedAssets.map(asset => (
-                <div key={asset.assetId} className="pms-asset" data-testid="related-asset">
-                  {asset.kind === 'image' ? <img alt="" src={assetUrl(asset.assetId)} /> : <div className="pms-ph" />}
-                  <div><strong>{asset.title}</strong><small>{asset.sourcePath}</small><span>{asset.rationale}</span></div>
-                </div>
-              ))}
-            </div>
-            <p>成熟度建议：{maturityLabel(analysis.maturity)}。要不要进入生产，由你决定。</p>
-          </>
-        )}
-        </aside>
-        )}
-      </div>
-      {confirmMature && (
-        <FocusConfirm
-          title="标为成熟并送去改稿？"
-          description="写下的原话会一起收好，卡片进入生产改稿。之后仍可以在改稿页退回选题。"
-          confirmLabel="确认，送去改稿"
-          onCancel={() => setConfirmMature(false)}
-          onConfirm={() => { setConfirmMature(false); void mature() }}
-        />
-      )}
-    </div>
-  )
-}
-
 /**
- * 标为成熟的确认弹窗。打开时把其余界面设为 inert，焦点锁在弹窗内，
- * Esc 取消并把焦点还给触发按钮——避免「误点成熟 → 送去改稿」的不可逆感。
+ * 操作确认弹窗。打开时把其余界面设为 inert，焦点锁在弹窗内，
+ * Esc 取消并把焦点还给触发按钮——避免「误点成熟 / 删除」的不可逆感。
  */
-function FocusConfirm({ title, description, confirmLabel, onCancel, onConfirm }: {
+function FocusConfirm({ title, description, confirmLabel, tone = 'primary', onCancel, onConfirm }: {
   title: string,
   description: string,
   confirmLabel: string,
+  tone?: 'primary' | 'danger',
   onCancel: () => void,
   onConfirm: () => void,
 }) {
@@ -1255,16 +1022,17 @@ function FocusConfirm({ title, description, confirmLabel, onCancel, onConfirm }:
         <p id="pms-confirm-desc">{description}</p>
         <div className="pms-confirm__actions">
           <button ref={cancelRef} className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={onCancel}>取消</button>
-          <button className="pms-btn pms-btn--sm pms-btn--primary" type="button" onClick={onConfirm}>{confirmLabel}</button>
+          <button className={`pms-btn pms-btn--sm ${tone === 'danger' ? 'pms-btn--danger' : 'pms-btn--primary'}`} type="button" onClick={onConfirm}>{confirmLabel}</button>
         </div>
       </div>
     </div>
   )
 }
 
+
 /**
- * 聚焦模式：一次只呈现一张稿纸。
- * 推进只由「记下，换一张 / 标为成熟」触发；只保存、关联素材留在当前卡。
+ * 聚焦工作台：一张卡一屏，像和工作室对话一样轮流写。
+ * 推进只由「记下，换一张 / 标为成熟」触发；只保存留在当前卡。
  * 队列在进入时按看板顺序拍快照并旋转到起点，一轮内处理过的卡不再出现；走完自动进入下一轮。
  */
 function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, onNotice }: {
@@ -1282,14 +1050,14 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
   const [detail, setDetail] = useState<CardDetail | null>(null)
   const [body, setBody] = useState('')
   const bodyRef = useRef('')
-  const [linked, setLinked] = useState<string[]>([])
-  const [assets, setAssets] = useState<AssetHit[]>([])
   const [error, setError] = useState('')
   const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirmMature, setConfirmMature] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [analysisOpen, setAnalysisOpen] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const threadRef = useRef<HTMLDivElement>(null)
   const focusAfterAdvance = useRef(false)
   const opRef = useRef<{ key: string, id: string } | null>(null)
   const detailStamp = useRef(0)
@@ -1304,7 +1072,7 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
     return opRef.current.id
   }
 
-  /** 刷新页面、退出聚焦、回到普通卡片视图，未提交的输入都还在。 */
+  /** 刷新页面或退出聚焦时，未提交的输入按卡片留在本地草稿。 */
   useEffect(() => () => { if (currentId) writeDraft(currentId, bodyRef.current) }, [currentId])
 
   useEffect(() => {
@@ -1312,14 +1080,28 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
     const next = currentId ? readDraft(currentId) : ''
     bodyRef.current = next
     setBody(next)
-    setLinked([])
-    setAssets([])
     setError('')
+    setAnalysisOpen(false)
     if (focusAfterAdvance.current) {
       focusAfterAdvance.current = false
       window.requestAnimationFrame(() => inputRef.current?.focus())
     }
   }, [currentId])
+
+  // 输入框随内容长高，到 200px 后内部滚动；这是对话式输入框的标准手感。
+  useEffect(() => {
+    const node = inputRef.current
+    if (!node) return
+    node.style.height = 'auto'
+    node.style.height = `${Math.min(node.scrollHeight, 200)}px`
+  }, [body, currentId])
+
+  // 新内容进来后贴在对话底部；只在换卡或新增原话时滚动，轮询刷新不抢滚动位置。
+  useEffect(() => {
+    const node = threadRef.current
+    if (!node) return
+    window.requestAnimationFrame(() => { node.scrollTop = node.scrollHeight })
+  }, [currentId, detail?.interactions.length])
 
   useEffect(() => {
     if (!currentId) { setDetail(null); return }
@@ -1339,9 +1121,8 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
         failures += 1
         setLoadError(failures === 1
           ? (err instanceof Error ? err.message : String(err))
-          : `后台整理暂时读不到，正在重试（第 ${failures} 次）。`)
+          : `分析暂时读不到，正在重试（第 ${failures} 次）。`)
       } finally {
-        // 成功 1.2s 轮询，失败指数退避到 12s；页面隐藏时跳过请求但保留节奏。
         if (alive) timer = window.setTimeout(() => { void load() }, failures === 0 ? 1200 : Math.min(1200 * 2 ** failures, 12000))
       }
     }
@@ -1358,7 +1139,7 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
   async function act(kind: 'append' | 'shelve' | 'mature') {
     if (!currentId || busy) return
     const done = currentId
-    const hasInput = body.trim().length > 0 || linked.length > 0
+    const hasInput = body.trim().length > 0
     if (kind === 'append' && !hasInput) {
       setError('先写一句再保存。')
       inputRef.current?.focus()
@@ -1368,20 +1149,19 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
     setError('')
     try {
       if (kind === 'append') {
-        await rpc('appendThought', { cardId: done, body, attachmentAssetIds: linked })
+        await rpc('appendThought', { cardId: done, body, attachmentAssetIds: [] })
         writeDraft(done, '')
         bodyRef.current = ''
         setBody('')
-        setLinked([])
         await refreshDetail(done)
-        onNotice({ title: '原话已追加' })
+        onNotice({ title: '原话已保存' })
       } else {
         if (hasInput) {
           // 原子推进：追加和状态变更同一个事务，clientOpId 让重试保持幂等。
           await rpc('advanceCard', {
             cardId: done,
             body,
-            attachmentAssetIds: linked,
+            attachmentAssetIds: [],
             action: kind,
             clientOpId: opIdFor(`${done}:${kind}`),
           })
@@ -1391,8 +1171,6 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
         writeDraft(done, '')
         bodyRef.current = ''
         setBody('')
-        setLinked([])
-        setAssets([])
         opRef.current = null
 
         const live = new Set(await onChanged())
@@ -1430,19 +1208,41 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
     }
   }
 
+  async function removeCard() {
+    if (!currentId || busy) return
+    const done = currentId
+    const title = detail?.card.title ?? '这张卡'
+    setBusy(true)
+    setError('')
+    try {
+      await rpc('deleteCard', { cardId: done })
+      writeDraft(done, '')
+      onNotice({
+        title: `已删除「${title}」`,
+        undo: { label: '撤销', run: () => { void rpc('restoreCard', { cardId: done }).then(() => { void onChanged() }) } },
+      })
+      onExit()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      setBusy(false)
+    }
+  }
+
   const progress = queueProgress(state)
   const percent = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0
   const analysis = detail?.analysis
   const pending = detail?.job?.status === 'queued' || detail?.job?.status === 'running'
+  const questions = detail?.suggestions.filter(item => item.kind === 'question') ?? []
 
   return (
     <div
       className={`pms-focus ${analysisOpen ? 'pms-focus--analysis' : ''}`}
       data-testid="focus-mode"
       onKeyDown={event => {
-        if (confirmMature) return
+        if (confirmMature || confirmDelete) return
         if (event.key === 'Escape') {
           event.preventDefault()
+          if (analysisOpen) { setAnalysisOpen(false); return }
           onExit()
           return
         }
@@ -1457,155 +1257,201 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
           ? `第 ${progress.round} 轮，本轮已处理 ${progress.completed} 张，共 ${progress.total} 张。当前：${detail?.card.title ?? '正在打开'}。`
           : '本轮已过完。'}
       </div>
-      <div className="pms-focus__main" role="region" aria-label="聚焦处理">
-        <div className="pms-toolbar pms-toolbar--sub">
-          <span className="pms-toolbar__context">聚焦处理 · 一次一张。写完再决定记下，还是送去改稿。</span>
-          <button
-            className="pms-btn pms-btn--sm pms-btn--ghost pms-focus__analysis-toggle"
-            type="button"
-            data-testid="focus-analysis-toggle"
-            aria-expanded={analysisOpen}
-            onClick={() => setAnalysisOpen(open => !open)}
-          >后台整理{pending && <span className="pms-pending-dot" aria-label="正在整理" />}</button>
-          <div
-            className="pms-focus__progress"
-            role="progressbar"
-            aria-label="队列进度"
-            aria-valuemin={0}
-            aria-valuemax={progress.total}
-            aria-valuenow={progress.completed}
-            aria-valuetext={`本轮已处理 ${progress.completed} 张，共 ${progress.total} 张${progress.round > 1 ? `，第 ${progress.round} 轮` : ''}`}
-          >
-            <span className="pms-focus__count">
-              {progress.total > 0
-                ? `本轮 ${String(progress.completed).padStart(2, '0')} / ${String(progress.total).padStart(2, '0')}${progress.round > 1 ? ` · 第 ${progress.round} 轮` : ''}`
-                : '本轮已过完'}
-            </span>
-            <div className="pms-focus__track"><div className="pms-focus__fill" style={{ width: `${percent}%` }} /></div>
-          </div>
-          <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" data-testid="exit-focus" onClick={onExit}>退出聚焦</button>
-        </div>
 
-        <div className="pms-focus__stage">
+      <div className="pms-focus__main" role="region" aria-label="聚焦处理">
+        <header className="pms-chat-head">
+          <div className="pms-chat-head__inner">
+            <div className="pms-chat-head__copy">
+              <div className="pms-chat-head__top">
+                <button
+                  className="pms-btn pms-btn--sm pms-btn--ghost pms-chat-head__back"
+                  type="button"
+                  data-testid="exit-focus"
+                  title="退出聚焦（Esc）"
+                  onClick={onExit}
+                >← 回看板</button>
+                <span className="pms-chat-head__kicker">选题 · 聚焦处理</span>
+              </div>
+              <h1 className="pms-chat-head__title" data-testid="focus-title">
+                {currentId ? (detail?.card.title ?? '正在打开这张卡…') : '这一轮过完了'}
+              </h1>
+              <div className="pms-chat-head__meta">
+                {currentId && detail && (
+                  <>
+                    <span>{statusLabel(detail.card.status)}</span>
+                    <span>我的原话 {detail.interactions.length}</span>
+                    {Number(detail.askCount) > 0 && <span>{detail.askCount} 人问过</span>}
+                  </>
+                )}
+                <span
+                  className="pms-chat-progress"
+                  role="progressbar"
+                  aria-label="队列进度"
+                  aria-valuemin={0}
+                  aria-valuemax={progress.total}
+                  aria-valuenow={progress.completed}
+                  aria-valuetext={`本轮已处理 ${progress.completed} 张，共 ${progress.total} 张${progress.round > 1 ? `，第 ${progress.round} 轮` : ''}`}
+                >
+                  <span className="pms-chat-progress__text">
+                    {progress.total > 0
+                      ? `本轮 ${String(progress.completed).padStart(2, '0')} / ${String(progress.total).padStart(2, '0')}${progress.round > 1 ? ` · 第 ${progress.round} 轮` : ''}`
+                      : '本轮已过完'}
+                  </span>
+                  <span className="pms-chat-progress__track"><span className="pms-chat-progress__fill" style={{ width: `${percent}%` }} /></span>
+                </span>
+              </div>
+            </div>
+            <div className="pms-chat-head__actions">
+              <button
+                className="pms-btn pms-btn--sm pms-btn--ghost"
+                type="button"
+                data-testid="focus-analysis-toggle"
+                aria-expanded={analysisOpen}
+                title="后台自动整理核心判断、缺口、追问和相关素材；不会改你的原话"
+                onClick={() => setAnalysisOpen(open => !open)}
+              >AI 分析{pending && <span className="pms-pending-dot" aria-label="正在分析" />}</button>
+              {currentId && (
+                <button
+                  className="pms-btn pms-btn--sm pms-btn--ghost pms-chat-head__danger"
+                  type="button"
+                  data-testid="focus-delete"
+                  disabled={busy}
+                  onClick={() => setConfirmDelete(true)}
+                >删除</button>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <div className="pms-chat-scroll" ref={threadRef}>
           {!currentId ? (
-            <div className="pms-focus__sheet">
-              <div className="pms-focus__empty">这一轮都过完了。回看板看看，或者从问答池再放一张上来。</div>
-              <div className="pms-focus__buttons">
-                <button className="pms-btn pms-btn--sm" type="button" onClick={onBoard}>回看板</button>
+            <div className="pms-chat-finished">
+              <p>这一轮都过完了。回看板看看，或者从问答池再放一张上来。</p>
+              <div className="pms-chat-finished__actions">
+                <button className="pms-btn pms-btn--sm pms-btn--primary" type="button" onClick={onBoard}>回看板</button>
                 <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={onPool}>去问答池</button>
               </div>
             </div>
           ) : (
-            <article key={currentId} className="pms-focus__sheet" data-testid="focus-card">
-              <header>
-                <div className="pms-focus__kicker">选题 · 聚焦处理</div>
-                <h1 className="pms-focus__title">{detail?.card.title ?? '正在打开这张卡…'}</h1>
-                <div className="pms-focus__tags">
-                  {detail && (
-                    <>
-                      <span className="pms-badge">我的原话 · {detail.interactions.length}</span>
-                      {Number(detail.askCount) > 0 && <span className="pms-badge">几人问过 · {detail.askCount}</span>}
-                    </>
-                  )}
+            <div className="pms-chat-thread">
+              {detail?.inspiration && <Inspiration key={detail.card.id} data={detail.inspiration} />}
+              {detail?.interactions.length ? (
+                <div className="pms-chat-notes" data-testid="focus-expressions">
+                  {detail.interactions.map(item => (
+                    <div className="pms-chat-note" key={item.id}>
+                      <time dateTime={item.created_at}>{formatWhen(item.created_at)}</time>
+                      <p>{item.body}</p>
+                    </div>
+                  ))}
                 </div>
-              </header>
-
-              <div className="pms-focus__body">
-                {detail?.inspiration && <Inspiration key={detail.card.id} data={detail.inspiration} variant="sheet" />}
-                {detail?.interactions.length ? (
-                  <div className="pms-focus__timeline" data-testid="focus-expressions">
-                    {detail.interactions.map(item => <p key={item.id} className="pms-focus__thought">{item.body}</p>)}
-                  </div>
-                ) : (
-                  <div className="pms-focus__empty">还没有写过这句。先把你真正想说的写下来，分析不会覆盖原文。</div>
-                )}
-                {assets.length > 0 && (
-                  <div className="pms-focus__timeline">
-                    {assets.map(asset => (
-                      <label key={asset.assetId} className="pms-asset">
-                        <input type="checkbox" checked={linked.includes(asset.assetId)} onChange={() => setLinked(list => list.includes(asset.assetId) ? list.filter(id => id !== asset.assetId) : [...list, asset.assetId])} />
-                        <span>{asset.title}<small>{asset.sourcePath}</small></span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <footer className="pms-focus__composer">
-                <textarea
-                  ref={inputRef}
-                  data-testid="focus-input"
-                  rows={3}
-                  value={body}
-                  placeholder="把判断、场景、犹豫都写下来。Ctrl + Enter 记下并换下一张。"
-                  onChange={event => updateBody(event.target.value)}
-                />
-                {(error || loadError) && <div className="pms-error">{error || loadError}</div>}
-                <div className="pms-focus__buttons">
-                  <button
-                    className="pms-btn pms-btn--sm pms-btn--ghost"
-                    type="button"
-                    disabled={busy}
-                    onClick={() => { void rpc<AssetHit[]>('searchAssets', { query: body || detail?.card.title || '' }).then(setAssets).catch(err => setError(err instanceof Error ? err.message : String(err))) }}
-                  >＋ 素材</button>
-                  <button className="pms-quiet" type="button" data-testid="focus-append" disabled={busy || !body.trim()} onClick={() => void act('append')}>只保存</button>
-                  <span className="pms-spacer" />
-                  <button
-                    className="pms-btn pms-btn--sm pms-btn--outline-accent"
-                    type="button"
-                    data-testid="focus-shelve"
-                    disabled={busy}
-                    title="记下这句，换下一张。Ctrl + Enter"
-                    onClick={() => void act('shelve')}
-                  >{body.trim() || linked.length > 0 ? '记下，换一张' : '跳过，换一张'}</button>
-                  <button
-                    className="pms-btn pms-btn--sm pms-btn--primary"
-                    type="button"
-                    data-testid="focus-mature"
-                    disabled={busy || (!detail?.interactions.length && !body.trim() && linked.length === 0)}
-                    title={detail?.interactions.length || body.trim() || linked.length ? '把当前输入一并收好，送去改稿（可撤销）' : '先写一句，或关联一条素材，再标为成熟'}
-                    onClick={() => setConfirmMature(true)}
-                  >标为成熟，送去改稿</button>
-                </div>
-              </footer>
-            </article>
+              ) : (
+                <p className="pms-chat-empty">还没有写过。先写一句你真正想说的，分析不会覆盖原文。</p>
+              )}
+            </div>
           )}
         </div>
+
+        {currentId && (
+          <footer className="pms-chat-composer">
+            <div className="pms-chat-composer__box">
+              <textarea
+                ref={inputRef}
+                data-testid="focus-input"
+                rows={1}
+                value={body}
+                placeholder="把判断、场景、犹豫写下来。Ctrl + Enter 记下并换下一张。"
+                aria-label="写下你的判断"
+                onChange={event => updateBody(event.target.value)}
+              />
+              {(error || loadError) && <div className="pms-error pms-chat-composer__error">{error || loadError}</div>}
+              <div className="pms-chat-composer__actions">
+                <button className="pms-quiet" type="button" data-testid="focus-append" disabled={busy || !body.trim()} onClick={() => void act('append')}>只保存</button>
+                <span className="pms-spacer" />
+                <button
+                  className="pms-btn pms-btn--sm pms-btn--outline-accent"
+                  type="button"
+                  data-testid="focus-shelve"
+                  disabled={busy}
+                  title="记下这句，换下一张。Ctrl + Enter"
+                  onClick={() => void act('shelve')}
+                >{body.trim() ? '记下，换一张' : '跳过，换一张'}</button>
+                <button
+                  className="pms-btn pms-btn--sm pms-btn--primary"
+                  type="button"
+                  data-testid="focus-mature"
+                  disabled={busy || (!detail?.interactions.length && !body.trim())}
+                  title={detail?.interactions.length || body.trim() ? '把当前输入一并收好，送去改稿（可撤销）' : '先写一句，再标为成熟'}
+                  onClick={() => setConfirmMature(true)}
+                >标为成熟，送去改稿</button>
+              </div>
+            </div>
+          </footer>
+        )}
       </div>
 
-      {analysisOpen && (
-      <aside className="pms-focus__aside" data-testid="focus-analysis">
-        <div className="pms-focus__aside-head">
-          <h3>后台整理</h3>
-          <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={() => setAnalysisOpen(false)}>收起</button>
-        </div>
-        {pending && <p>这张卡正在后台整理，你可以先写。</p>}
-        {!analysis && <p>暂存或保存之后，这里会出现核心判断和继续追问。</p>}
-        {analysis && (
-          <>
-            <h3>核心判断</h3>
-            <p data-testid="focus-thesis">{analysis.thesis}</p>
-            <h3>继续问</h3>
-            <ul>
-              {detail?.suggestions.filter(item => item.kind === 'question').map(item => <li key={item.id}>{item.text}</li>)}
-            </ul>
-            {analysis.relatedAssets.length > 0 && (
-              <>
-                <h3>相关素材</h3>
-                <ul>{analysis.relatedAssets.map(asset => <li key={asset.assetId}>{asset.title}</li>)}</ul>
-              </>
-            )}
-          </>
-        )}
-      </aside>
+      {analysisOpen && currentId && (
+        <aside className="pms-chat-aside" data-testid="focus-analysis">
+          <div className="pms-chat-aside__head">
+            <div>
+              <h2>AI 分析</h2>
+              <p>后台自动更新 · 不改你的原话</p>
+            </div>
+            <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={() => setAnalysisOpen(false)}>收起</button>
+          </div>
+          {pending && <p className="pms-chat-aside__note">正在整理这张卡，你可以先写。</p>}
+          {!analysis && !pending && <p className="pms-chat-aside__note">保存一句或暂存后，这里会出现核心判断、缺口、追问和相关素材。</p>}
+          {analysis && (
+            <>
+              <section className="pms-chat-aside__section">
+                <h3>核心判断</h3>
+                <p data-testid="focus-thesis">{analysis.thesis}</p>
+              </section>
+              {analysis.gaps.length > 0 && (
+                <section className="pms-chat-aside__section">
+                  <h3>还缺什么</h3>
+                  <ul>{analysis.gaps.map(gap => <li key={gap}>{gap}</li>)}</ul>
+                </section>
+              )}
+              {analysis.perspectives.length > 0 && (
+                <section className="pms-chat-aside__section">
+                  <h3>正反视角</h3>
+                  <ul>{analysis.perspectives.map((item, index) => <li key={index}>{item.stance} — {item.counter}</li>)}</ul>
+                </section>
+              )}
+              {questions.length > 0 && (
+                <section className="pms-chat-aside__section">
+                  <h3>继续问</h3>
+                  <ul>{questions.map(item => <li key={item.id}>{item.text}</li>)}</ul>
+                </section>
+              )}
+              {analysis.relatedAssets.length > 0 && (
+                <section className="pms-chat-aside__section">
+                  <h3>相关素材</h3>
+                  <ul>{analysis.relatedAssets.map(asset => <li key={asset.assetId}>{asset.title}</li>)}</ul>
+                </section>
+              )}
+            </>
+          )}
+        </aside>
       )}
+
       {confirmMature && (
         <FocusConfirm
           title="标为成熟，送去改稿？"
-          description="这张卡会离开选题阶段。改稿时如果反悔，可以在改稿页退回选题。"
+          description="这张卡会离开选题阶段。改稿页里仍然可以退回选题。"
           confirmLabel="标为成熟并送去改稿"
           onCancel={() => setConfirmMature(false)}
           onConfirm={() => { setConfirmMature(false); void act('mature') }}
+        />
+      )}
+      {confirmDelete && (
+        <FocusConfirm
+          tone="danger"
+          title="删除这张卡？"
+          description="卡片会从看板移除，写下的原话一起收进回收站；提示里可以撤销。"
+          confirmLabel="删除"
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => { setConfirmDelete(false); void removeCard() }}
         />
       )}
     </div>

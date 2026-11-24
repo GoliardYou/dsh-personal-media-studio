@@ -848,7 +848,7 @@
   border: 0;
   padding: var(--pms-space-1) var(--pms-space-2);
   background: none;
-  color: var(--pms-text-tertiary);
+  color: var(--pms-text-secondary);
   font: inherit;
   font-size: var(--pms-text-sm);
   border-radius: var(--pms-radius-sm);

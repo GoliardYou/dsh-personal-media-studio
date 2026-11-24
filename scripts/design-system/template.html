@@ -993,97 +993,108 @@
           </div>
         </div>
 
-        <!-- 快照 5：卡片聚焦模式 -->
+        <!-- 快照 5：选题处理工作台 -->
         <div class="ds-shot ds-shot--tall">
           <div class="ds-shot__bar">
-            <span class="ds-shot__name">选题 · 卡片聚焦模式</span>
-            <span class="ds-shot__note">一屏一张稿纸 · 只有暂存/成熟会推进 · 队尾循环 · 纸感令牌只作用于本视图</span>
+            <span class="ds-shot__name">选题 · 对话式处理工作台</span>
+            <span class="ds-shot__note">点卡即进入 · 标题 / 对话 / 输入框同一条轴 · AI 分析默认收起 · 只有一个推进按钮</span>
           </div>
           <div class="ds-shot__frame">
             <div class="pms-root" data-stage="topics">
-              <header class="pms-toolbar">
-                <span class="pms-toolbar__brand"><span class="pms-toolbar__mark">P</span><span>个人媒体工作室</span></span>
-                <nav class="pms-segmented">
-                  <button class="pms-segment" aria-selected="true">选题<span class="pms-segment__count">12</span></button>
-                  <button class="pms-segment">生产改稿<span class="pms-segment__count">3</span></button>
-                  <button class="pms-segment">渲染<span class="pms-segment__count">1</span></button>
-                </nav>
-                <span class="pms-toolbar__context">先把判断写下来。分析在后台发生，成熟了再送去改稿。</span>
-                <div class="pms-toolbar__actions">
-                  <span class="pms-badge pms-badge--accent">模型已连接</span>
-                </div>
-              </header>
-              <div class="pms-body">
-                <div class="pms-focus">
-                  <div class="pms-focus__main">
-                    <div class="pms-toolbar pms-toolbar--sub">
-                      <div class="pms-segmented" role="tablist" aria-label="选题视图">
-                        <button class="pms-segment" role="tab">看板<span class="pms-segment__count">12</span></button>
-                        <button class="pms-segment" role="tab">问答池<span class="pms-segment__count">38</span></button>
-                        <button class="pms-segment" role="tab" aria-selected="true">聚焦<span class="pms-segment__count">12</span></button>
-                      </div>
-                      <span class="pms-toolbar__context">一次只处理一张。写完再决定暂存，还是送去改稿。</span>
-                      <div class="pms-focus__progress" role="progressbar" aria-valuemin="0" aria-valuemax="12" aria-valuenow="3" aria-valuetext="本轮已处理 3 张，共 12 张">
-                        <span class="pms-focus__count">本轮 03 / 12</span>
-                        <div class="pms-focus__track"><div class="pms-focus__fill" style="width:25%"></div></div>
-                      </div>
-                      <button class="pms-btn pms-btn--sm pms-btn--ghost">退出聚焦</button>
-                    </div>
-                    <div class="pms-focus__stage">
-                      <article class="pms-focus__sheet">
-                        <header>
-                          <div class="pms-focus__kicker">选题 · 聚焦处理</div>
-                          <h1 class="pms-focus__title">为什么越努力越焦虑</h1>
-                          <div class="pms-focus__tags">
-                            <span class="pms-badge">我的原话 · 3</span>
-                            <span class="pms-badge">几人问过 · 7</span>
-                            <span class="pms-meta">模型分析</span>
-                          </div>
-                        </header>
-                        <div class="pms-focus__body">
-                          <section class="pms-focus__evidence">
-                            <div class="pms-focus__evidence-head">
-                              <span class="pms-focus__evidence-kicker">提问原话</span>
-                              <span class="pms-focus__evidence-meta">7 人问过</span>
-                            </div>
-                            <blockquote class="pms-focus__evidence-text">努力和结果之间的关系断在了「方向未定」这一步，而不是努力程度不够。</blockquote>
-                            <button class="pms-focus__evidence-toggle" type="button">展开全文</button>
-                          </section>
-                          <div class="pms-focus__timeline">
-                            <p class="pms-focus__thought">我观察到的共同点不是懒，是方向没定就先开跑。每天都很忙，但说不清在往哪走。</p>
-                            <p class="pms-focus__thought">有个学员每天学 4 小时，三个月换了三个方向。每次换都从零开始，越学越慌。</p>
-                            <p class="pms-focus__thought">犹豫本身不是问题，问题是把犹豫当成准备。准备是没有终点的。</p>
-                          </div>
+              <div class="pms-focus pms-focus--analysis">
+                <div class="pms-focus__main" role="region" aria-label="聚焦处理">
+                  <header class="pms-chat-head">
+                    <div class="pms-chat-head__inner">
+                      <div class="pms-chat-head__copy">
+                        <div class="pms-chat-head__top">
+                          <button class="pms-btn pms-btn--sm pms-btn--ghost pms-chat-head__back" type="button">← 回看板</button>
+                          <span class="pms-chat-head__kicker">选题 · 聚焦处理</span>
                         </div>
-                        <footer class="pms-focus__composer">
-                          <textarea rows="3" placeholder="把判断、场景、犹豫都写在这里。Ctrl + Enter 暂存并换一张。"></textarea>
-                          <div class="pms-focus__buttons">
-                            <button class="pms-btn pms-btn--sm pms-btn--ghost">关联素材</button>
-                            <button class="pms-btn pms-btn--sm pms-btn--ghost">追加保存</button>
-                            <span class="pms-spacer"></span>
-                            <button class="pms-btn pms-btn--sm pms-btn--outline-accent">暂存留在本阶段 · 换一张</button>
-                            <button class="pms-btn pms-btn--sm pms-btn--primary">标为成熟并送去改稿</button>
-                          </div>
-                        </footer>
-                      </article>
+                        <h1 class="pms-chat-head__title">为什么越努力越焦虑</h1>
+                        <div class="pms-chat-head__meta">
+                          <span>进行中</span>
+                          <span>我的原话 3</span>
+                          <span>7 人问过</span>
+                          <span class="pms-chat-progress" role="progressbar" aria-valuemin="0" aria-valuemax="12" aria-valuenow="3">
+                            <span class="pms-chat-progress__text">本轮 03 / 12</span>
+                            <span class="pms-chat-progress__track"><span class="pms-chat-progress__fill" style="width:25%"></span></span>
+                          </span>
+                        </div>
+                      </div>
+                      <div class="pms-chat-head__actions">
+                        <button class="pms-btn pms-btn--sm pms-btn--ghost" type="button">AI 分析</button>
+                        <button class="pms-btn pms-btn--sm pms-btn--ghost pms-chat-head__danger" type="button">删除</button>
+                      </div>
+                    </div>
+                  </header>
+
+                  <div class="pms-chat-scroll">
+                    <div class="pms-chat-thread">
+                      <section class="pms-inspiration">
+                        <div class="pms-inspiration__line">
+                          <span class="pms-inspiration__label">灵感</span>
+                          <span class="pms-inspiration__lead">努力和结果之间的关系断在了「方向未定」这一步，而不是努力程度不够。</span>
+                          <span class="pms-inspiration__meta">7 人问过</span>
+                          <button class="pms-inspiration__toggle" type="button">原始素材</button>
+                        </div>
+                      </section>
+                      <div class="pms-chat-notes">
+                        <div class="pms-chat-note">
+                          <time>2026-11-24 12:37</time>
+                          <p>我观察到的共同点不是懒，是方向没定就先开跑。每天都很忙，但说不清在往哪走。</p>
+                        </div>
+                        <div class="pms-chat-note">
+                          <time>2026-11-24 12:40</time>
+                          <p>有个学员每天学 4 小时，三个月换了三个方向。每次换都从零开始，越学越慌。</p>
+                        </div>
+                        <div class="pms-chat-note">
+                          <time>2026-11-24 12:41</time>
+                          <p>犹豫本身不是问题，问题是把犹豫当成准备。准备是没有终点的。</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <aside class="pms-focus__aside">
-                    <h3>后台整理</h3>
+
+                  <footer class="pms-chat-composer">
+                    <div class="pms-chat-composer__box">
+                      <textarea rows="1" placeholder="把判断、场景、犹豫写下来。Ctrl + Enter 记下并换下一张。"></textarea>
+                      <div class="pms-chat-composer__actions">
+                        <button class="pms-quiet" type="button">只保存</button>
+                        <span class="pms-spacer"></span>
+                        <button class="pms-btn pms-btn--sm pms-btn--outline-accent" type="button">记下，换一张</button>
+                        <button class="pms-btn pms-btn--sm pms-btn--primary" type="button">标为成熟，送去改稿</button>
+                      </div>
+                    </div>
+                  </footer>
+                </div>
+
+                <aside class="pms-chat-aside">
+                  <div class="pms-chat-aside__head">
+                    <div>
+                      <h2>AI 分析</h2>
+                      <p>后台自动更新 · 不改你的原话</p>
+                    </div>
+                    <button class="pms-btn pms-btn--sm pms-btn--ghost" type="button">收起</button>
+                  </div>
+                  <section class="pms-chat-aside__section">
                     <h3>核心判断</h3>
                     <p>焦虑来自方向未定时的持续投入：投入越多，沉没成本越高，越不敢停。</p>
+                  </section>
+                  <section class="pms-chat-aside__section">
                     <h3>继续问</h3>
                     <ul>
                       <li>你上一次确定方向是什么时候？</li>
                       <li>如果只能留一个方向，留哪个？</li>
                     </ul>
+                  </section>
+                  <section class="pms-chat-aside__section">
                     <h3>相关素材</h3>
                     <ul>
                       <li>课程大纲截图.png</li>
                       <li>学员反馈_0712.png</li>
                     </ul>
-                  </aside>
-                </div>
+                  </section>
+                </aside>
               </div>
             </div>
           </div>
@@ -1096,8 +1107,10 @@
             <tr><td>页头</td><td>约 150px：产品名 h1 + 副标题 + 独立胶囊导航条</td><td>56px 单行：产品标记 + 分段导航 + 上下文 + 主操作</td></tr>
             <tr><td>渲染区高度</td><td><code>calc(100vh - 220px)</code> 补丁</td><td>吃满剩余高度，无补丁</td></tr>
             <tr><td>选题页</td><td>看板与问答池上下堆叠，需长滚动</td><td>分段切换，一页装下</td></tr>
-            <tr><td>卡片输入框</td><td>沉在时间线末尾，写完要滚到底</td><td>固定在底部操作条</td></tr>
-            <tr><td>分析侧栏</td><td>浮动比例 0.8fr，随窗口伸缩</td><td>固定 320px，不挤占写作区</td></tr>
+            <tr><td>选题入口</td><td>卡片页与聚焦页两套界面</td><td>点卡即进入同一个对话式工作台</td></tr>
+            <tr><td>卡片输入框</td><td>沉在时间线末尾，写完要滚到底</td><td>贴底自增高，动作按推进层级分组</td></tr>
+            <tr><td>分析侧栏</td><td>常驻 320px，名称含混</td><td>「AI 分析」默认收起，按钮在标题栏</td></tr>
+            <tr><td>主按钮</td><td>卡片页给暂存、聚焦页给成熟</td><td>全流程只有「标为成熟，送去改稿」是 primary</td></tr>
             <tr><td>正文宽度</td><td>全宽 textarea，1200px 下行长难读</td><td>限宽 72ch 居中</td></tr>
             <tr><td>建议面板</td><td>sticky 浮层，遮挡正文</td><td>侧栏切页，与正文并排</td></tr>
             <tr><td>加载态</td><td>一行文字，高度塌陷</td><td>骨架屏，保留版式轮廓</td></tr>
