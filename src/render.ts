@@ -22,9 +22,9 @@ export interface RenderAsset {
   title: string
 }
 
-export function renderPageHtml(page: PageModel, template: string, assets: RenderAsset[], size: BrandSize = 'standard', index = 0, total = 1): string {
+export function renderPageHtml(page: PageModel, template: string, assets: RenderAsset[], size: BrandSize = 'standard', index = 0, total = 1, editable = false): string {
   const images = new Map(assets.filter(asset => asset.absPath).map(asset => [asset.id, dataUrl(asset.absPath)]))
-  return pageDocument(page, template, size, index, total, images)
+  return pageDocument(page, template, size, index, total, images, editable)
 }
 
 export function renderPageSvg(page: PageModel, template: string, assets: RenderAsset[]): string {

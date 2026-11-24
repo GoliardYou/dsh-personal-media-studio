@@ -220,9 +220,18 @@ h3.h2-title,
   margin: var(--h4-mt) 0 0;
 }
 
-.hl {
+.hl,
+.bold {
   font-weight: 700;
   color: #000;
+}
+
+.mark {
+  background: #F4F4F4;
+  box-shadow: none;
+}
+
+.hl {
   background: none;
   box-shadow: none;
 }

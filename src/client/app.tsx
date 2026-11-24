@@ -126,7 +126,7 @@ interface CardDetail {
   sourceAssetId?: string | null
   sourceFile?: string
   inspiration?: CardInspiration | null
-  interactions: Array<{ id: string, body: string, created_at: string, attachments_json: string }>
+  interactions: Array<{ id: string, body: string, created_at: string, edited_at?: string | null, attachments_json: string }>
   analysis: AnalysisView | null
   suggestions: Array<{ id: string, kind: string, text: string, status: string }>
   job: { status?: string } | null
@@ -614,6 +614,12 @@ function formatWhen(value: string) {
   return value.replace('T', ' ').slice(0, 16)
 }
 
+function formatClock(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return formatWhen(value).slice(11, 16)
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
 interface ArticleDoc {
   draftId: string
   title: string
@@ -1055,12 +1061,66 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
   const [busy, setBusy] = useState(false)
   const [confirmMature, setConfirmMature] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [analysisOpen, setAnalysisOpen] = useState(false)
+  const [analysisOpen, setAnalysisOpen] = useState(() => {
+    const saved = typeof localStorage === 'undefined' ? null : localStorage.getItem('pms-focus-aside')
+    return saved === 'open'
+  })
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [noteDraft, setNoteDraft] = useState('')
+  const [savingNote, setSavingNote] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const noteEditRef = useRef<HTMLTextAreaElement>(null)
+  const skipNoteBlur = useRef(false)
   const threadRef = useRef<HTMLDivElement>(null)
   const focusAfterAdvance = useRef(false)
   const opRef = useRef<{ key: string, id: string } | null>(null)
   const detailStamp = useRef(0)
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('pms-focus-aside')
+      if (!saved) {
+        const panel = document.querySelector<HTMLElement>('.pms-body')
+        if ((panel?.clientWidth ?? window.innerWidth) >= 1000) setAnalysisOpen(true)
+      }
+      localStorage.setItem('pms-focus-aside', analysisOpen ? 'open' : 'closed')
+    } catch { /* 忽略隐私模式下的存储失败 */ }
+  }, [analysisOpen])
+
+  function beginEditNote(item: CardDetail['interactions'][number]) {
+    skipNoteBlur.current = false
+    setEditingNoteId(item.id)
+    setNoteDraft(item.body)
+    window.requestAnimationFrame(() => {
+      const node = noteEditRef.current
+      if (!node) return
+      node.focus()
+      node.setSelectionRange(node.value.length, node.value.length)
+    })
+  }
+
+  async function saveNote() {
+    if (skipNoteBlur.current) { skipNoteBlur.current = false; setEditingNoteId(null); return }
+    if (!editingNoteId || !currentId || savingNote) return
+    const noteId = editingNoteId
+    const text = noteDraft.trim()
+    if (!text) { setError('原话不能改成空句。'); noteEditRef.current?.focus(); return }
+    const original = detail?.interactions.find(item => item.id === noteId)
+    if (!original) { setEditingNoteId(null); return }
+    if (original.body === text) { setEditingNoteId(null); return }
+    setSavingNote(true)
+    try {
+      const next = await rpc<CardDetail>('editThought', { cardId: currentId, interactionId: noteId, body: text })
+      setDetail(next)
+      setEditingNoteId(prev => prev === noteId ? null : prev)
+      setError('')
+      onNotice({ title: '原话已更新' })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSavingNote(false)
+    }
+  }
 
   function updateBody(next: string) {
     bodyRef.current = next
@@ -1081,7 +1141,8 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
     bodyRef.current = next
     setBody(next)
     setError('')
-    setAnalysisOpen(false)
+    setEditingNoteId(null)
+    setNoteDraft('')
     if (focusAfterAdvance.current) {
       focusAfterAdvance.current = false
       window.requestAnimationFrame(() => inputRef.current?.focus())
@@ -1236,18 +1297,20 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
 
   return (
     <div
-      className={`pms-focus ${analysisOpen ? 'pms-focus--analysis' : ''}`}
+      className={`pms-paper ${analysisOpen ? 'pms-paper--aside' : ''}`}
       data-testid="focus-mode"
       onKeyDown={event => {
         if (confirmMature || confirmDelete) return
         if (event.key === 'Escape') {
           event.preventDefault()
+          if (editingNoteId) { setEditingNoteId(null); return }
           if (analysisOpen) { setAnalysisOpen(false); return }
           onExit()
           return
         }
         if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
           event.preventDefault()
+          if (editingNoteId) { void saveNote(); return }
           void act('shelve')
         }
       }}
@@ -1258,33 +1321,31 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
           : '本轮已过完。'}
       </div>
 
-      <div className="pms-focus__main" role="region" aria-label="聚焦处理">
-        <header className="pms-chat-head">
-          <div className="pms-chat-head__inner">
-            <div className="pms-chat-head__copy">
-              <div className="pms-chat-head__top">
-                <button
-                  className="pms-btn pms-btn--sm pms-btn--ghost pms-chat-head__back"
-                  type="button"
-                  data-testid="exit-focus"
-                  title="退出聚焦（Esc）"
-                  onClick={onExit}
-                >← 回看板</button>
-                <span className="pms-chat-head__kicker">选题 · 聚焦处理</span>
-              </div>
-              <h1 className="pms-chat-head__title" data-testid="focus-title">
+      <div className="pms-paper__main" role="region" aria-label="聚焦处理">
+        <header className="pms-paper-head">
+          <div className="pms-paper-head__inner">
+            <button
+              className="pms-paper-back"
+              type="button"
+              data-testid="exit-focus"
+              title="退出聚焦（Esc）"
+              onClick={onExit}
+            >← <span>回看板</span></button>
+            <div className="pms-paper-head__copy">
+              <div className="pms-paper-head__kicker">选题 · 聚焦处理</div>
+              <h1 className="pms-paper-head__title" data-testid="focus-title">
                 {currentId ? (detail?.card.title ?? '正在打开这张卡…') : '这一轮过完了'}
               </h1>
-              <div className="pms-chat-head__meta">
+              <div className="pms-paper-head__meta">
                 {currentId && detail && (
                   <>
                     <span>{statusLabel(detail.card.status)}</span>
-                    <span>我的原话 {detail.interactions.length}</span>
+                    <span>{detail.interactions.length} 条原话</span>
                     {Number(detail.askCount) > 0 && <span>{detail.askCount} 人问过</span>}
                   </>
                 )}
                 <span
-                  className="pms-chat-progress"
+                  className="pms-paper-progress"
                   role="progressbar"
                   aria-label="队列进度"
                   aria-valuemin={0}
@@ -1292,27 +1353,27 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
                   aria-valuenow={progress.completed}
                   aria-valuetext={`本轮已处理 ${progress.completed} 张，共 ${progress.total} 张${progress.round > 1 ? `，第 ${progress.round} 轮` : ''}`}
                 >
-                  <span className="pms-chat-progress__text">
+                  <span className="pms-paper-progress__text">
                     {progress.total > 0
-                      ? `本轮 ${String(progress.completed).padStart(2, '0')} / ${String(progress.total).padStart(2, '0')}${progress.round > 1 ? ` · 第 ${progress.round} 轮` : ''}`
+                      ? `${progress.completed} / ${progress.total}${progress.round > 1 ? ` · 第 ${progress.round} 轮` : ''}`
                       : '本轮已过完'}
                   </span>
-                  <span className="pms-chat-progress__track"><span className="pms-chat-progress__fill" style={{ width: `${percent}%` }} /></span>
+                  <span className="pms-paper-progress__track"><span className="pms-paper-progress__fill" style={{ width: `${percent}%` }} /></span>
                 </span>
               </div>
             </div>
-            <div className="pms-chat-head__actions">
+            <div className="pms-paper-head__actions">
               <button
-                className="pms-btn pms-btn--sm pms-btn--ghost"
+                className={`pms-paper-quiet ${analysisOpen ? 'is-on' : ''}`}
                 type="button"
                 data-testid="focus-analysis-toggle"
                 aria-expanded={analysisOpen}
                 title="后台自动整理核心判断、缺口、追问和相关素材；不会改你的原话"
                 onClick={() => setAnalysisOpen(open => !open)}
-              >AI 分析{pending && <span className="pms-pending-dot" aria-label="正在分析" />}</button>
+              >批注{analysis ? ` ${analysis.gaps.length + questions.length + analysis.relatedAssets.length}` : ''}{pending && <span className="pms-pending-dot" aria-label="正在分析" />}</button>
               {currentId && (
                 <button
-                  className="pms-btn pms-btn--sm pms-btn--ghost pms-chat-head__danger"
+                  className="pms-paper-quiet pms-paper-quiet--danger"
                   type="button"
                   data-testid="focus-delete"
                   disabled={busy}
@@ -1323,52 +1384,99 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
           </div>
         </header>
 
-        <div className="pms-chat-scroll" ref={threadRef}>
+        <div className="pms-paper-scroll" ref={threadRef}>
           {!currentId ? (
-            <div className="pms-chat-finished">
-              <p>这一轮都过完了。回看板看看，或者从问答池再放一张上来。</p>
-              <div className="pms-chat-finished__actions">
-                <button className="pms-btn pms-btn--sm pms-btn--primary" type="button" onClick={onBoard}>回看板</button>
-                <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={onPool}>去问答池</button>
+            <div className="pms-paper-finished">
+              <p className="pms-paper-finished__mark">这一轮都过完了。</p>
+              <p>回看板看看，或者从问答池再放一张上来。</p>
+              <div className="pms-paper-finished__actions">
+                <button className="pms-paper-btn pms-paper-btn--ink" type="button" onClick={onBoard}>回看板</button>
+                <button className="pms-paper-quiet" type="button" onClick={onPool}>去问答池</button>
               </div>
             </div>
           ) : (
-            <div className="pms-chat-thread">
+            <div className="pms-paper-sheet">
               {detail?.inspiration && <Inspiration key={detail.card.id} data={detail.inspiration} />}
-              {detail?.interactions.length ? (
-                <div className="pms-chat-notes" data-testid="focus-expressions">
-                  {detail.interactions.map(item => (
-                    <div className="pms-chat-note" key={item.id}>
-                      <time dateTime={item.created_at}>{formatWhen(item.created_at)}</time>
-                      <p>{item.body}</p>
+              <div className="pms-paper-notes" data-testid="focus-expressions">
+                {detail?.interactions.length ? detail.interactions.map((item, index) => (
+                  <article className={`pms-paper-note ${editingNoteId === item.id ? 'is-editing' : ''}`} key={item.id}>
+                    <div className="pms-paper-note__rail">
+                      <time dateTime={item.created_at}>{formatClock(item.created_at)}</time>
+                      <span>{String(index + 1).padStart(2, '0')}</span>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="pms-chat-empty">还没有写过。先写一句你真正想说的，分析不会覆盖原文。</p>
-              )}
+                    <div className="pms-paper-note__body">
+                      {editingNoteId === item.id ? (
+                        <textarea
+                          ref={noteEditRef}
+                          className="pms-paper-note__edit"
+                          value={noteDraft}
+                          rows={Math.max(2, Math.ceil(noteDraft.length / 34))}
+                          aria-label="编辑这条原话"
+                          onChange={event => setNoteDraft(event.target.value)}
+                          onBlur={() => void saveNote()}
+                          onKeyDown={event => {
+                            if (event.key === 'Escape') {
+                              event.preventDefault()
+                              skipNoteBlur.current = true
+                              setEditingNoteId(null)
+                              setNoteDraft('')
+                            } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                              event.preventDefault()
+                              event.currentTarget.blur()
+                            }
+                          }}
+                        />
+                      ) : (
+                        <div
+                          className="pms-paper-note__text"
+                          role="button"
+                          tabIndex={0}
+                          title="点一下改这句话"
+                          onClick={() => beginEditNote(item)}
+                          onKeyDown={event => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              beginEditNote(item)
+                            }
+                          }}
+                        >{item.body}</div>
+                      )}
+                      <div className="pms-paper-note__foot">
+                        {item.edited_at ? <span>已编辑 · {formatClock(item.edited_at)}</span> : <span>点文字可改</span>}
+                        {savingNote && editingNoteId === item.id && <span>保存中…</span>}
+                      </div>
+                    </div>
+                  </article>
+                )) : (
+                  <p className="pms-paper-empty">还没有写过。先写一句你真正想说的，分析不会覆盖原文。</p>
+                )}
+              </div>
             </div>
           )}
         </div>
 
         {currentId && (
-          <footer className="pms-chat-composer">
-            <div className="pms-chat-composer__box">
-              <textarea
-                ref={inputRef}
-                data-testid="focus-input"
-                rows={1}
-                value={body}
-                placeholder="把判断、场景、犹豫写下来。Ctrl + Enter 记下并换下一张。"
-                aria-label="写下你的判断"
-                onChange={event => updateBody(event.target.value)}
-              />
-              {(error || loadError) && <div className="pms-error pms-chat-composer__error">{error || loadError}</div>}
-              <div className="pms-chat-composer__actions">
-                <button className="pms-quiet" type="button" data-testid="focus-append" disabled={busy || !body.trim()} onClick={() => void act('append')}>只保存</button>
+          <footer className="pms-paper-composer">
+            <div className="pms-paper-composer__inner">
+              <div className="pms-paper-capture">
+                <button className="pms-paper-capture__plus" type="button" aria-label="写一句" onClick={() => inputRef.current?.focus()}>+</button>
+                <textarea
+                  ref={inputRef}
+                  data-testid="focus-input"
+                  rows={1}
+                  value={body}
+                  placeholder="写下去，不用先想好。"
+                  aria-label="写下你的判断"
+                  onChange={event => updateBody(event.target.value)}
+                />
+              </div>
+              {(error || loadError) && <div className="pms-paper-error">{error || loadError}</div>}
+              <div className="pms-paper-composer__foot">
+                <span className="pms-paper-composer__hint">{body.trim() ? '草稿 · 记下后才算落笔' : 'Ctrl + Enter 记下并换一张'}</span>
                 <span className="pms-spacer" />
+                <button className="pms-paper-quiet" type="button" data-testid="focus-append" disabled={busy || !body.trim()} onClick={() => void act('append')}>只保存</button>
                 <button
-                  className="pms-btn pms-btn--sm pms-btn--outline-accent"
+                  className="pms-paper-btn pms-paper-btn--ink"
                   type="button"
                   data-testid="focus-shelve"
                   disabled={busy}
@@ -1376,13 +1484,13 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
                   onClick={() => void act('shelve')}
                 >{body.trim() ? '记下，换一张' : '跳过，换一张'}</button>
                 <button
-                  className="pms-btn pms-btn--sm pms-btn--primary"
+                  className="pms-paper-quiet"
                   type="button"
                   data-testid="focus-mature"
                   disabled={busy || (!detail?.interactions.length && !body.trim())}
                   title={detail?.interactions.length || body.trim() ? '把当前输入一并收好，送去改稿（可撤销）' : '先写一句，再标为成熟'}
                   onClick={() => setConfirmMature(true)}
-                >标为成熟，送去改稿</button>
+                >标为成熟</button>
               </div>
             </div>
           </footer>
@@ -1390,42 +1498,42 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
       </div>
 
       {analysisOpen && currentId && (
-        <aside className="pms-chat-aside" data-testid="focus-analysis">
-          <div className="pms-chat-aside__head">
+        <aside className="pms-paper-aside" data-testid="focus-analysis">
+          <div className="pms-paper-aside__head">
             <div>
-              <h2>AI 分析</h2>
+              <h2>批注</h2>
               <p>后台自动更新 · 不改你的原话</p>
             </div>
-            <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={() => setAnalysisOpen(false)}>收起</button>
+            <button className="pms-paper-quiet" type="button" onClick={() => setAnalysisOpen(false)}>收起</button>
           </div>
-          {pending && <p className="pms-chat-aside__note">正在整理这张卡，你可以先写。</p>}
-          {!analysis && !pending && <p className="pms-chat-aside__note">保存一句或暂存后，这里会出现核心判断、缺口、追问和相关素材。</p>}
+          {pending && <p className="pms-paper-aside__note">正在整理这张卡，你可以先写。</p>}
+          {!analysis && !pending && <p className="pms-paper-aside__note">保存一句后，这里会出现核心判断、缺口、追问和相关素材。</p>}
           {analysis && (
             <>
-              <section className="pms-chat-aside__section">
+              <section className="pms-paper-aside__section">
                 <h3>核心判断</h3>
                 <p data-testid="focus-thesis">{analysis.thesis}</p>
               </section>
               {analysis.gaps.length > 0 && (
-                <section className="pms-chat-aside__section">
+                <section className="pms-paper-aside__section">
                   <h3>还缺什么</h3>
                   <ul>{analysis.gaps.map(gap => <li key={gap}>{gap}</li>)}</ul>
                 </section>
               )}
               {analysis.perspectives.length > 0 && (
-                <section className="pms-chat-aside__section">
+                <section className="pms-paper-aside__section">
                   <h3>正反视角</h3>
                   <ul>{analysis.perspectives.map((item, index) => <li key={index}>{item.stance} — {item.counter}</li>)}</ul>
                 </section>
               )}
               {questions.length > 0 && (
-                <section className="pms-chat-aside__section">
+                <section className="pms-paper-aside__section">
                   <h3>继续问</h3>
                   <ul>{questions.map(item => <li key={item.id}>{item.text}</li>)}</ul>
                 </section>
               )}
               {analysis.relatedAssets.length > 0 && (
-                <section className="pms-chat-aside__section">
+                <section className="pms-paper-aside__section">
                   <h3>相关素材</h3>
                   <ul>{analysis.relatedAssets.map(asset => <li key={asset.assetId}>{asset.title}</li>)}</ul>
                 </section>
@@ -1555,6 +1663,8 @@ function Production({ cardId, onReview }: { cardId: string, onReview: () => void
   )
 }
 
+type PageEdit = { field: string, blockId?: string | null, text?: string, html?: string }
+
 function Workbench({ cardId, onReturn }: { cardId: string, onReturn?: () => void }) {
   const [project, setProject] = useState<ProjectView | null>(null)
   const [pages, setPages] = useState<PageModel[]>([])
@@ -1570,6 +1680,7 @@ function Workbench({ cardId, onReturn }: { cardId: string, onReturn?: () => void
   const [error, setError] = useState('')
   const stageRef = useRef<HTMLDivElement>(null)
   const drag = useRef<string | null>(null)
+  const commitFrameRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     void rpc<ProjectView>('getProject', { cardId }).then(value => {
@@ -1614,11 +1725,41 @@ function Workbench({ cardId, onReturn }: { cardId: string, onReturn?: () => void
     commit(pages.map((item, index) => index === current ? { ...item, ...patch } : item))
   }
 
+  function commitFrameNow() {
+    commitFrameRef.current?.()
+  }
+
+  function applyPageEdit(data: PageEdit) {
+    const text = (data.text ?? '').replace(/\u00a0/g, ' ')
+    if (data.field === 'title') {
+      if (text.trim()) updatePage({ title: text.trim() })
+      return
+    }
+    if (data.field === 'kicker') {
+      updatePage({ kicker: text.trim() })
+      return
+    }
+    if (data.field === 'caption' && data.blockId) {
+      updatePage({ blocks: page.blocks.map(block => block.id === data.blockId ? { ...block, caption: text } : block) })
+      return
+    }
+    if (data.field !== 'block' || !data.blockId) return
+    const host = document.createElement('div')
+    host.innerHTML = data.html ?? ''
+    updatePage({
+      blocks: page.blocks.map(block => {
+        if (block.id !== data.blockId) return block
+        if (block.type === 'quote') return { ...block, text }
+        return { ...block, text, spans: serializeSpans(host) }
+      }),
+    })
+  }
+
   if (!project?.draft || !page) return <div className="pms-empty">{error || '正在铺开审定台…'}</div>
   return (
     <div className="pms-workbench" data-testid="workbench">
       <aside className="pms-col pms-thumbs" data-testid="page-list">
-        {onReturn && <button className="pms-btn" onClick={() => { void rpc('returnToDrafts', { cardId }).then(onReturn) }}>退回生产改稿</button>}
+        {onReturn && <button className="pms-btn" onClick={() => { commitFrameNow(); void rpc('returnToDrafts', { cardId }).then(onReturn) }}>退回生产改稿</button>}
         {pages.map((item, index) => (
           <button
             key={item.id}
@@ -1635,7 +1776,11 @@ function Workbench({ cardId, onReturn }: { cardId: string, onReturn?: () => void
               commit(next)
               setCurrent(index)
             }}
-            onClick={() => setCurrent(index)}
+            onClick={() => {
+              if (index === current) return
+              commitFrameNow()
+              setCurrent(index)
+            }}
           >
             <strong>{index + 1}. {item.title}</strong>
             <div className="pms-meta">{roleLabel(item.role)}</div>
@@ -1647,7 +1792,7 @@ function Workbench({ cardId, onReturn }: { cardId: string, onReturn?: () => void
       <section className="pms-stage" ref={stageRef} data-testid="page-canvas">
         <div className="pms-canvas-wrap" style={{ width: 1080 * scale, height: 1440 * scale }}>
           <div style={{ width: 1080, height: 1440, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
-            <BrandFrame page={page} template={template} size={pageSize} index={current} total={pages.length} />
+            <BrandFrame page={page} template={template} size={pageSize} index={current} total={pages.length} onEdit={applyPageEdit} commitRef={commitFrameRef} />
           </div>
         </div>
       </section>
@@ -1659,13 +1804,13 @@ function Workbench({ cardId, onReturn }: { cardId: string, onReturn?: () => void
         </div>
         <div className="pms-field">
           <label>模板</label>
-          <select data-testid="template" value={template} onChange={event => setTemplate(event.target.value as keyof typeof THEMES)}>
+          <select data-testid="template" value={template} onChange={event => { commitFrameNow(); setTemplate(event.target.value as keyof typeof THEMES) }}>
             <option value="avatar-green">头像绿（默认）</option>
             <option value="navy-gold">深蓝金</option>
             <option value="gongwen">公文风</option>
           </select>
           <label htmlFor="page-size">字号（画布保持 1080×1440）</label>
-          <select id="page-size" data-testid="page-size" value={pageSize} onChange={event => setPageSize(event.target.value as 'small' | 'standard' | 'large')}>
+          <select id="page-size" data-testid="page-size" value={pageSize} onChange={event => { commitFrameNow(); setPageSize(event.target.value as 'small' | 'standard' | 'large') }}>
             <option value="small">小</option>
             <option value="standard">标准</option>
             <option value="large">大</option>
@@ -1752,15 +1897,38 @@ function TextGate({ cardId, onConfirmed }: { cardId: string, onConfirmed: () => 
   )
 }
 
-function BrandFrame({ page, template, size, index, total }: { page: PageModel, template: string, size: string, index: number, total: number }) {
+function BrandFrame({ page, template, size, index, total, onEdit, commitRef }: { page: PageModel, template: string, size: string, index: number, total: number, onEdit?: (data: PageEdit) => void, commitRef?: { current: (() => void) | null } }) {
   const [html, setHtml] = useState('')
+  const frameRef = useRef<HTMLIFrameElement>(null)
+  const editRef = useRef(onEdit)
+  editRef.current = onEdit
   useEffect(() => {
     const handle = window.setTimeout(() => {
-      void rpc<{ html: string }>('previewPage', { page, template, size, index, total }).then(result => setHtml(result.html)).catch(() => undefined)
+      void rpc<{ html: string }>('previewPage', { page, template, size, index, total, editable: true }).then(result => setHtml(result.html)).catch(() => undefined)
     }, 180)
     return () => window.clearTimeout(handle)
   }, [page, template, size, index, total])
-  return <iframe title="1080×1440 预览" data-testid="brand-frame" srcDoc={html} style={{ width: 1080, height: 1440, border: 0, background: '#F5F6F0' }} />
+  useEffect(() => {
+    const receive = (event: MessageEvent) => {
+      if (event.source !== frameRef.current?.contentWindow) return
+      const message = event.data as { __pms?: boolean, type?: string, pageId?: string, data?: PageEdit } | null
+      if (!message?.__pms || message.type !== 'commit' || message.pageId !== page.id || !message.data) return
+      editRef.current?.(message.data)
+    }
+    window.addEventListener('message', receive)
+    return () => window.removeEventListener('message', receive)
+  }, [page.id])
+
+  useEffect(() => {
+    if (!commitRef) return
+    commitRef.current = () => {
+      const win = frameRef.current?.contentWindow as (Window & { __pmsCommit?: () => PageEdit | null }) | null
+      const data = win?.__pmsCommit?.()
+      if (data) editRef.current?.(data)
+    }
+    return () => { commitRef.current = null }
+  }, [commitRef])
+  return <iframe ref={frameRef} title="1080×1440 预览" data-testid="brand-frame" srcDoc={html} style={{ width: 1080, height: 1440, border: 0, background: '#F5F6F0' }} />
 }
 
 function imageFrame(crop?: { x: number, y: number, scale: number }) {
@@ -1826,8 +1994,9 @@ function serializeSpans(root: HTMLElement): Span[] {
       return
     }
     if (!(node instanceof HTMLElement)) return
-    const nextBold = bold || node.tagName === 'STRONG' || node.tagName === 'B'
-    const nextHighlight = highlight || node.tagName === 'MARK'
+    const style = node.getAttribute('style') ?? ''
+    const nextBold = bold || node.tagName === 'STRONG' || node.tagName === 'B' || /font-weight\s*:\s*(bold|[6-9]00)/i.test(style)
+    const nextHighlight = highlight || node.tagName === 'MARK' || /background-color/i.test(style)
     node.childNodes.forEach(child => walk(child, nextBold, nextHighlight))
   }
   walk(root, false, false)

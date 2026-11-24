@@ -405,6 +405,29 @@ export class StudioRuntime {
     return this.getCard(cardId)
   }
 
+  /**
+   * 改一条已经写下的原话。作者是唯一的内容来源：这里只做原样保存，
+   * 不重写、不润色，也不把旧文本另存成“AI 建议”。
+   * 编辑同样让 input_version 前进，后台分析会基于新原文重跑。
+   */
+  editThought(cardId: string, interactionId: string, body: string) {
+    const text = body.trim()
+    if (!text) throw new StudioError('empty_thought', '原话不能改成空句。')
+    const card = this.requireCard(cardId)
+    const row = this.db.db.prepare(`SELECT body FROM interactions WHERE id = ? AND card_id = ?`).get(interactionId, cardId) as { body: string } | undefined
+    if (!row) throw new StudioError('thought_not_found', '这条原话已经不在当前卡片里。')
+    if (row.body === text) return this.getCard(cardId)
+    const stamp = nowIso()
+    const nextVersion = Number(card.input_version) + 1
+    this.db.tx(() => {
+      this.db.db.prepare(`UPDATE interactions SET body = ?, edited_at = ? WHERE id = ? AND card_id = ?`).run(text, stamp, interactionId, cardId)
+      this.db.db.prepare(`UPDATE cards SET input_version = ?, updated_at = ? WHERE id = ?`).run(nextVersion, stamp, cardId)
+      this.db.indexText('card', cardId, `${card.title}\n${this.rawText(cardId)}`)
+    })
+    this.enqueueAnalyze(cardId, nextVersion)
+    return this.getCard(cardId)
+  }
+
   shelve(cardId: string) {
     const card = this.requireCard(cardId)
     const stamp = nowIso()
@@ -1074,6 +1097,7 @@ export class StudioRuntime {
       case 'createCard': return this.createCard(String(payload.title ?? ''))
       case 'getCard': return this.getCard(String(payload.cardId))
       case 'appendThought': return this.appendThought(String(payload.cardId), String(payload.body ?? ''), arrayOf(payload.attachmentAssetIds))
+      case 'editThought': return this.editThought(String(payload.cardId), String(payload.interactionId), String(payload.body ?? ''))
       case 'advanceCard': return this.advanceCard(
         String(payload.cardId),
         String(payload.body ?? ''),
@@ -1089,7 +1113,7 @@ export class StudioRuntime {
       case 'textGate': return this.textGate(String(payload.cardId))
       case 'previewPage': {
         const size = payload.size === 'small' || payload.size === 'large' || payload.size === 'standard' ? payload.size : this.config.render.size
-        return { html: (await import('./render.ts')).renderPageHtml(payload.page as PageModel, String(payload.template || 'avatar-green'), this.previewAssets(), size, Number(payload.index || 0), Number(payload.total || 1)) }
+        return { html: (await import('./render.ts')).renderPageHtml(payload.page as PageModel, String(payload.template || 'avatar-green'), this.previewAssets(), size, Number(payload.index || 0), Number(payload.total || 1), payload.editable === true) }
       }
       case 'promote': {
         const cardId = String(payload.cardId)

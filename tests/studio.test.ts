@@ -55,7 +55,7 @@ describe('database', () => {
     for (const table of ['assets', 'asset_chunks', 'asset_tags', 'asset_embeddings', 'topics', 'cards', 'interactions', 'ai_analyses', 'ai_suggestions', 'jobs', 'projects', 'drafts', 'draft_pages', 'asset_relations', 'style_profiles', 'versions', 'exports']) {
       expect(names).toContain(table)
     }
-    expect((db.db.prepare(`SELECT COUNT(*) AS n FROM schema_migrations`).get() as { n: number }).n).toBe(3)
+    expect((db.db.prepare(`SELECT COUNT(*) AS n FROM schema_migrations`).get() as { n: number }).n).toBe(4)
     expect((db.db.prepare(`SELECT COUNT(*) AS n FROM style_profiles`).get() as { n: number }).n).toBe(3)
     db.indexText('asset', 'a1', '个人媒体工作室的选题卡片与金句提取')
     const hit = db.searchText('金句提')
@@ -109,6 +109,9 @@ describe('library and cards', () => {
     expect(detail.interactions).toHaveLength(2)
     expect(detail.interactions[0].body).toContain('我认为慢')
     expect(detail.interactions[1].body).toContain('40 秒')
+    const edited = studio.editThought(id, detail.interactions[0].id, '我认为慢不是缺点，是这台澄白咖啡机真正的句子。')
+    expect(edited.interactions[0].body).toBe('我认为慢不是缺点，是这台澄白咖啡机真正的句子。')
+    expect(edited.card.input_version).toBe(3)
     await studio.drain()
     const analyzed = studio.getCard(id)
     expect((analyzed.analysis as { thesis?: string } | null)?.thesis).toBeTruthy()
@@ -193,7 +196,8 @@ describe('production and export', () => {
     expect(meta.width).toBe(PAGE_W)
     expect(meta.height).toBe(PAGE_H)
     expect(readFileSync(join(exported.dir, 'body.md'), 'utf8')).toContain('澄白')
-    expect(readFileSync(join(exported.dir, 'assets.json'), 'utf8')).toContain(relation.source_path)
+    const traced = JSON.parse(readFileSync(join(exported.dir, 'assets.json'), 'utf8')) as { assets: Array<{ sourcePath: string }> }
+    expect(traced.assets.some(asset => asset.sourcePath === relation.source_path)).toBe(true)
     expect(readFileSync(manifest.knowledge, 'utf8')).toContain('回写')
     await studio.dispose()
   })

@@ -26,11 +26,12 @@ export function editorHtml(): string {
 
 export async function renderEditorPngs(state: EditorState): Promise<Buffer[]> {
   const { chromium } = await import('playwright')
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: process.env.PMS_CHROME || '/usr/bin/google-chrome',
-    args: ['--no-sandbox', '--disable-dev-shm-usage', '--font-render-hinting=none'],
-  })
+  const args = ['--no-sandbox', '--disable-dev-shm-usage', '--font-render-hinting=none']
+  const browser = await chromium.launch(process.env.PMS_CHROME
+    ? { headless: true, executablePath: process.env.PMS_CHROME, args }
+    : process.platform === 'win32'
+      ? { headless: true, channel: 'chrome', args }
+      : { headless: true, executablePath: '/usr/bin/google-chrome', args })
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 })
     await page.setContent(editorHtml(), { waitUntil: 'load' })

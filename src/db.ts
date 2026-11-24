@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -249,6 +249,10 @@ export class StudioDb {
     const interactionColumns = new Set((this.db.prepare(`PRAGMA table_info(interactions)`).all() as Array<{ name: string }>).map(column => column.name))
     if (!interactionColumns.has('client_op_id')) this.db.exec(`ALTER TABLE interactions ADD COLUMN client_op_id TEXT`)
     this.db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_interactions_client_op ON interactions(client_op_id) WHERE client_op_id IS NOT NULL`)
+    // 原话可编辑：保留首次写入时间，另记最后一次编辑时间；不覆盖、不丢历史版本。
+    const editableColumns = new Set((this.db.prepare(`PRAGMA table_info(interactions)`).all() as Array<{ name: string }>).map(column => column.name))
+    if (!editableColumns.has('edited_at')) this.db.exec(`ALTER TABLE interactions ADD COLUMN edited_at TEXT`)
+    this.mark(4)
   }
 
   private mark(version: number) {
@@ -312,8 +316,10 @@ export class StudioDb {
 
   backup(dest: string) {
     mkdirSync(dirname(dest), { recursive: true })
-    const bytes = this.db.serialize()
-    writeFileSync(dest, bytes)
+    // node:sqlite has no serialize(); VACUUM INTO writes a consistent snapshot
+    // while the database stays open (and replaces any stale file).
+    rmSync(dest, { force: true })
+    this.db.prepare(`VACUUM INTO ?`).run(dest)
   }
 
   close() {

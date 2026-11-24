@@ -309,9 +309,20 @@ h1 {
   margin-bottom: 0;
 }
 
-.hl {
+.hl,
+.bold {
   font-weight: 700;
   color: var(--ink-deep);
+}
+
+.mark {
+  background: linear-gradient(transparent 58%, var(--gold-soft) 58%);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  padding: 0 0.04em;
+}
+
+.hl {
   background: linear-gradient(transparent 58%, var(--gold-soft) 58%);
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
