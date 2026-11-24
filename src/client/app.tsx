@@ -680,7 +680,11 @@ function InspirationStage({ data, onChanged, onNotice, onTopics }: {
   const [tab, setTab] = useState<'pending' | 'approved' | 'rejected'>('pending')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const rows = data.candidates.filter(candidate => candidate.status === tab)
+  const [query, setQuery] = useState('')
+  const needle = query.trim().toLowerCase()
+  const rows = data.candidates
+    .filter(candidate => candidate.status === tab)
+    .filter(candidate => !needle || [candidate.angle, candidate.why, candidate.itemBody, candidate.sourceName].some(value => value.toLowerCase().includes(needle)))
 
   async function capture() {
     if (!body.trim() || busy) return
@@ -759,7 +763,17 @@ function InspirationStage({ data, onChanged, onNotice, onTopics }: {
             </div>
           </div>
           {error && <div className="pms-error">{error}</div>}
-          <p className="pms-inspiration-note">自动提取还没开。现在只收下你主动丢进来的东西；素材库和千帆还没接，状态不装成“已同步”。</p>
+          <p className="pms-inspiration-note">自动提取还没开。现在只收下你主动丢进来的东西，也可以让 DSH 助手用 <code>media_propose_inspiration</code> 提议；素材库和千帆还没接，状态不装成“已同步”。</p>
+
+          <div className="pms-inspiration-search">
+            <input
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              placeholder="搜一条灵感、一句原话或来源"
+              aria-label="搜索灵感"
+            />
+            {query && <button type="button" className="pms-btn pms-btn--sm pms-btn--ghost" onClick={() => setQuery('')}>清空</button>}
+          </div>
 
           <div className="pms-inspiration-tabs" role="tablist" aria-label="灵感状态">
             {(['pending', 'approved', 'rejected'] as const).map(item => (
@@ -779,8 +793,8 @@ function InspirationStage({ data, onChanged, onNotice, onTopics }: {
 
           {rows.length === 0 ? (
             <div className="pms-paper-empty">
-              <strong>{tab === 'pending' ? '还没有待判断的灵感' : tab === 'approved' ? '还没有通过的灵感' : '还没有略过的灵感'}</strong>
-              <span>{tab === 'pending' ? '把一句原话丢进上面的框里，先收下。' : '你做的判断会留在这里，之后可以回看。'}</span>
+              <strong>{needle ? '没有匹配的灵感' : tab === 'pending' ? '还没有待判断的灵感' : tab === 'approved' ? '还没有通过的灵感' : '还没有略过的灵感'}</strong>
+              <span>{needle ? '换一个词，或清空搜索。' : tab === 'pending' ? '把一句原话丢进上面的框里，先收下。' : '你做的判断会留在这里，之后可以回看。'}</span>
             </div>
           ) : (
             <div className="pms-inspiration-list">
