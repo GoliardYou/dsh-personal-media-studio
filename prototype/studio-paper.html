@@ -1,0 +1,2222 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>个人媒体工作室 · 纸感工作台（静态原型）</title>
+<style>
+  :root {
+    --font-sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", sans-serif;
+    --font-serif: "Iowan Old Style", "Noto Serif SC", "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
+
+    --bg: #f7f6f2;
+    --surface: #fcfbf7;
+    --surface-2: #ffffff;
+    --ink: #20241f;
+    --ink-2: #5c635a;
+    --ink-3: #8b9187;
+    --line: #e6e4dc;
+    --line-strong: #d8d5cb;
+    --hover: #efede5;
+    --blue: #3964fe;
+    --green: #2f8a5b;
+    --amber: #9a6a24;
+    --danger: #b3423a;
+    --shadow-pop: 0 12px 32px rgba(32, 36, 31, .10), 0 1px 2px rgba(32, 36, 31, .05);
+    --appbar-bg: color-mix(in srgb, #f7f6f2 88%, transparent);
+    --primary-hover: color-mix(in srgb, var(--ink) 88%, var(--bg));
+    --focus-ring: color-mix(in srgb, var(--ink) 55%, transparent);
+
+    /* printed page: stays paper in both themes */
+    --page: #fbfaf6;
+    --page-ink: #20241f;
+    --page-muted: #5c635a;
+    --page-line: #e6e4dc;
+    --page-accent: #a9563b;
+  }
+
+  [data-theme="dark"] {
+    --bg: #131613;
+    --surface: #191d19;
+    --surface-2: #1e221e;
+    --ink: #e9ece5;
+    --ink-2: #a7aea3;
+    --ink-3: #7c847a;
+    --line: #2a2f2a;
+    --line-strong: #3a403a;
+    --hover: #242a24;
+    --blue: #7ba2ff;
+    --green: #6fcf97;
+    --amber: #d8b46a;
+    --danger: #e08a82;
+    --shadow-pop: 0 12px 32px rgba(0, 0, 0, .48), 0 1px 2px rgba(0, 0, 0, .30);
+    --appbar-bg: color-mix(in srgb, #131613 88%, transparent);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { min-height: 100%; }
+  html { color-scheme: light; }
+  [data-theme="dark"] { color-scheme: dark; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: default; opacity: .45; }
+  a { color: inherit; text-decoration: none; }
+  ::selection { background: color-mix(in srgb, var(--blue) 18%, transparent); }
+  :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border: 3px solid var(--bg);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
+
+  /* ── appbar ───────────────────────────────────────────── */
+
+  .appbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: var(--appbar-bg);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .appbar-inner {
+    max-width: 1120px;
+    margin: 0 auto;
+    height: 56px;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+    font-size: 13px;
+    letter-spacing: .01em;
+  }
+
+  .brand-mark {
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    background: var(--surface);
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1;
+    color: var(--ink);
+  }
+
+  .brand-name { color: var(--ink-2); }
+
+  .stages {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--surface) 55%, transparent);
+  }
+
+  .stage {
+    height: 26px;
+    padding: 0 9px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink-2);
+    font-size: 12.5px;
+    line-height: 20px;
+    white-space: nowrap;
+    transition: background-color .12s ease, color .12s ease, box-shadow .12s ease;
+  }
+
+  .stage span {
+    font-size: 10.5px;
+    line-height: 16px;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stage:hover { color: var(--ink); }
+  .stage.is-active {
+    background: var(--surface-2);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(32, 36, 31, .07);
+  }
+  .stage.is-active span { color: var(--ink-2); }
+
+  .appbar-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ink-2);
+    transition: background-color .12s ease, color .12s ease;
+  }
+
+  .icon-btn:hover { background: var(--hover); color: var(--ink); }
+  .icon-btn:active { background: var(--line); }
+  .icon-btn svg { width: 16px; height: 16px; display: block; }
+  .i-sun { display: none; }
+  [data-theme="dark"] .i-sun { display: block; }
+  [data-theme="dark"] .i-moon { display: none; }
+
+  /* ── type / common ────────────────────────────────────── */
+
+  .wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  .screen { padding-bottom: 76px; animation: screen-in .18s ease; }
+
+  @keyframes screen-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .page-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 38px 0 26px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .page-kicker {
+    margin-bottom: 10px;
+    color: var(--ink-3);
+    font-size: 11.5px;
+    line-height: 16px;
+    letter-spacing: .04em;
+  }
+
+  .page-head h1 {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 28px;
+    line-height: 1.3;
+    font-weight: 600;
+    letter-spacing: .005em;
+    color: var(--ink);
+  }
+
+  .page-head .lede {
+    margin: 10px 0 0;
+    max-width: 540px;
+    color: var(--ink-2);
+    font-size: 13.5px;
+    line-height: 22px;
+  }
+
+  .page-head-side { flex: none; padding-bottom: 2px; }
+  .page-head--compact { padding: 26px 0 18px; }
+  .page-head--compact h1 { font-size: 23px; }
+  .page-head--compact .lede { margin-top: 8px; font-size: 13px; line-height: 20px; }
+
+  .primary {
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 12px;
+    border: 1px solid var(--ink);
+    border-radius: 7px;
+    background: var(--ink);
+    color: var(--bg);
+    font-size: 12.5px;
+    line-height: 18px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background-color .12s ease, border-color .12s ease, transform .06s ease;
+  }
+
+  .primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+  .primary:active { transform: translateY(.5px); }
+  .primary--sm { height: 28px; padding: 0 10px; font-size: 12px; }
+  .primary svg { width: 14px; height: 14px; }
+
+  .quiet {
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink-2);
+    font-size: 12px;
+    line-height: 18px;
+    white-space: nowrap;
+  }
+
+  .quiet:hover { background: var(--hover); color: var(--ink); }
+
+  .back {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 0;
+    border: 0;
+    background: transparent;
+    color: var(--ink-3);
+    font-size: 12px;
+    line-height: 18px;
+  }
+
+  .back:hover { color: var(--ink); }
+
+  .segmented {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--surface) 55%, transparent);
+  }
+
+  .seg {
+    height: 26px;
+    padding: 0 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink-2);
+    font-size: 12px;
+    line-height: 20px;
+    white-space: nowrap;
+    transition: background-color .12s ease, color .12s ease, box-shadow .12s ease;
+  }
+
+  .seg span {
+    color: var(--ink-3);
+    font-size: 10.5px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .seg:hover { color: var(--ink); }
+  .seg.is-active {
+    background: var(--surface-2);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(32, 36, 31, .07);
+  }
+  .seg.is-active span { color: var(--ink-2); }
+
+  .segmented--full { display: flex; width: 100%; }
+  .segmented--full .seg { flex: 1; }
+
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 220px;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--ink-3);
+    transition: border-color .12s ease, box-shadow .12s ease;
+  }
+
+  .search:focus-within {
+    border-color: var(--line-strong);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+
+  .search svg { width: 14px; height: 14px; flex: none; }
+  .search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--ink);
+    font-size: 12.5px;
+    line-height: 20px;
+  }
+  .search input::placeholder { color: var(--ink-3); }
+
+  .viewbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 0 6px;
+  }
+
+  .group-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 22px 0 8px;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink-3);
+    font-size: 11.5px;
+    line-height: 18px;
+    letter-spacing: .04em;
+  }
+
+  .group-head strong { font-weight: 500; color: var(--ink-2); }
+  .group-head .count { font-variant-numeric: tabular-nums; color: var(--ink-3); }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--line-strong);
+  }
+  .dot--green { background: var(--green); }
+  .dot--amber { background: var(--amber); }
+  .dot--blue { background: var(--blue); }
+
+  /* ── topics ───────────────────────────────────────────── */
+
+  .topic { border-bottom: 1px solid var(--line); }
+
+  .topic-row {
+    display: grid;
+    grid-template-columns: 84px minmax(0, 1fr) auto;
+    gap: 16px;
+    width: 100%;
+    padding: 18px 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    color: inherit;
+    transition: background-color .12s ease;
+  }
+
+  .topic-row:hover { background: color-mix(in srgb, var(--surface-2) 68%, transparent); }
+  .topic-row.is-open { background: color-mix(in srgb, var(--surface-2) 82%, transparent); }
+
+  .topic-date {
+    padding-top: 4px;
+    color: var(--ink-3);
+    font-size: 11px;
+    line-height: 17px;
+    letter-spacing: .02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .topic-main { min-width: 0; display: block; }
+
+  .topic-title {
+    display: block;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 20px;
+    line-height: 1.5;
+    font-weight: 600;
+    letter-spacing: .005em;
+  }
+
+  .topic-excerpt {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    max-width: 650px;
+    margin-top: 5px;
+    color: var(--ink-2);
+    font-size: 13px;
+    line-height: 21px;
+  }
+
+  .topic-meta {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 9px;
+    color: var(--ink-3);
+    font-size: 11.5px;
+    line-height: 18px;
+  }
+
+  .meta-sep { color: var(--line-strong); }
+
+  .topic-side {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 5px;
+    color: var(--ink-3);
+    font-size: 11.5px;
+    line-height: 18px;
+    white-space: nowrap;
+  }
+
+  .topic-side .go { color: var(--ink-2); }
+
+  .chev {
+    width: 14px;
+    height: 14px;
+    flex: none;
+    color: var(--ink-3);
+    transition: transform .15s ease;
+  }
+
+  .topic-row[aria-expanded="true"] .chev { transform: rotate(180deg); }
+
+  .topic-detail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 40px;
+    padding: 18px 0 24px 100px;
+    border-top: 1px solid var(--line);
+    animation: detail-in .16s ease;
+  }
+
+  @keyframes detail-in {
+    from { opacity: 0; transform: translateY(-2px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .detail-notes { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+  .detail-note {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .detail-note time {
+    padding-top: 3px;
+    color: var(--ink-3);
+    font-size: 10.5px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .detail-note p {
+    margin: 0;
+    color: var(--ink-2);
+    font-family: var(--font-serif);
+    font-size: 14px;
+    line-height: 24px;
+  }
+
+  .detail-anno {
+    min-width: 0;
+    padding-left: 20px;
+    border-left: 1px solid var(--line);
+  }
+
+  .anno-kicker {
+    color: var(--ink-3);
+    font-size: 10.5px;
+    line-height: 16px;
+    letter-spacing: .04em;
+  }
+
+  .detail-anno blockquote {
+    margin: 8px 0;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 15px;
+    line-height: 24px;
+  }
+
+  .detail-anno p {
+    margin: 0;
+    color: var(--ink-2);
+    font-size: 12.5px;
+    line-height: 20px;
+  }
+
+  .detail-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 12px;
+    color: var(--ink);
+    font-size: 12px;
+    line-height: 18px;
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: 3px;
+  }
+
+  .detail-link:hover { text-decoration-color: var(--ink-2); }
+  .detail-empty { margin: 0; color: var(--ink-3); font-size: 13px; line-height: 22px; }
+
+  /* ── pool ─────────────────────────────────────────────── */
+
+  .pool-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 20px;
+    align-items: start;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .pool-kicker {
+    margin-bottom: 6px;
+    color: var(--ink-3);
+    font-size: 11px;
+    line-height: 17px;
+    letter-spacing: .02em;
+  }
+
+  .pool-row h3 {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 18px;
+    line-height: 1.5;
+    font-weight: 600;
+  }
+
+  .pool-row p {
+    max-width: 650px;
+    margin: 6px 0 0;
+    color: var(--ink-2);
+    font-size: 13px;
+    line-height: 21px;
+  }
+
+  .pool-add { align-self: center; }
+
+  .search-empty {
+    padding: 44px 0;
+    color: var(--ink-3);
+    font-size: 13px;
+    line-height: 22px;
+  }
+
+  /* ── new topic ────────────────────────────────────────── */
+
+  .new-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .new-plus {
+    width: 84px;
+    flex: none;
+    color: var(--ink-3);
+    font-family: var(--font-serif);
+    font-size: 18px;
+  }
+
+  .new-row input {
+    flex: 1;
+    min-width: 0;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-bottom: 1px solid var(--line-strong);
+    outline: 0;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 18px;
+    line-height: 28px;
+  }
+
+  .new-row input::placeholder { color: var(--ink-3); }
+  .new-row input:focus { border-bottom-color: var(--ink); }
+  .new-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+
+  /* ── drafts ───────────────────────────────────────────── */
+
+  .draft-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 20px;
+    width: 100%;
+    padding: 20px 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    text-align: left;
+    color: inherit;
+    transition: background-color .12s ease;
+  }
+
+  .draft-row:hover { background: color-mix(in srgb, var(--surface-2) 68%, transparent); }
+
+  .draft-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 7px;
+    color: var(--ink-3);
+    font-size: 11px;
+    line-height: 17px;
+    letter-spacing: .02em;
+  }
+
+  .draft-title {
+    display: block;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 19px;
+    line-height: 1.5;
+    font-weight: 600;
+  }
+
+  .draft-excerpt {
+    display: block;
+    max-width: 680px;
+    margin-top: 5px;
+    color: var(--ink-2);
+    font-size: 13px;
+    line-height: 21px;
+  }
+
+  .draft-side {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: var(--ink-3);
+    font-size: 11px;
+    line-height: 18px;
+    white-space: nowrap;
+  }
+
+  .draft-arrow { color: var(--ink-2); }
+
+  /* ── editor ───────────────────────────────────────────── */
+
+  .subbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .subbar-title {
+    max-width: 420px;
+    overflow: hidden;
+    color: var(--ink-2);
+    font-size: 12.5px;
+    line-height: 18px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .save-state {
+    color: var(--ink-3);
+    font-size: 11px;
+    line-height: 17px;
+    white-space: nowrap;
+  }
+
+  .subbar-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+  }
+
+  .editor-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 40px;
+    align-items: start;
+    padding: 28px 0 60px;
+  }
+
+  .doc {
+    width: 100%;
+    max-width: 716px;
+    min-width: 0;
+    padding-bottom: 40px;
+  }
+
+  .doc-kicker {
+    color: var(--ink-3);
+    font-size: 11px;
+    line-height: 17px;
+    letter-spacing: .06em;
+  }
+
+  .doc h1 {
+    margin: 10px 0 12px;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 32px;
+    line-height: 1.4;
+    font-weight: 600;
+    letter-spacing: .005em;
+  }
+
+  .doc-meta {
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 24px;
+    color: var(--ink-3);
+    font-size: 11.5px;
+    line-height: 18px;
+  }
+
+  .doc-body {
+    outline: none;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 17px;
+    line-height: 31px;
+    letter-spacing: .005em;
+    caret-color: var(--blue);
+  }
+
+  .doc-body:focus-visible { outline: none; }
+
+  .doc-body p { margin: 0 0 20px; }
+  .doc-body h2 {
+    margin: 34px 0 14px;
+    font-family: var(--font-serif);
+    font-size: 21px;
+    line-height: 30px;
+    font-weight: 600;
+    letter-spacing: .005em;
+  }
+
+  .doc-body blockquote {
+    margin: 26px 0;
+    padding-left: 18px;
+    border-left: 2px solid var(--line-strong);
+    color: var(--ink-2);
+    font-size: 18px;
+    line-height: 30px;
+  }
+
+  .doc-body > :first-child { margin-top: 0; }
+  .doc-body > :last-child { margin-bottom: 0; }
+
+  .editor-margin {
+    position: sticky;
+    top: 84px;
+    align-self: start;
+    min-height: 360px;
+    padding: 2px 0 40px 28px;
+    border-left: 1px solid var(--line);
+  }
+
+  .panel-note {
+    margin: 0 0 14px;
+    color: var(--ink-3);
+    font-size: 12px;
+    line-height: 19px;
+  }
+
+  .suggestion {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .suggestion:first-child { padding-top: 0; }
+  .suggestion-kicker {
+    color: var(--ink-3);
+    font-size: 10.5px;
+    line-height: 16px;
+    letter-spacing: .04em;
+  }
+
+  .suggestion blockquote {
+    margin: 7px 0;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 14.5px;
+    line-height: 23px;
+  }
+
+  .suggestion p {
+    margin: 0;
+    color: var(--ink-2);
+    font-size: 12.5px;
+    line-height: 20px;
+  }
+
+  .outline-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: outline;
+  }
+
+  .outline-list li {
+    counter-increment: outline;
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 8px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink-2);
+    font-family: var(--font-serif);
+    font-size: 14px;
+    line-height: 23px;
+  }
+
+  .outline-list li::before {
+    content: counter(outline, decimal-leading-zero);
+    color: var(--ink-3);
+    font-family: var(--font-sans);
+    font-size: 10px;
+    line-height: 23px;
+  }
+
+  .version-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .version-label { color: var(--ink-2); font-size: 12.5px; line-height: 18px; }
+  .version-time { color: var(--ink-3); font-size: 10.5px; line-height: 16px; }
+  .version-restore { height: 24px; padding: 0 6px; font-size: 11px; }
+
+  .panel-empty { margin: 0; color: var(--ink-3); font-size: 12.5px; line-height: 20px; }
+
+  /* ── render ───────────────────────────────────────────── */
+
+  .render-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .render-title {
+    max-width: 420px;
+    overflow: hidden;
+    color: var(--ink-2);
+    font-size: 12.5px;
+    line-height: 18px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .render-meta {
+    color: var(--ink-3);
+    font-size: 11px;
+    line-height: 17px;
+    white-space: nowrap;
+  }
+
+  .render-bar .primary { margin-left: auto; }
+
+  .render-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 40px;
+    align-items: start;
+    padding: 22px 0 60px;
+  }
+
+  .canvas {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 22px 20px 18px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--surface) 45%, transparent);
+  }
+
+  .page-card {
+    width: 380px;
+    max-width: 100%;
+    aspect-ratio: 3 / 4;
+    display: flex;
+    flex-direction: column;
+    padding: 34px;
+    border: 1px solid var(--page-line);
+    border-radius: 2px;
+    background: var(--page);
+    color: var(--page-ink);
+    box-shadow: 0 14px 36px rgba(32, 36, 31, .10);
+    overflow: hidden;
+  }
+
+  .page-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #8b9187;
+    font-size: 9.5px;
+    line-height: 14px;
+    letter-spacing: .08em;
+  }
+
+  .page-content {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .page-content h2 {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 30px;
+    line-height: 1.42;
+    font-weight: 600;
+    letter-spacing: .005em;
+  }
+
+  .page-rule { width: 26px; height: 1px; background: var(--page-ink); opacity: .65; }
+
+  .page-body {
+    max-width: 92%;
+    margin: 0;
+    color: var(--page-muted);
+    font-size: 13px;
+    line-height: 22px;
+  }
+
+  .page-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 12px;
+    border-top: 1px solid var(--page-line);
+    color: #8b9187;
+    font-size: 9.5px;
+    line-height: 14px;
+    letter-spacing: .04em;
+  }
+
+  .quote-mark {
+    height: 36px;
+    color: var(--page-accent);
+    font-family: var(--font-serif);
+    font-size: 64px;
+    line-height: .6;
+  }
+
+  .tone-quote .page-content h2 {
+    font-size: 25px;
+    line-height: 1.55;
+    font-weight: 500;
+  }
+
+  .tone-end .page-content { align-items: center; text-align: center; }
+  .tone-end .page-content h2 { font-size: 27px; line-height: 1.5; }
+
+  .page-card[data-template="plain"] { background: #fff; padding: 40px 38px; }
+  .page-card[data-template="plain"] .page-content h2 { font-weight: 500; }
+
+  .page-card[data-template="note"] { background: #f3eee3; }
+  .page-card[data-template="note"] .page-content {
+    padding-left: 18px;
+    border-left: 1px solid #d8d0bf;
+  }
+
+  .page-card.is-square { aspect-ratio: 1 / 1; }
+  .page-card.is-square .page-content h2 { font-size: 25px; }
+
+  .thumbs {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+
+  .thumb {
+    width: 42px;
+    aspect-ratio: 3 / 4;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+    background: var(--page);
+    color: var(--page-muted);
+    font-size: 9px;
+    opacity: .65;
+    transition: opacity .12s ease, border-color .12s ease, box-shadow .12s ease;
+  }
+
+  .thumb:hover { opacity: 1; }
+  .thumb.is-active {
+    border-color: var(--ink);
+    box-shadow: 0 0 0 1px var(--ink);
+    color: var(--page-ink);
+    opacity: 1;
+  }
+
+  .settings {
+    padding: 2px 0 40px 28px;
+    border-left: 1px solid var(--line);
+  }
+
+  .setting-group { margin-bottom: 24px; }
+  .setting-label {
+    margin-bottom: 8px;
+    color: var(--ink-3);
+    font-size: 11px;
+    line-height: 17px;
+    letter-spacing: .04em;
+  }
+
+  .settings .segmented { display: flex; width: 100%; }
+  .settings .seg { flex: 1; }
+
+  .export-note {
+    margin: 0 0 10px;
+    color: var(--ink-3);
+    font-size: 11.5px;
+    line-height: 19px;
+  }
+
+  .settings .primary { width: 100%; }
+
+  .export-path {
+    margin-top: 10px;
+    color: var(--ink-3);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 10.5px;
+    line-height: 17px;
+    word-break: break-all;
+  }
+
+  .export-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 14px;
+    color: var(--ink-3);
+    font-size: 11px;
+    line-height: 17px;
+  }
+
+  /* ── toast ────────────────────────────────────────────── */
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100vw - 32px);
+    padding: 9px 14px;
+    border-radius: 8px;
+    background: var(--ink);
+    color: var(--bg);
+    font-size: 12.5px;
+    line-height: 18px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(6px);
+    transition: opacity .16s ease, transform .16s ease;
+  }
+
+  .toast.is-on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── responsive ───────────────────────────────────────── */
+
+  @media (max-width: 1080px) {
+    .appbar-inner, .wrap { max-width: 820px; }
+    .page-head h1 { font-size: 26px; }
+
+    .editor-grid, .render-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 24px;
+    }
+
+    .doc { max-width: none; }
+
+    .editor-margin {
+      position: static;
+      padding: 20px 0 0;
+      border-left: 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .settings {
+      padding: 20px 0 0;
+      border-left: 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .page-card { width: 340px; }
+  }
+
+  @media (max-width: 720px) {
+    .appbar-inner { height: 52px; padding: 0 16px; gap: 12px; }
+    .wrap { padding: 0 18px; }
+    .brand-name { display: none; }
+
+    .stage { padding: 0 8px; }
+    .new-label { display: none; }
+    .new-btn { width: 28px; padding: 0; }
+
+    .page-head { align-items: flex-start; padding: 28px 0 20px; gap: 16px; }
+    .page-head h1 { font-size: 24px; }
+    .page-head-side { display: none; }
+
+    .viewbar { flex-direction: column; align-items: stretch; gap: 10px; }
+    .search { width: 100%; min-width: 0; }
+
+    .topic-row { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 16px 0; }
+    .topic-date { display: none; }
+    .topic-title { font-size: 17px; }
+    .topic-excerpt { font-size: 12.5px; line-height: 20px; }
+    .topic-side .go { display: none; }
+
+    .topic-detail {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 18px;
+      padding: 16px 0 22px;
+    }
+
+    .detail-anno {
+      padding: 16px 0 0;
+      border-left: 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .new-plus { display: none; }
+
+    .draft-row { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 16px 0; }
+    .draft-side { gap: 10px; }
+    .draft-title { font-size: 17px; }
+
+    .subbar { flex-wrap: wrap; gap: 8px; }
+    .subbar-title { order: 3; width: 100%; max-width: none; }
+    .subbar-actions { order: 4; width: 100%; margin-left: 0; justify-content: flex-end; }
+    .save-state { margin-left: auto; }
+
+    .doc h1 { font-size: 26px; line-height: 1.35; }
+    .doc-body { font-size: 16px; line-height: 29px; }
+    .doc-body h2 { font-size: 19px; line-height: 28px; }
+    .doc-body blockquote { font-size: 17px; line-height: 28px; }
+
+    .render-bar { flex-wrap: wrap; }
+    .render-title { order: 3; width: 100%; max-width: 100%; }
+    .render-bar .primary { margin-left: 0; }
+
+    .canvas { padding: 18px 14px; }
+    .page-card { width: 100%; max-width: 340px; padding: 28px; }
+    .page-content h2 { font-size: 26px; }
+    .tone-cover .page-content h2 { font-size: 28px; }
+    .tone-quote .page-content h2 { font-size: 22px; }
+
+    .thumbs {
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+      max-width: 100%;
+      padding-bottom: 4px;
+      overflow-x: auto;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .appbar-inner { padding: 0 14px; gap: 10px; }
+    .wrap { padding: 0 14px; }
+    .brand-mark { width: 22px; height: 22px; font-size: 12px; }
+    .stages { gap: 0; padding: 1px; }
+    .stage { height: 24px; padding: 0 7px; font-size: 11.5px; }
+    .stage span { display: none; }
+
+    .page-head h1 { font-size: 22px; }
+    .page-head .lede { font-size: 12.5px; line-height: 20px; }
+    .page-kicker { font-size: 10.5px; }
+
+    .topic-title { font-size: 16px; }
+    .topic-side .topic-note-count { display: none; }
+
+    .page-card { max-width: 100%; padding: 22px; }
+    .page-content h2 { font-size: 23px; line-height: 1.45; }
+    .tone-cover .page-content h2 { font-size: 24px; }
+    .tone-quote .page-content h2 { font-size: 20px; }
+    .page-body { font-size: 12px; line-height: 20px; }
+    .page-top, .page-foot { font-size: 8.5px; }
+    .quote-mark { font-size: 52px; height: 30px; }
+
+    .page-card.is-square .page-content { gap: 12px; }
+    .page-card.is-square .page-content h2 { font-size: 21px; line-height: 1.4; }
+    .page-card.is-square .page-body { font-size: 11.5px; line-height: 19px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: .001ms !important;
+      transition-duration: .001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+</style>
+<script>
+  (function () {
+    try {
+      var saved = localStorage.getItem('pms-studio-theme');
+      if (saved === 'light' || saved === 'dark') {
+        document.documentElement.dataset.theme = saved;
+      } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.dataset.theme = 'dark';
+      }
+    } catch (_) {}
+  })();
+</script>
+</head>
+<body>
+<div class="app">
+  <header class="appbar">
+    <div class="appbar-inner">
+      <a class="brand" href="#topics" id="brand" aria-label="个人媒体工作室">
+        <span class="brand-mark">纸</span>
+        <span class="brand-name">个人媒体工作室</span>
+      </a>
+      <nav class="stages" aria-label="工作阶段">
+        <button class="stage is-active" type="button" data-stage="topics" aria-current="page">选题 <span id="stageTopics">6</span></button>
+        <button class="stage" type="button" data-stage="drafts">草稿 <span id="stageDrafts">4</span></button>
+        <button class="stage" type="button" data-stage="render">渲染 <span id="stageRender">2</span></button>
+      </nav>
+      <div class="appbar-actions">
+        <button class="icon-btn" id="themeBtn" type="button" aria-label="切换深浅色">
+          <svg class="i-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 9.7A5.6 5.6 0 0 1 6.3 2.8 5.6 5.6 0 1 0 13.2 9.7Z"/></svg>
+          <svg class="i-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.7"/><path d="M8 1.3v1.4M8 13.3v1.4M1.3 8h1.4M13.3 8h1.4M3.3 3.3l1 1M11.7 11.7l1 1M12.7 3.3l-1 1M4.3 11.7l-1 1"/></svg>
+        </button>
+        <button class="primary primary--sm new-btn" id="newBtn" type="button" aria-label="新建选题">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 3.2v9.6M3.2 8h9.6"/></svg>
+          <span class="new-label">新建选题</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="screen" id="screen-topics">
+      <div class="wrap">
+        <header class="page-head">
+          <div>
+            <div class="page-kicker">选题 · <span id="topicCount">6</span> 张卡</div>
+            <h1>手上有什么值得写的</h1>
+            <p class="lede">从一句没想清楚的话开始。成熟一张，就送去改稿。</p>
+          </div>
+          <div class="page-head-side">
+            <a class="quiet" href="focus-paper.html" target="_blank" rel="noreferrer">打开聚焦工作台 ↗</a>
+          </div>
+        </header>
+
+        <div class="viewbar">
+          <div class="segmented" role="tablist" aria-label="选题视图">
+            <button class="seg is-active" type="button" role="tab" aria-selected="true" data-view="board">我的选题 <span id="boardCount">6</span></button>
+            <button class="seg" type="button" role="tab" aria-selected="false" data-view="pool">灵感池 <span id="poolCount">24</span></button>
+          </div>
+          <label class="search">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7.1" cy="7.1" r="4.3"/><path d="m10.4 10.4 3 3"/></svg>
+            <input id="topicSearch" type="search" placeholder="搜标题、句子…" aria-label="搜索选题">
+          </label>
+        </div>
+
+        <div id="boardView">
+          <div class="group-head" data-group="writing"><strong>正在写</strong><span class="count" id="writingCount">2</span></div>
+          <div class="new-row" id="newRow" hidden>
+            <span class="new-plus">+</span>
+            <input id="newTitle" type="text" maxlength="80" placeholder="这张卡想讲什么？" aria-label="新选题标题">
+            <div class="new-actions">
+              <button class="quiet" id="newCancel" type="button">取消</button>
+              <button class="primary primary--sm" id="newCreate" type="button">创建</button>
+            </div>
+          </div>
+          <div id="writingList"></div>
+
+          <div class="group-head" data-group="mature"><strong>成熟了，可以改稿</strong><span class="count" id="matureCount">4</span></div>
+          <div id="matureList"></div>
+
+          <div class="search-empty" id="searchEmpty" hidden>没有找到对得上的卡。换个词，或者新建一张。</div>
+        </div>
+
+        <div id="poolView" hidden>
+          <div class="group-head" data-group="pool"><strong>被反复问到的方向</strong><span class="count" id="poolTotal">24</span></div>
+          <div id="poolList"></div>
+          <div class="search-empty" id="poolEmpty" hidden>选题池里没有对得上的方向。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-drafts" hidden>
+      <div class="wrap">
+        <header class="page-head">
+          <div>
+            <div class="page-kicker">草稿 · <span id="draftCount">4</span> 篇</div>
+            <h1>把想清楚的，写成一篇</h1>
+            <p class="lede">文字先定稿，版式最后再说。改字会自动保存，你不需要记得按保存。</p>
+          </div>
+          <div class="page-head-side">
+            <span class="save-state">按最近更新排序</span>
+          </div>
+        </header>
+        <div class="group-head"><strong>全部稿件</strong><span class="count">4</span></div>
+        <div id="draftList"></div>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-editor" hidden>
+      <div class="wrap">
+        <div class="subbar">
+          <button class="back" id="editorBack" type="button">← 草稿</button>
+          <span class="subbar-title" id="editorSubtitle"></span>
+          <span class="save-state" id="saveState">已自动保存</span>
+          <div class="subbar-actions">
+            <button class="quiet" id="saveVersion" type="button">保存版本</button>
+            <button class="primary primary--sm" id="finalizeBtn" type="button">定稿，送去渲染</button>
+          </div>
+        </div>
+
+        <div class="editor-grid">
+          <article class="doc">
+            <div class="doc-kicker" id="docKicker"></div>
+            <h1 id="docTitle"></h1>
+            <div class="doc-meta" id="docMeta"></div>
+            <div class="doc-body" id="docBody" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-label="文章正文"></div>
+          </article>
+
+          <aside class="editor-margin" aria-label="文章侧栏">
+            <div class="segmented segmented--full" role="tablist" aria-label="侧栏内容">
+              <button class="seg is-active" type="button" role="tab" aria-selected="true" data-panel="suggestions">建议 <span id="suggestionCount">3</span></button>
+              <button class="seg" type="button" role="tab" aria-selected="false" data-panel="outline">大纲</button>
+              <button class="seg" type="button" role="tab" aria-selected="false" data-panel="versions">版本 <span id="versionCount">3</span></button>
+            </div>
+            <div id="editorPanel"></div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-render" hidden>
+      <div class="wrap">
+        <header class="page-head page-head--compact">
+          <div>
+            <div class="page-kicker">渲染 · <span id="renderCount">2</span> 篇 · 6 页</div>
+            <h1>文字已经定了，剩下的是版式</h1>
+            <p class="lede">页面随内容伸缩；导出只写文件，不发平台。</p>
+          </div>
+          <div class="page-head-side">
+            <span class="save-state">PNG · 3:4</span>
+          </div>
+        </header>
+
+        <div class="render-bar">
+          <button class="back" id="renderBack" type="button">← 改稿台</button>
+          <span class="render-title" id="renderTitle"></span>
+          <span class="render-meta" id="renderMeta"></span>
+          <button class="primary primary--sm" id="exportTop" type="button">导出 6 张图</button>
+        </div>
+
+        <div class="render-grid">
+          <div class="canvas">
+            <div class="page-card" id="pageCard" data-template="paper"></div>
+            <div class="thumbs" id="thumbs" role="tablist" aria-label="页面"></div>
+          </div>
+
+          <aside class="settings" aria-label="渲染设置">
+            <div class="setting-group">
+              <div class="setting-label">版式</div>
+              <div class="segmented segmented--full" role="group" aria-label="版式">
+                <button class="seg is-active" type="button" data-template="paper">纸感</button>
+                <button class="seg" type="button" data-template="plain">留白</button>
+                <button class="seg" type="button" data-template="note">手记</button>
+              </div>
+            </div>
+            <div class="setting-group">
+              <div class="setting-label">尺寸</div>
+              <div class="segmented segmented--full" role="group" aria-label="尺寸">
+                <button class="seg is-active" type="button" data-size="3:4">3:4</button>
+                <button class="seg" type="button" data-size="1:1">1:1</button>
+              </div>
+            </div>
+            <div class="setting-group">
+              <div class="setting-label">导出</div>
+              <p class="export-note">PNG · 2160 × 2880 · 6 张</p>
+              <button class="primary" id="exportBottom" type="button">导出全部</button>
+              <div class="export-path">~/.dsh/personal-media-studio/exports/休息-11.24/</div>
+              <div class="export-status" id="exportStatus"><span class="dot dot--green"></span>还没有导出</div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden><span id="toastText"></span></div>
+
+<script>
+(function () {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+
+  const TOPICS = [
+    {
+      id: 't1', title: '为什么我们总是把“休息”当成奖励？',
+      excerpt: '“休息”被写成了完成事情之后的奖赏，于是停下来本身变成了一种亏欠。',
+      notes: 5, state: 'mature', updated: '今天 14:41', date: '11.24', article: 'rest'
+    },
+    {
+      id: 't2', title: '把“自律”当成道德，会毁掉一个人的节奏',
+      excerpt: '当自律变成一种道德优越感，休息就会被读成放纵。',
+      notes: 7, state: 'mature', updated: '昨天 22:10', date: '11.23', article: 'discipline'
+    },
+    {
+      id: 't3', title: '一个人开始变强的信号，不是更努力',
+      excerpt: '是开始允许自己停下来，并且不再为停下来解释。',
+      notes: 2, state: 'writing', updated: '昨天 18:02', date: '11.23',
+      notesList: [
+        { time: '18:02', text: '“变强”被默认成更能扛。但也许真正的变化，是不再需要证明自己能扛。' },
+        { time: '17:40', text: '如果一个人停下来不解释，会发生什么？这个画面可以放在开头。' }
+      ],
+      annotation: {
+        quote: '不再需要证明自己能扛。',
+        body: '这句可以往下走：具体是什么时刻，你第一次没有解释？把一个场景写出来，比结论更有说服力。'
+      }
+    },
+    {
+      id: 't4', title: '我们为什么越来越不会“无聊”了',
+      excerpt: '无聊不是空白，它是注意力还没有被安排的那一小段时间。',
+      notes: 5, state: 'mature', updated: '11.21', date: '11.21', article: 'boredom',
+      notesList: [
+        { time: '10:12', text: '现在连排队三十秒都要掏出手机。不是怕无聊，是怕那段没有被安排的时间。' },
+        { time: '10:18', text: '无聊里其实有一种很松的注意力，它不指向任何任务。' },
+        { time: '10:26', text: '可以写一个对照：小时候在窗边发呆，和现在在电梯里刷手机。' }
+      ],
+      annotation: {
+        quote: '没有被安排的时间。',
+        body: '这里可以停一下：为什么“没有被安排”会让人不安？往身体感受写，不要急着给解释。'
+      }
+    },
+    {
+      id: 't5', title: '被看见的渴望，和被理解的渴望',
+      excerpt: '被看见是“我在这里”，被理解是“你知道我为什么在这里”。',
+      notes: 1, state: 'mature', updated: '11.20', date: '11.20', article: 'visibility',
+      notesList: [
+        { time: '21:06', text: '被看见很容易变成表演；被理解需要有人愿意多停一会儿。' }
+      ],
+      annotation: {
+        quote: '多停一会儿。',
+        body: '“停一会儿”可以是一个具体的动作：追问一句、记住一个细节、不急着给建议。选一个写。'
+      }
+    },
+    {
+      id: 't6', title: '休息不是奖励，是工作的一部分',
+      excerpt: '如果休息需要被挣来，那工作就永远没有结束的时候。',
+      notes: 4, state: 'writing', updated: '11.19', date: '11.19',
+      notesList: [
+        { time: '09:14', text: '把休息写成“下一段工作的前提”，比写成“对自己好一点”更有力。' },
+        { time: '09:22', text: '但不要把它写成新的效率工具。休息不需要产出。' },
+        { time: '09:30', text: '可以放一个反例：那种“为了更好工作而休息”的休息，常常并没有真的休息。' }
+      ],
+      annotation: {
+        quote: '休息不需要产出。',
+        body: '这句是全文最容易滑过去的地方。给它一个具体的场景：二十分钟，不记录，不解释。'
+      }
+    }
+  ];
+
+  const POOL = [
+    { title: '为什么我一闲下来就觉得自己在浪费生命？', asks: 23, summary: '一停下来就心慌，好像必须一直产出才配存在。' },
+    { title: '怎么在不自律的时候，也不讨厌自己？', asks: 17, summary: '计划断掉之后，最先来的不是累，是自我攻击。' },
+    { title: '如何判断自己是真的累了，还是在逃避？', asks: 12, summary: '两者看起来一样，但需要的回应完全不同。' },
+    { title: '为什么越休息越累？', asks: 9, summary: '休息被安排成了另一项任务，身体停了，评价没有停。' }
+  ];
+
+  const DRAFTS = [
+    {
+      id: 'd1', article: 'rest', target: 'editor', stage: '改稿中', tone: 'amber',
+      title: '为什么我们总是把“休息”当成奖励？', words: '2,180 字', updated: '今天 14:41',
+      excerpt: '我们常把休息放在“做完之后”。好像只有把今天该做的事清空，停下来才不算偷懒。'
+    },
+    {
+      id: 'd2', article: 'discipline', target: 'editor', stage: '待定稿', tone: 'blue',
+      title: '把“自律”当成道德，会毁掉一个人的节奏', words: '3,020 字', updated: '昨天 22:10',
+      excerpt: '自律这个词，很容易变成一种道德。做到了就是“对自己负责”，没做到就是“放纵”。'
+    },
+    {
+      id: 'd3', article: 'boredom', target: 'render', stage: '待渲染', tone: 'green',
+      title: '我们为什么越来越不会“无聊”了', words: '6 页', updated: '11.21',
+      excerpt: '文字已定稿。页面随内容伸缩，导出只写文件。'
+    },
+    {
+      id: 'd4', article: 'visibility', target: 'render', stage: '已导出', tone: 'muted',
+      title: '被看见的渴望，和被理解的渴望', words: '6 页', updated: '11.20',
+      excerpt: '上次导出 6 张图。改字之后需要重新导出。'
+    }
+  ];
+
+  const ARTICLES = {
+    rest: {
+      title: '为什么我们总是把“休息”当成奖励？',
+      kicker: '改稿 · 第 3 版',
+      meta: '3 条笔记 · 2,180 字 · 最后编辑 14:41',
+      body: `
+        <p>我们常把休息放在“做完之后”。</p>
+        <p>好像只有把今天该做的事清空，停下来才不算偷懒。</p>
+        <p>但休息不是完成任务的奖赏。它是下一段工作的前提。</p>
+        <h2>一、把休息当奖励，会发生什么</h2>
+        <p>当休息需要被“挣来”，工作就永远没有结束的时候。你会把每一次停下来，都读成一次欠账。</p>
+        <p>于是你休息的时候也在想：我是不是应该做点什么。身体停下来了，评价没有停。</p>
+        <h2>二、真正累的不是身体</h2>
+        <p>很多时候，累来自一个没有关掉的评价：我这样够不够好。休息之所以无效，是因为你把它变成了另一个需要完成的任务。</p>
+        <blockquote>你不是因为停下来才落后，你是因为一直没停，才看不清下一步。</blockquote>
+        <p>这句话不是让你躺平。它只是提醒你：停下来不是退出，是换一种速度。</p>
+        <h2>三、把休息放回它本来的位置</h2>
+        <p>不是“做完再休息”，而是“休息也是工作的一部分”。像安排一场会议一样，安排一段不被打断的时间。</p>
+        <p>它不需要有产出，不需要被记录，也不需要向谁解释。</p>
+        <h2>四、一个可以马上试的动作</h2>
+        <p>今天给自己留二十分钟，不产出、不记录、不解释。只观察：当你允许自己停下来，身体先松的是哪里。</p>
+      `,
+      suggestions: [
+        { kicker: '关于 14:41', quote: '休息不是完成任务的奖赏。', body: '这句是全文的支点。下一段可以给一个具体的“奖赏式休息”场景，读者会立刻认出来。' },
+        { kicker: '缺口', quote: '真正累的不是身体', body: '这里还差一个反例：有没有一种休息，反而让你更累？把它写出来，论证会更稳。' },
+        { kicker: '可以追问', quote: '像安排一场会议一样', body: '“会议”这个比喻很好，但它也可能让休息变得更像任务。要不要换一个更松的比喻？' }
+      ],
+      outline: ['把休息当奖励，会发生什么', '真正累的不是身体', '把休息放回它本来的位置', '一个可以马上试的动作'],
+      versions: [
+        { label: '初稿', time: '11.23 22:10' },
+        { label: '删掉第二节', time: '11.24 09:12' },
+        { label: '补一个反例', time: '11.24 14:05' }
+      ],
+      pages: [
+        { no: '01', role: '封面', title: '休息不是奖励，\n是工作的一部分。', body: '为什么我们总把停下来，读成一种亏欠。', tone: 'cover' },
+        { no: '02', role: '内页', title: '把休息当奖励，\n工作就没有结束。', body: '当休息需要被挣来，每一次停下都像一次欠账。', tone: 'text' },
+        { no: '03', role: '金句', title: '你不是因为停下来才落后，\n你是因为一直没停，\n才看不清下一步。', body: '', tone: 'quote' },
+        { no: '04', role: '内页', title: '真正累的，\n不是身体。', body: '累来自一个没有关掉的评价：我这样够不够好。', tone: 'text' },
+        { no: '05', role: '内页', title: '把休息放回\n它本来的位置。', body: '不是“做完再休息”，而是“休息也是工作的一部分”。', tone: 'text' },
+        { no: '06', role: '尾页', title: '今天，留二十分钟\n不产出。', body: '不记录，不解释。只观察身体先松的是哪里。', tone: 'end' }
+      ]
+    },
+    discipline: {
+      title: '把“自律”当成道德，会毁掉一个人的节奏',
+      kicker: '改稿 · 第 2 版',
+      meta: '7 条笔记 · 3,020 字 · 最后编辑 22:10',
+      body: `
+        <p>自律这个词，很容易变成一种道德。</p>
+        <p>早起、读书、运动，做到了就是“对自己负责”，没做到就是“放纵”。</p>
+        <p>但节奏不是一条直线。人有高有低，有能写的时候，也有只能坐着的时候。</p>
+        <h2>一、当自律变成道德</h2>
+        <p>一旦把自律当成道德，休息就会被读成放纵。你不再问“我需不需要停”，只问“我配不配停”。</p>
+        <blockquote>你不是不够自律，你是在用道德要求自己。</blockquote>
+        <h2>二、节奏不是固定的</h2>
+        <p>真正的节奏，是知道什么时候该快，也知道什么时候该慢。它不是每天做到，而是长期不把自己耗空。</p>
+        <h2>三、允许自己失败一次</h2>
+        <p>今天少做一件“应该做”的事。看看世界有没有塌。大多数时候，它没有。</p>
+      `,
+      suggestions: [
+        { kicker: '关于 22:10', quote: '自律这个词，很容易变成一种道德。', body: '开头很好。下一句可以停在一个具体的自我审判上，不要急着解释“为什么会这样”。' },
+        { kicker: '可以追问', quote: '节奏不是一条直线。', body: '“直线”这个比喻还可以再具体：你的一周里，哪一天是可以慢下来的？写那个下午。' }
+      ],
+      outline: ['当自律变成道德', '节奏不是固定的', '允许自己失败一次'],
+      versions: [
+        { label: '初稿', time: '11.22 21:40' },
+        { label: '换了一个开头', time: '11.23 10:18' }
+      ],
+      pages: [
+        { no: '01', role: '封面', title: '把“自律”当成道德，\n会毁掉一个人的节奏。', body: '自律不是每天做到，是知道什么时候停。', tone: 'cover' },
+        { no: '02', role: '内页', title: '当自律变成道德，\n休息就成了放纵。', body: '你不再问“我需不需要停”，只问“我配不配停”。', tone: 'text' },
+        { no: '03', role: '金句', title: '你不是不够自律，\n你是在用道德\n要求自己。', body: '', tone: 'quote' },
+        { no: '04', role: '内页', title: '节奏不是一条直线。', body: '人有高有低，有能写的时候，也有只能坐着的时候。', tone: 'text' },
+        { no: '05', role: '内页', title: '真正的节奏，\n是长期不把自己耗空。', body: '知道什么时候该快，也知道什么时候该慢。', tone: 'text' },
+        { no: '06', role: '尾页', title: '今天，少做一件\n“应该做”的事。', body: '看看世界有没有塌。大多数时候，它没有。', tone: 'end' }
+      ]
+    },
+    boredom: {
+      title: '我们为什么越来越不会“无聊”了',
+      kicker: '改稿 · 第 2 版',
+      meta: '5 条笔记 · 1,860 字 · 最后编辑 11.21',
+      body: `
+        <p>现在连排队三十秒，都要掏出手机。</p>
+        <p>不是怕无聊，是怕那段没有被安排的时间。</p>
+        <p>无聊不是空白。它是注意力还没有被安排的那一小段时间。</p>
+        <h2>一、我们怕的不是无聊</h2>
+        <p>无聊会让人面对一个事实：此刻没有事情需要我。对习惯用“有用”来衡量时间的人来说，这几乎是一种失重。</p>
+        <blockquote>无聊里其实有一种很松的注意力，它不指向任何任务。</blockquote>
+        <h2>二、小时候的窗边</h2>
+        <p>小时候可以在窗边坐很久，看云、看楼下的人。那不是浪费时间，那是注意力在自由地找东西。</p>
+        <h2>三、把十分钟还给自己</h2>
+        <p>今天允许自己无聊十分钟。不刷手机，不听播客，不把这段时间变成另一个任务。</p>
+      `,
+      suggestions: [
+        { kicker: '关于 10:18', quote: '没有被安排的时间。', body: '这里可以停一下：为什么“没有被安排”会让人不安？往身体感受写，不要急着给解释。' },
+        { kicker: '可以追问', quote: '一种很松的注意力。', body: '“松”是什么感觉？可以写一个具体的画面：窗边的光、楼下的声音、手里没有东西。' }
+      ],
+      outline: ['我们怕的不是无聊', '小时候的窗边', '把十分钟还给自己'],
+      versions: [
+        { label: '初稿', time: '11.20 20:05' },
+        { label: '补一个童年场景', time: '11.21 10:22' }
+      ],
+      pages: [
+        { no: '01', role: '封面', title: '无聊不是空白，\n是注意力还没被安排。', body: '我们怕的不是无事可做，是那段没有名字的时间。', tone: 'cover' },
+        { no: '02', role: '内页', title: '我们怕的不是无聊，\n是那段没有被安排的时间。', body: '此刻没有事情需要我——对习惯用“有用”衡量时间的人，这几乎是一种失重。', tone: 'text' },
+        { no: '03', role: '金句', title: '无聊里有一种\n很松的注意力，\n它不指向任何任务。', body: '', tone: 'quote' },
+        { no: '04', role: '内页', title: '现在连排队三十秒，\n都要掏出手机。', body: '不是怕无聊，是怕停下来之后，那个问题浮上来。', tone: 'text' },
+        { no: '05', role: '内页', title: '小时候在窗边发呆，\n和现在在电梯里刷手机。', body: '同样是等待，一个在让注意力自己找东西，一个在把它填满。', tone: 'text' },
+        { no: '06', role: '尾页', title: '今天，允许自己\n无聊十分钟。', body: '不刷手机，不听播客，不把这段时间变成另一个任务。', tone: 'end' }
+      ]
+    },
+    visibility: {
+      title: '被看见的渴望，和被理解的渴望',
+      kicker: '改稿 · 第 1 版',
+      meta: '1 条笔记 · 1,540 字 · 最后编辑 11.20',
+      body: `
+        <p>被看见是“我在这里”。被理解是“你知道我为什么在这里”。</p>
+        <p>我们常常把前者当成后者，于是不断地说、不断地展示，却还是觉得没有被接住。</p>
+        <h2>一、被看见很容易变成表演</h2>
+        <p>表演需要观众，理解需要一个人愿意多停一会儿。停在哪里？停在你还没说清楚的那句话上。</p>
+        <blockquote>被理解需要有人愿意多停一会儿。</blockquote>
+        <h2>二、多停一会儿的动作</h2>
+        <p>追问一句，记住一个细节，不急着给建议。理解不是同意，是愿意把你的话听完。</p>
+        <h2>三、更长的停留</h2>
+        <p>我们想要的不是更多目光，是更长的停留。今天，对一个人多问一句“然后呢”。</p>
+      `,
+      suggestions: [
+        { kicker: '关于 21:06', quote: '多停一会儿。', body: '“停一会儿”可以是一个具体的动作：追问一句、记住一个细节、不急着给建议。选一个写。' },
+        { kicker: '缺口', quote: '被看见很容易变成表演。', body: '这里可以放一个你被“看见”却没有被理解的时刻。不要解释，先写那个场景。' }
+      ],
+      outline: ['被看见很容易变成表演', '多停一会儿的动作', '更长的停留'],
+      versions: [
+        { label: '初稿', time: '11.19 22:40' },
+        { label: '换了一个开头', time: '11.20 09:35' }
+      ],
+      pages: [
+        { no: '01', role: '封面', title: '被看见是“我在这里”，\n被理解是“你知道\n我为什么在这里”。', body: '我们常常把前者当成后者，于是不断地说，却还是觉得没有被接住。', tone: 'cover' },
+        { no: '02', role: '内页', title: '被看见很容易\n变成表演。', body: '表演需要观众，理解需要一个人愿意多停一会儿。', tone: 'text' },
+        { no: '03', role: '金句', title: '被理解需要有人\n愿意多停一会儿。', body: '', tone: 'quote' },
+        { no: '04', role: '内页', title: '追问一句，记住一个细节，\n不急着给建议。', body: '理解不是同意，是愿意把你的话听完。', tone: 'text' },
+        { no: '05', role: '内页', title: '我们想要的不是更多目光，\n是更长的停留。', body: '被看见是“我在这里”，被理解是“你知道我为什么在这里”。', tone: 'text' },
+        { no: '06', role: '尾页', title: '今天，多问一句\n“然后呢？”', body: '不急着给建议，不急着把话题接回自己。', tone: 'end' }
+      ]
+    }
+  };
+
+  const state = {
+    screen: 'topics',
+    view: 'board',
+    article: 'rest',
+    editorFrom: 'drafts',
+    panel: 'suggestions',
+    page: 0,
+    template: 'paper',
+    size: '3:4',
+    toastTimer: 0,
+    saveTimer: 0
+  };
+
+  const stageForScreen = { topics: 'topics', drafts: 'drafts', editor: 'drafts', render: 'render' };
+
+  function esc(value) {
+    return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function nowTime() {
+    return new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+
+  function article() { return ARTICLES[state.article] || ARTICLES.rest; }
+
+  /* ── shell ────────────────────────────────────────────── */
+
+  function showScreen(name) {
+    state.screen = name;
+    document.querySelectorAll('.screen').forEach(section => {
+      section.hidden = section.id !== 'screen-' + name;
+    });
+    const stage = stageForScreen[name] || 'topics';
+    document.querySelectorAll('.stage').forEach(button => {
+      const active = button.dataset.stage === stage;
+      button.classList.toggle('is-active', active);
+      if (active) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  function showToast(message) {
+    window.clearTimeout(state.toastTimer);
+    const toast = $('toast');
+    $('toastText').textContent = message;
+    toast.hidden = false;
+    requestAnimationFrame(() => toast.classList.add('is-on'));
+    state.toastTimer = window.setTimeout(() => {
+      toast.classList.remove('is-on');
+      state.toastTimer = window.setTimeout(() => { toast.hidden = true; }, 180);
+    }, 2400);
+  }
+
+  /* ── topics ───────────────────────────────────────────── */
+
+  function detailHtml(topic) {
+    const notes = topic.notesList || [];
+    const anno = topic.annotation || {
+      quote: topic.title,
+      body: '还没有批注。先写下第一句，再让 AI 在旁边读。'
+    };
+    return `
+      <div class="detail-notes">
+        ${notes.length
+          ? notes.map(note => `<div class="detail-note"><time>${esc(note.time)}</time><p>${esc(note.text)}</p></div>`).join('')
+          : '<p class="detail-empty">还没有笔记。进入聚焦工作台，写下第一句。</p>'}
+      </div>
+      <aside class="detail-anno">
+        <div class="anno-kicker">批注</div>
+        <blockquote>“${esc(anno.quote)}”</blockquote>
+        <p>${esc(anno.body)}</p>
+        <a class="detail-link" href="focus-paper.html" target="_blank" rel="noreferrer">进入聚焦工作台 <span>→</span></a>
+      </aside>`;
+  }
+
+  function topicRow(topic) {
+    const writing = topic.state === 'writing';
+    return `
+      <div class="topic" data-id="${esc(topic.id)}" data-state="${esc(topic.state)}" data-article="${esc(topic.article || '')}">
+        <button class="topic-row" type="button" aria-expanded="false">
+          <span class="topic-date">${esc(topic.date)}</span>
+          <span class="topic-main">
+            <span class="topic-title">${esc(topic.title)}</span>
+            <span class="topic-excerpt">${esc(topic.excerpt)}</span>
+            <span class="topic-meta">${topic.notes} 条笔记<span class="meta-sep">·</span>${esc(topic.updated)}</span>
+          </span>
+          <span class="topic-side">
+            ${writing
+              ? `<span class="topic-note-count">${topic.notes} 条</span><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 4 4 4-4"/></svg>`
+              : `<span class="dot dot--green"></span><span class="go">去改稿</span><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 4.5 12.5 8 9 11.5"/></svg>`}
+          </span>
+        </button>
+        ${writing ? `<div class="topic-detail" hidden>${detailHtml(topic)}</div>` : ''}
+      </div>`;
+  }
+
+  function renderTopics() {
+    const writing = TOPICS.filter(topic => topic.state === 'writing');
+    const mature = TOPICS.filter(topic => topic.state === 'mature');
+    $('writingList').innerHTML = writing.map(topicRow).join('');
+    $('matureList').innerHTML = mature.map(topicRow).join('');
+    $('writingCount').textContent = String(writing.length);
+    $('matureCount').textContent = String(mature.length);
+    $('topicCount').textContent = String(TOPICS.length);
+    $('boardCount').textContent = String(TOPICS.length);
+    $('stageTopics').textContent = String(TOPICS.length);
+    $('poolList').innerHTML = POOL.map(item => `
+      <article class="pool-row">
+        <div>
+          <div class="pool-kicker">${item.asks} 人问过</div>
+          <h3>${esc(item.title)}</h3>
+          <p>${esc(item.summary)}</p>
+        </div>
+        <button class="quiet pool-add" type="button" data-pool="${esc(item.title)}">放到看板</button>
+      </article>`).join('');
+    applySearch();
+  }
+
+  function closeDetails() {
+    document.querySelectorAll('.topic-detail').forEach(detail => { detail.hidden = true; });
+    document.querySelectorAll('.topic-row').forEach(row => {
+      row.classList.remove('is-open');
+      row.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function applySearch() {
+    const query = $('topicSearch').value.trim().toLowerCase();
+    if (state.view === 'board') {
+      const topics = Array.from(document.querySelectorAll('.topic'));
+      let visible = 0;
+      topics.forEach(topic => {
+        const match = !query || topic.textContent.toLowerCase().includes(query);
+        topic.hidden = !match;
+        if (match) visible++;
+      });
+      document.querySelectorAll('#boardView .group-head').forEach(head => { head.hidden = Boolean(query); });
+      $('searchEmpty').hidden = !query || visible > 0;
+      if (query) closeDetails();
+    } else {
+      const rows = Array.from(document.querySelectorAll('.pool-row'));
+      let visible = 0;
+      rows.forEach(row => {
+        const match = !query || row.textContent.toLowerCase().includes(query);
+        row.hidden = !match;
+        if (match) visible++;
+      });
+      $('poolEmpty').hidden = !query || visible > 0;
+    }
+  }
+
+  function switchView(view) {
+    state.view = view;
+    $('boardView').hidden = view !== 'board';
+    $('poolView').hidden = view !== 'pool';
+    document.querySelectorAll('[data-view]').forEach(button => {
+      const active = button.dataset.view === view;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-selected', String(active));
+    });
+    applySearch();
+  }
+
+  function openNewTopic() {
+    if (state.screen !== 'topics') showScreen('topics');
+    switchView('board');
+    $('newRow').hidden = false;
+    $('newTitle').focus();
+  }
+
+  function createTopic() {
+    const title = $('newTitle').value.trim();
+    if (!title) { $('newTitle').focus(); return; }
+    TOPICS.unshift({
+      id: 't' + Date.now(),
+      title,
+      excerpt: '还没有写过。去聚焦里说第一句。',
+      notes: 0,
+      state: 'writing',
+      updated: '刚刚',
+      date: '今天',
+      notesList: [],
+      annotation: {
+        quote: title,
+        body: '先写下第一句。不用完整，也不用先想好。'
+      }
+    });
+    $('newTitle').value = '';
+    $('newRow').hidden = true;
+    renderTopics();
+    showToast('已新建一张卡，去聚焦里写第一句');
+  }
+
+  /* ── drafts ───────────────────────────────────────────── */
+
+  function renderDrafts() {
+    $('draftList').innerHTML = DRAFTS.map(draft => `
+      <button class="draft-row" type="button" data-id="${esc(draft.id)}" data-article="${esc(draft.article)}" data-target="${esc(draft.target)}">
+        <span class="draft-main">
+          <span class="draft-status"><span class="dot dot--${esc(draft.tone)}"></span>${esc(draft.stage)}</span>
+          <span class="draft-title">${esc(draft.title)}</span>
+          <span class="draft-excerpt">${esc(draft.excerpt)}</span>
+        </span>
+        <span class="draft-side"><span>${esc(draft.words)}</span><span>${esc(draft.updated)}</span><span class="draft-arrow">→</span></span>
+      </button>`).join('');
+    $('draftCount').textContent = String(DRAFTS.length);
+    $('stageDrafts').textContent = String(DRAFTS.length);
+    $('stageRender').textContent = String(DRAFTS.filter(draft => draft.target === 'render').length);
+    $('renderCount').textContent = String(DRAFTS.filter(draft => draft.target === 'render').length);
+  }
+
+  /* ── editor ───────────────────────────────────────────── */
+
+  function renderEditor() {
+    const doc = article();
+    $('editorSubtitle').textContent = doc.title;
+    $('docKicker').textContent = doc.kicker;
+    $('docTitle').textContent = doc.title;
+    $('docMeta').textContent = doc.meta;
+    $('docBody').innerHTML = doc.body;
+    $('saveState').textContent = '已自动保存 · 14:41';
+    $('suggestionCount').textContent = String(doc.suggestions.length);
+    $('versionCount').textContent = String(doc.versions.length);
+    state.panel = 'suggestions';
+    document.querySelectorAll('[data-panel]').forEach(button => {
+      const active = button.dataset.panel === 'suggestions';
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-selected', String(active));
+    });
+    renderPanel();
+  }
+
+  function renderPanel() {
+    const doc = article();
+    const panel = $('editorPanel');
+    if (state.panel === 'suggestions') {
+      panel.innerHTML = `<p class="panel-note">建议不会改你的句子。要收进正文，自己贴进去。</p>` +
+        (doc.suggestions.length
+          ? doc.suggestions.map(item => `
+              <div class="suggestion">
+                <div class="suggestion-kicker">${esc(item.kicker)}</div>
+                <blockquote>“${esc(item.quote)}”</blockquote>
+                <p>${esc(item.body)}</p>
+              </div>`).join('')
+          : '<p class="panel-empty">还没有新的建议。</p>');
+      return;
+    }
+    if (state.panel === 'outline') {
+      panel.innerHTML = `<p class="panel-note">这篇的小标题结构。</p><ol class="outline-list">` +
+        doc.outline.map(item => `<li>${esc(item)}</li>`).join('') + '</ol>';
+      return;
+    }
+    panel.innerHTML = `<p class="panel-note">保存过的版本。恢复只影响正文，不动批注。</p>` +
+      (doc.versions.length
+        ? doc.versions.map(version => `
+            <div class="version-row">
+              <div><div class="version-label">${esc(version.label)}</div><div class="version-time">${esc(version.time)}</div></div>
+              <button class="quiet version-restore" type="button" data-restore="${esc(version.label)}">恢复</button>
+            </div>`).join('')
+        : '<p class="panel-empty">还没有保存过版本。</p>');
+  }
+
+  function openEditor(articleId) {
+    const current = document.querySelector('.screen:not([hidden])');
+    if (current && current.id === 'screen-topics') state.editorFrom = 'topics';
+    else if (current && current.id === 'screen-drafts') state.editorFrom = 'drafts';
+    state.article = articleId;
+    renderEditor();
+    showScreen('editor');
+  }
+
+  function saveVersion() {
+    const doc = article();
+    doc.versions.unshift({ label: '手动版本', time: nowTime() });
+    $('versionCount').textContent = String(doc.versions.length);
+    if (state.panel === 'versions') renderPanel();
+    showToast('已保存一个版本');
+  }
+
+  /* ── render ───────────────────────────────────────────── */
+
+  function renderRender() {
+    const doc = article();
+    $('renderTitle').textContent = doc.title;
+    $('renderMeta').textContent = doc.pages.length + ' 页 · ' + state.size;
+    $('stageRender').textContent = String(DRAFTS.filter(draft => draft.target === 'render').length);
+    renderPage();
+    renderThumbs();
+  }
+
+  function renderPage() {
+    const doc = article();
+    const page = doc.pages[state.page] || doc.pages[0];
+    const card = $('pageCard');
+    card.className = 'page-card tone-' + page.tone + (state.size === '1:1' ? ' is-square' : '');
+    card.dataset.template = state.template;
+    card.innerHTML = `
+      <div class="page-top"><span>${esc(page.no)} / ${String(doc.pages.length).padStart(2, '0')}</span><span>${esc(page.role)}</span></div>
+      <div class="page-content">
+        ${page.tone === 'quote' ? '<div class="quote-mark">“</div>' : '<div class="page-rule"></div>'}
+        <h2>${esc(page.title).replace(/\n/g, '<br>')}</h2>
+        ${page.body ? `<p class="page-body">${esc(page.body)}</p>` : ''}
+      </div>
+      <div class="page-foot"><span>个人媒体工作室</span><span>${esc(page.no)}</span></div>`;
+  }
+
+  function renderThumbs() {
+    const doc = article();
+    $('thumbs').innerHTML = doc.pages.map((page, index) => `
+      <button class="thumb${index === state.page ? ' is-active' : ''}" type="button" role="tab" aria-selected="${index === state.page}" data-page="${index}" aria-label="第 ${index + 1} 页">${esc(page.no)}</button>`).join('');
+  }
+
+  function exportPages() {
+    $('exportStatus').innerHTML = '<span class="dot dot--green"></span>已导出 · ' + nowTime();
+    showToast('已导出 6 张 PNG（原型模拟）');
+  }
+
+  /* ── events ───────────────────────────────────────────── */
+
+  document.querySelectorAll('.stage').forEach(button => {
+    button.addEventListener('click', () => {
+      const stage = button.dataset.stage;
+      if (stage === 'topics') showScreen('topics');
+      else if (stage === 'drafts') showScreen('drafts');
+      else { renderRender(); showScreen('render'); }
+    });
+  });
+
+  $('brand').addEventListener('click', (event) => {
+    event.preventDefault();
+    showScreen('topics');
+  });
+
+  $('themeBtn').addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('pms-studio-theme', next); } catch (_) {}
+  });
+
+  $('newBtn').addEventListener('click', openNewTopic);
+  $('newCancel').addEventListener('click', () => { $('newRow').hidden = true; $('newTitle').value = ''; });
+  $('newCreate').addEventListener('click', createTopic);
+  $('newTitle').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); createTopic(); }
+    if (event.key === 'Escape') { event.preventDefault(); $('newRow').hidden = true; $('newTitle').value = ''; }
+  });
+
+  document.querySelectorAll('[data-view]').forEach(button => {
+    button.addEventListener('click', () => switchView(button.dataset.view));
+  });
+
+  $('topicSearch').addEventListener('input', applySearch);
+
+  $('boardView').addEventListener('click', (event) => {
+    const poolAdd = event.target.closest('.pool-add');
+    if (poolAdd) { showToast('已放到看板（原型模拟）'); return; }
+    const row = event.target.closest('.topic-row');
+    if (!row) return;
+    const topic = row.closest('.topic');
+    if (topic.dataset.state === 'mature') {
+      openEditor(topic.dataset.article || 'rest');
+      return;
+    }
+    const detail = topic.querySelector('.topic-detail');
+    const willOpen = detail && detail.hidden;
+    closeDetails();
+    if (willOpen) {
+      detail.hidden = false;
+      row.classList.add('is-open');
+      row.setAttribute('aria-expanded', 'true');
+    }
+  });
+
+  $('poolView').addEventListener('click', (event) => {
+    const poolAdd = event.target.closest('.pool-add');
+    if (poolAdd) showToast('已放到看板（原型模拟）');
+  });
+
+  $('draftList').addEventListener('click', (event) => {
+    const row = event.target.closest('.draft-row');
+    if (!row) return;
+    if (row.dataset.target === 'editor') openEditor(row.dataset.article);
+    else { state.article = row.dataset.article; state.page = 0; renderRender(); showScreen('render'); }
+  });
+
+  $('editorBack').addEventListener('click', () => showScreen(state.editorFrom));
+  $('finalizeBtn').addEventListener('click', () => {
+    state.page = 0;
+    renderRender();
+    showScreen('render');
+    showToast('文字已定稿，去渲染');
+  });
+  $('saveVersion').addEventListener('click', saveVersion);
+
+  document.querySelectorAll('[data-panel]').forEach(button => {
+    button.addEventListener('click', () => {
+      state.panel = button.dataset.panel;
+      document.querySelectorAll('[data-panel]').forEach(item => {
+        const active = item === button;
+        item.classList.toggle('is-active', active);
+        item.setAttribute('aria-selected', String(active));
+      });
+      renderPanel();
+    });
+  });
+
+  $('editorPanel').addEventListener('click', (event) => {
+    const restore = event.target.closest('[data-restore]');
+    if (restore) showToast('已恢复「' + restore.dataset.restore + '」（原型模拟）');
+  });
+
+  $('docBody').addEventListener('input', () => {
+    window.clearTimeout(state.saveTimer);
+    $('saveState').textContent = '保存中…';
+    state.saveTimer = window.setTimeout(() => {
+      $('saveState').textContent = '已自动保存 · ' + nowTime();
+    }, 650);
+  });
+
+  $('renderBack').addEventListener('click', () => openEditor(state.article));
+
+  $('thumbs').addEventListener('click', (event) => {
+    const thumb = event.target.closest('[data-page]');
+    if (!thumb) return;
+    state.page = Number(thumb.dataset.page);
+    renderPage();
+    renderThumbs();
+  });
+
+  document.querySelectorAll('.settings [data-template]').forEach(button => {
+    button.addEventListener('click', () => {
+      state.template = button.dataset.template;
+      document.querySelectorAll('.settings [data-template]').forEach(item => item.classList.toggle('is-active', item === button));
+      renderPage();
+    });
+  });
+
+  document.querySelectorAll('[data-size]').forEach(button => {
+    button.addEventListener('click', () => {
+      state.size = button.dataset.size;
+      document.querySelectorAll('[data-size]').forEach(item => item.classList.toggle('is-active', item === button));
+      $('renderMeta').textContent = article().pages.length + ' 页 · ' + state.size;
+      renderPage();
+    });
+  });
+
+  $('exportTop').addEventListener('click', exportPages);
+  $('exportBottom').addEventListener('click', exportPages);
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!$('newRow').hidden) {
+      $('newRow').hidden = true;
+      $('newTitle').value = '';
+      closeDetails();
+    }
+  });
+
+  /* ── boot ─────────────────────────────────────────────── */
+
+  renderTopics();
+  renderDrafts();
+  renderEditor();
+  renderRender();
+  showScreen('topics');
+})();
+</script>
+</body>
+</html>

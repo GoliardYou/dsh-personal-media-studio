@@ -1,0 +1,1739 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>聚焦 · 纸与批注（静态原型）</title>
+<style>
+  :root {
+    --font-sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", sans-serif;
+    --font-serif: "Iowan Old Style", "Noto Serif SC", "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
+
+    --bg: #f7f6f2;
+    --surface: #fcfbf7;
+    --surface-2: #ffffff;
+    --ink: #20241f;
+    --ink-2: #5c635a;
+    --ink-3: #8b9187;
+    --line: #e6e4dc;
+    --line-strong: #d8d5cb;
+    --hover: #efede5;
+    --blue: #3964fe;
+    --blue-soft: rgba(57, 100, 254, .09);
+    --green: #2f8a5b;
+    --danger: #b3423a;
+    --shadow: 0 1px 2px rgba(32, 36, 31, .05), 0 8px 24px rgba(32, 36, 31, .06);
+    --shadow-pop: 0 12px 32px rgba(32, 36, 31, .10), 0 1px 2px rgba(32, 36, 31, .05);
+  }
+
+  [data-theme="dark"] {
+    --bg: #131613;
+    --surface: #191d19;
+    --surface-2: #1e221e;
+    --ink: #e9ece5;
+    --ink-2: #a7aea3;
+    --ink-3: #7c847a;
+    --line: #2a2f2a;
+    --line-strong: #3a403a;
+    --hover: #242a24;
+    --blue: #7ba2ff;
+    --blue-soft: rgba(123, 162, 255, .12);
+    --green: #6fcf97;
+    --danger: #e08a82;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .32);
+    --shadow-pop: 0 12px 32px rgba(0, 0, 0, .45), 0 1px 2px rgba(0, 0, 0, .3);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  html, body { height: 100%; }
+  html { color-scheme: light; }
+  [data-theme="dark"] { color-scheme: dark; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 20px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+  }
+
+  button, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  ::selection { background: var(--blue-soft); }
+
+  :focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+
+  .app {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── top bar ───────────────────────────────────────────── */
+
+  .topbar {
+    flex: none;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+    position: relative;
+    z-index: 20;
+  }
+
+  .topbar-inner {
+    height: 56px;
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+  }
+
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ink-2);
+    padding: 0;
+    transition: background-color .12s ease, color .12s ease;
+  }
+
+  .icon-btn:hover { background: var(--hover); color: var(--ink); }
+  .icon-btn:active { background: var(--line); }
+
+  .icon-btn svg { width: 16px; height: 16px; display: block; }
+  .i-sun { display: none; }
+  [data-theme="dark"] .i-sun { display: block; }
+  [data-theme="dark"] .i-moon { display: none; }
+
+  .title-wrap { min-width: 0; display: flex; align-items: center; gap: 8px; }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    flex: none;
+  }
+
+  .card-title {
+    margin: 0;
+    font-size: 15px;
+    line-height: 22px;
+    font-weight: 500;
+    letter-spacing: .005em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink-3);
+    font-size: 12px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+    padding: 0 4px;
+  }
+
+  .progress-bar {
+    width: 44px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--line);
+    overflow: hidden;
+  }
+
+  .progress-bar i {
+    display: block;
+    height: 100%;
+    background: var(--ink-2);
+    border-radius: 1px;
+    transition: width .24s ease;
+  }
+
+  .margin-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 7px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ink-2);
+    font-size: 12px;
+    line-height: 16px;
+    transition: background-color .12s ease, color .12s ease, border-color .12s ease;
+  }
+
+  .margin-btn:hover { background: var(--hover); color: var(--ink); }
+  .margin-btn[aria-expanded="true"] {
+    background: var(--surface-2);
+    border-color: var(--line);
+    color: var(--ink);
+  }
+  .margin-btn svg { width: 15px; height: 15px; }
+  .margin-btn-count {
+    min-width: 12px;
+    color: var(--ink-3);
+    font-size: 11px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+  .margin-btn[aria-expanded="true"] .margin-btn-count { color: var(--ink-2); }
+
+  .menu-wrap { position: relative; }
+
+  .menu {
+    position: absolute;
+    top: 34px;
+    right: 0;
+    width: 184px;
+    padding: 4px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow-pop);
+    z-index: 40;
+    animation: pop-in .14s ease-out;
+  }
+
+  @keyframes pop-in {
+    from { opacity: 0; transform: translateY(-4px) scale(.98); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    height: 32px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink-2);
+    font-size: 13px;
+    line-height: 20px;
+    text-align: left;
+  }
+
+  .menu-item:hover { background: var(--hover); color: var(--ink); }
+  .menu-item svg { width: 15px; height: 15px; flex: none; }
+  .menu-item.danger { color: var(--danger); }
+  .menu-item.danger:hover { background: color-mix(in srgb, var(--danger) 9%, transparent); }
+  .menu-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+
+  /* ── workspace ─────────────────────────────────────────── */
+
+  .workspace {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 32px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 40px;
+  }
+
+  .sheet {
+    width: 100%;
+    --gutter: 46px;
+    --gap: 14px;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    transition: opacity .14s ease, transform .14s ease;
+  }
+
+  .sheet.is-leaving { opacity: 0; transform: translateY(-4px); }
+
+  /* The annotation column is a real sidebar: hide it and the sheet gets the
+     width back, without moving its left edge (the title stays aligned). */
+  @media (min-width: 1081px) {
+    .sidebar-hidden .workspace { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sidebar-hidden .margin { display: none; }
+    .sidebar-hidden .sheet { max-width: 820px; margin: 0 auto; }
+  }
+
+  .notes-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    padding: 22px 0 18px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  .notes-scroll::-webkit-scrollbar { width: 10px; }
+  .notes-scroll::-webkit-scrollbar-track { background: transparent; }
+  .notes-scroll::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border: 3px solid var(--bg);
+    border-radius: 999px;
+  }
+  .notes-scroll::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
+
+  .sheet-meta {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 0 8px calc(var(--gutter) + var(--gap));
+    color: var(--ink-3);
+    font-size: 11px;
+    line-height: 16px;
+    letter-spacing: .01em;
+  }
+
+  .meta-sep { color: var(--line-strong); }
+
+  .notes {
+    position: relative;
+    padding-bottom: 8px;
+  }
+
+  .notes::before {
+    content: "";
+    position: absolute;
+    top: 2px;
+    bottom: 18px;
+    left: calc(var(--gutter) + var(--gap) / 2 - .5px);
+    width: 1px;
+    background: var(--line);
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 18px, #000 calc(100% - 18px), transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 18px, #000 calc(100% - 18px), transparent);
+  }
+
+  .note {
+    position: relative;
+    display: grid;
+    grid-template-columns: var(--gutter) minmax(0, 1fr);
+    gap: var(--gap);
+    padding: 13px 0;
+  }
+
+  .note.is-new { animation: note-in .18s ease-out; }
+
+  @keyframes note-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .note.removing { animation: note-out .14s ease-in forwards; }
+
+  @keyframes note-out {
+    to { opacity: 0; transform: translateY(-3px); }
+  }
+
+  .note-gutter {
+    padding-top: 5px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
+
+  .note-gutter time {
+    color: var(--ink-3);
+    font-size: 12px;
+    line-height: 18px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .01em;
+  }
+
+  .note-gutter .edited {
+    color: var(--ink-3);
+    font-size: 10px;
+    line-height: 14px;
+    opacity: .75;
+  }
+
+  .note-main { position: relative; min-width: 0; }
+
+  .note-body {
+    margin: -5px -10px;
+    padding: 5px 84px 5px 10px;
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 16px;
+    line-height: 28px;
+    letter-spacing: .002em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    outline: none;
+    transition: background-color .12s ease, box-shadow .12s ease;
+    min-height: 38px;
+  }
+
+  .note:hover .note-body { background: var(--hover); }
+
+  .note-body:focus {
+    background: var(--surface-2);
+    box-shadow: 0 0 0 1px var(--line-strong);
+  }
+
+  .note-body:focus-visible,
+  .capture-input:focus-visible { outline: none; }
+
+  .note-actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: flex;
+    gap: 1px;
+    padding: 0;
+    border-radius: 8px;
+    background: transparent;
+    opacity: 0;
+    transform: translateY(-2px);
+    pointer-events: none;
+    z-index: 2;
+    transition: opacity .12s ease, transform .12s ease;
+  }
+
+  .note:hover .note-actions,
+  .note:focus-within .note-actions {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .note:focus-within .note-actions { background: transparent; }
+
+  .note-actions button {
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink-3);
+    padding: 0;
+    transition: background-color .1s ease, color .1s ease;
+  }
+
+  .note-actions button:hover { background: var(--surface-2); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+  .note-actions button[data-act="delete"]:hover { color: var(--danger); }
+  .note-actions svg { width: 15px; height: 15px; }
+
+  .empty {
+    padding: 64px 0 40px calc(var(--gutter) + var(--gap));
+    animation: note-in .2s ease-out;
+  }
+
+  .empty p { margin: 0; color: var(--ink-2); font-size: 13px; line-height: 21px; }
+  .empty .empty-sub { margin-top: 4px; color: var(--ink-3); }
+  .empty .ghost {
+    margin-top: 14px;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ink-2);
+    font-size: 12px;
+    line-height: 18px;
+  }
+  .empty .ghost:hover { background: var(--hover); color: var(--ink); }
+
+  /* ── capture ───────────────────────────────────────────── */
+
+  .capture-wrap {
+    position: relative;
+    flex: none;
+    padding: 0 0 14px;
+    background: var(--bg);
+    border-top: 1px solid var(--line);
+  }
+
+  .capture-wrap::before {
+    content: "";
+    position: absolute;
+    top: -25px;
+    left: 0;
+    right: 0;
+    height: 24px;
+    background: linear-gradient(to top, var(--bg), transparent);
+    pointer-events: none;
+  }
+
+  .to-latest {
+    position: absolute;
+    top: -42px;
+    left: calc(var(--gutter) + var(--gap));
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface-2);
+    box-shadow: var(--shadow);
+    color: var(--ink-2);
+    font-size: 12px;
+    line-height: 16px;
+    animation: note-in .16s ease-out;
+  }
+
+  .to-latest:hover { color: var(--ink); }
+  .to-latest svg { width: 13px; height: 13px; }
+
+  .capture {
+    display: grid;
+    grid-template-columns: var(--gutter) minmax(0, 1fr) auto;
+    gap: var(--gap);
+    align-items: start;
+    padding: 9px 0 7px;
+  }
+
+  .plus {
+    justify-self: end;
+    width: 24px;
+    height: 24px;
+    margin-top: 1px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--line-strong);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--ink-3);
+    padding: 0;
+    transition: border-color .12s ease, color .12s ease, background-color .12s ease;
+  }
+
+  .plus:hover { border-color: var(--ink-3); color: var(--ink); background: var(--hover); }
+  .capture:focus-within .plus { border-color: var(--blue); color: var(--blue); }
+  .plus svg { width: 12px; height: 12px; }
+
+  .capture-input {
+    display: block;
+    width: 100%;
+    min-height: 28px;
+    max-height: 168px;
+    padding: 1px 0;
+    border: 0;
+    outline: 0;
+    resize: none;
+    overflow-y: auto;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 15px;
+    line-height: 26px;
+    letter-spacing: .002em;
+    caret-color: var(--blue);
+  }
+
+  .capture-input::placeholder { color: var(--ink-3); opacity: 1; }
+
+  .commit {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    margin-top: 1px;
+    padding: 0 8px;
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    background: var(--surface-2);
+    color: var(--ink-2);
+    font-size: 12px;
+    line-height: 18px;
+    transition: opacity .12s ease, border-color .12s ease, color .12s ease, background-color .12s ease;
+  }
+
+  .commit:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-3); }
+  .commit:disabled { opacity: .38; cursor: default; }
+
+  .commit kbd {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    line-height: 14px;
+    color: var(--ink-3);
+    padding: 0 3px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+  }
+
+  .capture-foot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: calc(var(--gutter) + var(--gap));
+    min-height: 18px;
+    color: var(--ink-3);
+    font-size: 11px;
+    line-height: 16px;
+  }
+
+  .save-state { font-variant-numeric: tabular-nums; }
+  .save-state.is-saving { color: var(--blue); }
+
+  .foot-hint { color: var(--ink-3); opacity: .8; }
+
+  .next {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink-2);
+    font-size: 12px;
+    line-height: 18px;
+  }
+
+  .next:hover { color: var(--ink); background: var(--hover); }
+  .next span { color: var(--ink-3); }
+
+  /* ── margin ────────────────────────────────────────────── */
+
+  .margin {
+    min-height: 0;
+    border-left: 1px solid var(--line);
+    padding: 22px 0 40px 28px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  .margin::-webkit-scrollbar { width: 8px; }
+  .margin::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 999px; }
+
+  .margin-head {
+    position: sticky;
+    top: -22px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0 14px;
+    background: var(--bg);
+  }
+
+  .margin-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--ink-2);
+    font-size: 13px;
+    line-height: 20px;
+    font-weight: 500;
+  }
+
+  .margin-title svg.spark { width: 14px; height: 14px; color: var(--ink-3); }
+  .margin-title .count { color: var(--ink-3); font-weight: 400; font-variant-numeric: tabular-nums; }
+
+  .margin-body { padding-bottom: 8px; }
+
+  .anno { padding: 0 0 22px; }
+  .anno + .anno { border-top: 1px solid var(--line); padding-top: 18px; }
+
+  .anno-kicker {
+    margin-bottom: 8px;
+    color: var(--ink-3);
+    font-size: 11px;
+    line-height: 16px;
+    letter-spacing: .04em;
+  }
+
+  .anno blockquote {
+    margin: 0 0 8px;
+    padding-left: 10px;
+    border-left: 2px solid var(--line-strong);
+    color: var(--ink-2);
+    font-size: 13px;
+    line-height: 21px;
+  }
+
+  .anno p {
+    margin: 0;
+    color: var(--ink-2);
+    font-size: 13px;
+    line-height: 21px;
+  }
+
+  .margin-empty {
+    margin: 0;
+    color: var(--ink-3);
+    font-size: 13px;
+    line-height: 21px;
+  }
+
+  .margin-foot { padding-top: 4px; }
+
+  .reanalyze {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    border: 0;
+    background: transparent;
+    color: var(--ink-3);
+    font-size: 12px;
+    line-height: 20px;
+  }
+
+  .reanalyze:hover { color: var(--ink); }
+  .reanalyze svg { width: 13px; height: 13px; }
+
+  .reading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0 18px;
+    color: var(--ink-3);
+    font-size: 12px;
+    line-height: 20px;
+  }
+
+  .reading .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--blue);
+    animation: pulse 1s ease-in-out infinite alternate;
+  }
+
+  @keyframes pulse {
+    from { opacity: .3; transform: scale(.9); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  /* ── drawer / toast ───────────────────────────────────── */
+
+  .drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(15, 18, 15, .18);
+    opacity: 0;
+    transition: opacity .2s ease;
+  }
+
+  .drawer-backdrop[data-open="true"] { opacity: 1; }
+
+  .drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    width: min(360px, 100%);
+    padding: 0 20px;
+    background: var(--bg);
+    border-left: 1px solid var(--line);
+    box-shadow: -16px 0 40px rgba(0, 0, 0, .10);
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform .2s ease;
+  }
+
+  .drawer[data-open="true"] { transform: none; }
+
+  .drawer-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .drawer-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--ink-2);
+    font-size: 13px;
+    line-height: 20px;
+    font-weight: 500;
+  }
+
+  .drawer-title svg { width: 14px; height: 14px; color: var(--ink-3); }
+  .drawer-title .count { color: var(--ink-3); font-weight: 400; }
+  .drawer-body { padding: 18px 0 40px; }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 104px;
+    z-index: 70;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 8px 8px 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: 9px;
+    background: var(--surface-2);
+    box-shadow: var(--shadow-pop);
+    color: var(--ink-2);
+    font-size: 12px;
+    line-height: 18px;
+    white-space: nowrap;
+    animation: toast-in .16s ease-out;
+  }
+
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+    to { opacity: 1; transform: translateX(-50%); }
+  }
+
+  .toast button {
+    padding: 2px 5px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--blue);
+    font-size: 12px;
+    line-height: 18px;
+    font-weight: 500;
+  }
+
+  .toast button:hover { background: var(--blue-soft); }
+
+  /* ── responsive ────────────────────────────────────────── */
+
+  @media (max-width: 1080px) {
+    .topbar-inner { max-width: 820px; }
+    .workspace { max-width: 820px; grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sheet { max-width: none; }
+    .margin { display: none; }
+  }
+
+  @media (max-width: 720px) {
+    .topbar-inner { padding: 0 18px; gap: 6px; }
+    .workspace { padding: 0 18px; }
+    .progress-bar { display: none; }
+    .foot-hint { display: none; }
+    .title-wrap { gap: 6px; }
+    .card-title { font-size: 14px; }
+    .note-body { padding-right: 10px; }
+    .note-actions {
+      position: static;
+      justify-content: flex-end;
+      margin-top: 3px;
+      opacity: .55;
+      transform: none;
+      pointer-events: auto;
+    }
+    .note:focus-within .note-actions,
+    .note:hover .note-actions { opacity: 1; }
+  }
+
+  @media (max-width: 560px) {
+    .sheet { --gutter: 38px; --gap: 10px; }
+    .topbar-inner { height: 64px; padding: 0 14px; }
+    .card-title {
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      line-height: 20px;
+    }
+    .workspace { padding: 0 14px; }
+    .topbar-right { gap: 2px; }
+    .progress { font-size: 11px; padding: 0 2px; }
+    .margin-btn { padding: 0 5px; }
+    .margin-btn-label { display: none; }
+    .commit kbd { display: none; }
+    .note-body { font-size: 15px; line-height: 26px; }
+    .capture-input { font-size: 15px; }
+    .toast { bottom: 96px; max-width: calc(100vw - 28px); white-space: normal; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: .001ms !important;
+      transition-duration: .001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+</style>
+<script>
+  (function () {
+    try {
+      var saved = localStorage.getItem('pms-focus-theme');
+      if (saved === 'light' || saved === 'dark') {
+        document.documentElement.dataset.theme = saved;
+      } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.dataset.theme = 'dark';
+      }
+      if (localStorage.getItem('pms-focus-sidebar') === 'hidden') {
+        document.documentElement.classList.add('sidebar-hidden');
+      }
+    } catch (_) {}
+  })();
+</script>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-left">
+        <button class="icon-btn" id="backBtn" type="button" aria-label="上一张">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg>
+        </button>
+        <div class="title-wrap">
+          <span class="status-dot" id="statusDot" title="已成熟" hidden></span>
+          <h1 class="card-title" id="cardTitle">为什么我们总是把“休息”当成奖励？</h1>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="progress" aria-label="进度">
+          <span id="progressText">3 / 12</span>
+          <span class="progress-bar"><i id="progressBar" style="width:25%"></i></span>
+        </div>
+        <button class="margin-btn" id="marginBtn" type="button" aria-label="隐藏 AI 批注" aria-controls="margin" aria-expanded="true">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8 9.4 5.1 12.9 5.5 10.3 7.9 11 11.3 8 9.6 5 11.3 5.7 7.9 3.1 5.5 6.6 5.1Z"/><path d="M12.6 11.4v2.4M11.4 12.6h2.4"/></svg>
+          <span class="margin-btn-label">批注</span>
+          <span class="margin-btn-count" id="marginBtnCount">3</span>
+        </button>
+        <button class="icon-btn" id="themeBtn" type="button" aria-label="切换深浅色">
+          <svg class="i-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 9.7A5.6 5.6 0 0 1 6.3 2.8 5.6 5.6 0 1 0 13.2 9.7Z"/></svg>
+          <svg class="i-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.7"/><path d="M8 1.3v1.4M8 13.3v1.4M1.3 8h1.4M13.3 8h1.4M3.3 3.3l1 1M11.7 11.7l1 1M12.7 3.3l-1 1M4.3 11.7l-1 1"/></svg>
+        </button>
+        <div class="menu-wrap">
+          <button class="icon-btn" id="moreBtn" type="button" aria-label="更多" aria-haspopup="menu" aria-expanded="false">
+            <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.15"/><circle cx="8" cy="8" r="1.15"/><circle cx="13" cy="8" r="1.15"/></svg>
+          </button>
+          <div class="menu" id="menu" role="menu" hidden>
+            <button class="menu-item" type="button" data-menu="mature" role="menuitem">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.4 3.1 3.1L13 4.7"/></svg>
+              <span id="matureLabel">标记为成熟</span>
+            </button>
+            <button class="menu-item" type="button" data-menu="copy" role="menuitem">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.2" y="5.2" width="8.1" height="8.1" rx="1.6"/><path d="M10.8 5.2V3.7c0-.9-.7-1.6-1.6-1.6H3.7c-.9 0-1.6.7-1.6 1.6v5.5c0 .9.7 1.6 1.6 1.6h1.5"/></svg>
+              复制标题
+            </button>
+            <div class="menu-sep"></div>
+            <button class="menu-item danger" type="button" data-menu="delete" role="menuitem">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 4.3h10.4M6 2.6h4M4.2 4.3l.6 8.6c.1.8.7 1.4 1.5 1.4h3.4c.8 0 1.4-.6 1.5-1.4l.6-8.6"/><path d="M6.6 7v4.2M9.4 7v4.2"/></svg>
+              删除卡片
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="sheet" id="sheet">
+      <div class="notes-scroll" id="notesScroll">
+        <div class="sheet-meta">
+          <span id="noteCount">3 条笔记</span>
+          <span class="meta-sep">·</span>
+          <span id="lastEdit">最后 14:41</span>
+        </div>
+        <div class="notes" id="notes"></div>
+        <div class="empty" id="empty" hidden>
+          <p>这张卡还没有笔记。</p>
+          <p class="empty-sub">写第一句，或者让 AI 先问一个问题。</p>
+          <button class="ghost" id="seedBtn" type="button">让 AI 起个头</button>
+        </div>
+      </div>
+
+      <div class="capture-wrap">
+        <button class="to-latest" id="toLatest" type="button" hidden>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v10M3.5 8.5 8 13l4.5-4.5"/></svg>
+          回到最新
+        </button>
+        <div class="capture">
+          <button class="plus" id="plusBtn" type="button" aria-label="聚焦输入">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 3.2v9.6M3.2 8h9.6"/></svg>
+          </button>
+          <textarea class="capture-input" id="captureInput" rows="1" placeholder="随时记一句…" aria-label="随时记一句"></textarea>
+          <button class="commit" id="commitBtn" type="button" disabled>记下 <kbd>⌘↵</kbd></button>
+        </div>
+        <div class="capture-foot">
+          <span class="save-state" id="saveState">已保存 · 14:41</span>
+          <span class="foot-hint">写下去，不用先想好</span>
+          <button class="next" id="nextBtn" type="button">下一张 <span>→</span></button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="margin" id="margin" aria-label="AI 批注">
+      <div class="margin-head">
+        <div class="margin-title">
+          <svg class="spark" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8 9.4 5.1 12.9 5.5 10.3 7.9 11 11.3 8 9.6 5 11.3 5.7 7.9 3.1 5.5 6.6 5.1Z"/><path d="M12.6 11.4v2.4M11.4 12.6h2.4"/></svg>
+          批注
+          <span class="count" id="annoCount">3</span>
+        </div>
+      </div>
+      <div class="margin-body" id="marginBody"></div>
+    </aside>
+  </main>
+</div>
+
+<div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+<aside class="drawer" id="drawer" aria-label="AI 批注" hidden>
+  <div class="drawer-head">
+    <div class="drawer-title">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8 9.4 5.1 12.9 5.5 10.3 7.9 11 11.3 8 9.6 5 11.3 5.7 7.9 3.1 5.5 6.6 5.1Z"/><path d="M12.6 11.4v2.4M11.4 12.6h2.4"/></svg>
+      批注 <span class="count" id="drawerCount">3</span>
+    </div>
+    <button class="icon-btn" id="drawerClose" type="button" aria-label="关闭批注">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m4 4 8 8M12 4l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</aside>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden>
+  <span id="toastText"></span>
+  <button id="toastAction" type="button" hidden>撤销</button>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── data ─────────────────────────────────────────────── */
+
+  const CARDS = [
+    {
+      position: 3,
+      total: 12,
+      title: '为什么我们总是把“休息”当成奖励？',
+      mature: false,
+      notes: [
+        { id: 'n1', time: '14:32', edited: false, body: '我发现我只有在完成一件事之后才允许自己休息。休息像是工资，不是空气。' },
+        { id: 'n2', time: '14:35', edited: false, body: '小时候被夸“努力”，长大后就把“停下来”等同于“退步”。' },
+        { id: 'n3', time: '14:41', edited: false, body: '也许问题不是休息太少，而是休息时必须“有用”——跑步要打卡，读书要输出。' }
+      ],
+      annos: [
+        { kicker: '关于 14:32', quote: '休息像是工资，不是空气。', body: '这个比喻可以往下推：工资是事后结算，空气是当下必需。两者的时间结构不同——你缺的可能不是休息的量，而是“不需要先证明什么”的休息。' },
+        { kicker: '缺口', body: '你还没有说：如果休息不需要“挣”，你具体会做什么？这里需要一个场景，不然会停在观念层。' },
+        { kicker: '可以追问', body: '谁最早让你觉得“停下来”是危险的？把那个人、那句话、那个下午写出来。' }
+      ]
+    },
+    {
+      position: 4,
+      total: 12,
+      title: '如果休息不是奖励，那它是什么？',
+      mature: true,
+      notes: [
+        { id: 'n4', time: '15:02', edited: false, body: '可能是一种背景音。不是做完什么才响起的掌声，而是一直在的空气。' },
+        { id: 'n5', time: '15:06', edited: true, body: '但“一直在”很难被感知。人是不是只能感知到边界？比如忙完之后的那个空白。' }
+      ],
+      annos: [
+        { kicker: '关于 15:02', quote: '不是做完什么才响起的掌声，而是一直在的空气。', body: '空气的比喻很好，但它有个风险：空气看不见。你需要一个能被看见的仪式，否则“一直在”会变成“一直不在”。' },
+        { kicker: '可以试', body: '明天留 20 分钟，不做任何“有用”的事，只记录你在这 20 分钟里想逃向哪里。' }
+      ]
+    },
+    {
+      position: 5,
+      total: 12,
+      title: '我们能不能把休息写进日程，而不是写进奖励？',
+      mature: false,
+      notes: [
+        { id: 'n6', time: '15:18', edited: false, body: '日程是承诺，奖励是结算。把休息写进日程，等于承认它不需要被挣。' }
+      ],
+      annos: [
+        { kicker: '关于 15:18', quote: '日程是承诺，奖励是结算。', body: '这句话可以成为文章的开头。它把“时间管理”改写成了“资格感”——不是怎么安排时间，而是谁有资格休息。' }
+      ]
+    }
+  ];
+
+  const state = {
+    index: 0,
+    reading: false,
+    readingToken: 0,
+    transitioning: false,
+    toastTimer: 0
+  };
+
+  /* ── refs ─────────────────────────────────────────────── */
+
+  const $ = (id) => document.getElementById(id);
+  const sheet = $('sheet');
+  const notesEl = $('notes');
+  const notesScroll = $('notesScroll');
+  const emptyEl = $('empty');
+  const seedBtn = $('seedBtn');
+  const noteCount = $('noteCount');
+  const lastEdit = $('lastEdit');
+  const titleEl = $('cardTitle');
+  const statusDot = $('statusDot');
+  const progressText = $('progressText');
+  const progressBar = $('progressBar');
+  const captureInput = $('captureInput');
+  const commitBtn = $('commitBtn');
+  const plusBtn = $('plusBtn');
+  const saveState = $('saveState');
+  const toLatest = $('toLatest');
+  const nextBtn = $('nextBtn');
+  const backBtn = $('backBtn');
+  const marginBody = $('marginBody');
+  const drawerBody = $('drawerBody');
+  const annoCount = $('annoCount');
+  const drawerCount = $('drawerCount');
+  const marginBtnCount = $('marginBtnCount');
+  const marginBtn = $('marginBtn');
+  const drawer = $('drawer');
+  const drawerBackdrop = $('drawerBackdrop');
+  const drawerClose = $('drawerClose');
+  const themeBtn = $('themeBtn');
+  const moreBtn = $('moreBtn');
+  const menu = $('menu');
+  const matureLabel = $('matureLabel');
+  const toast = $('toast');
+  const toastText = $('toastText');
+  const toastAction = $('toastAction');
+
+  /* ── helpers ──────────────────────────────────────────── */
+
+  function current() { return CARDS[state.index]; }
+
+  function isNarrow() { return window.innerWidth <= 1080; }
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function truncate(s, n) {
+    const t = String(s).trim();
+    return t.length > n ? t.slice(0, n) + '…' : t;
+  }
+
+  function nowTime() {
+    return new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+
+  function uid() { return 'n' + Math.random().toString(36).slice(2, 8); }
+
+  function findNote(id) {
+    return current().notes.find((n) => n.id === id);
+  }
+
+  function scrollToBottom(smooth) {
+    notesScroll.scrollTo({ top: notesScroll.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+  }
+
+  function nearBottom() {
+    return notesScroll.scrollHeight - notesScroll.scrollTop - notesScroll.clientHeight < 140;
+  }
+
+  function syncLatest() {
+    toLatest.hidden = !(notesScroll.scrollTop > 80) || nearBottom();
+  }
+
+  function setSaved() {
+    saveState.textContent = '已保存 · ' + nowTime();
+    saveState.classList.remove('is-saving');
+  }
+
+  function setSaving() {
+    saveState.textContent = '保存中…';
+    saveState.classList.add('is-saving');
+  }
+
+  /* ── toast ────────────────────────────────────────────── */
+
+  let toastActionFn = null;
+
+  function showToast(text, actionLabel, actionFn) {
+    window.clearTimeout(state.toastTimer);
+    toastText.textContent = text;
+    toastActionFn = actionFn || null;
+    toastAction.hidden = !actionFn;
+    toastAction.textContent = actionLabel || '撤销';
+    toast.hidden = false;
+    state.toastTimer = window.setTimeout(() => {
+      toast.hidden = true;
+      toastActionFn = null;
+    }, 4200);
+  }
+
+  toastAction.addEventListener('click', () => {
+    const fn = toastActionFn;
+    toast.hidden = true;
+    toastActionFn = null;
+    window.clearTimeout(state.toastTimer);
+    if (fn) fn();
+  });
+
+  /* ── notes ────────────────────────────────────────────── */
+
+  function renderNotes() {
+    const card = current();
+    const has = card.notes.length > 0;
+
+    notesEl.hidden = !has;
+    emptyEl.hidden = has;
+
+    notesEl.innerHTML = card.notes.map((n) => `
+      <article class="note" data-id="${n.id}">
+        <div class="note-gutter">
+          <time>${esc(n.time)}</time>
+          <span class="edited" ${n.edited ? '' : 'hidden'}>已编辑</span>
+        </div>
+        <div class="note-main">
+          <div class="note-body" contenteditable="plaintext-only" spellcheck="false"
+               role="textbox" aria-multiline="true" aria-label="笔记内容" data-id="${n.id}">${esc(n.body)}</div>
+          <div class="note-actions">
+            <button type="button" data-act="edit" title="编辑" aria-label="编辑这条笔记">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.8 2.9 13.1 6.2M2.9 11.1 2.4 13.6l2.5-.5 7.4-7.4a1.4 1.4 0 0 0 0-2l-.4-.4a1.4 1.4 0 0 0-2 0Z"/></svg>
+            </button>
+            <button type="button" data-act="ai" title="让 AI 看这句" aria-label="让 AI 看这句">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8 9.4 5.1 12.9 5.5 10.3 7.9 11 11.3 8 9.6 5 11.3 5.7 7.9 3.1 5.5 6.6 5.1Z"/><path d="M12.6 11.4v2.4M11.4 12.6h2.4"/></svg>
+            </button>
+            <button type="button" data-act="delete" title="删除" aria-label="删除这条笔记">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 4.3h10.4M6 2.6h4M4.2 4.3l.6 8.6c.1.8.7 1.4 1.5 1.4h3.4c.8 0 1.4-.6 1.5-1.4l.6-8.6"/><path d="M6.6 7v4.2M9.4 7v4.2"/></svg>
+            </button>
+          </div>
+        </div>
+      </article>`).join('');
+
+    noteCount.textContent = card.notes.length + ' 条笔记';
+    lastEdit.textContent = has ? '最后 ' + card.notes[card.notes.length - 1].time : '还没有落笔';
+
+    requestAnimationFrame(syncLatest);
+  }
+
+  function focusEnd(el) {
+    el.focus();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  notesEl.addEventListener('focusin', (e) => {
+    const body = e.target.closest('.note-body');
+    if (!body) return;
+    const note = findNote(body.dataset.id);
+    if (note) note._last = note.body;
+  });
+
+  notesEl.addEventListener('input', (e) => {
+    const body = e.target.closest('.note-body');
+    if (!body) return;
+    const note = findNote(body.dataset.id);
+    if (!note) return;
+    note.body = body.innerText.replace(/\n{3,}/g, '\n\n');
+    note.edited = note.body.trim() !== String(note._last || '').trim() || note.edited;
+    const row = body.closest('.note');
+    const badge = row.querySelector('.edited');
+    if (badge) badge.hidden = !note.edited;
+    setSaving();
+    window.clearTimeout(note._saveTimer);
+    note._saveTimer = window.setTimeout(() => {
+      setSaved();
+      lastEdit.textContent = '最后 ' + nowTime();
+    }, 650);
+  });
+
+  notesEl.addEventListener('focusout', (e) => {
+    const body = e.target.closest('.note-body');
+    if (!body) return;
+    const note = findNote(body.dataset.id);
+    if (!note) return;
+    if (!body.innerText.trim()) {
+      note.body = note._last || '';
+      body.innerText = note.body;
+      note.edited = false;
+      const badge = body.closest('.note').querySelector('.edited');
+      if (badge) badge.hidden = true;
+    } else {
+      note.body = body.innerText.replace(/\n{3,}/g, '\n\n');
+    }
+    setSaved();
+  });
+
+  notesEl.addEventListener('keydown', (e) => {
+    const body = e.target.closest('.note-body');
+    if (!body) return;
+    if (e.key === 'Escape' || ((e.metaKey || e.ctrlKey) && e.key === 'Enter')) {
+      e.preventDefault();
+      body.blur();
+    }
+  });
+
+  notesEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const row = btn.closest('.note');
+    const note = findNote(row.dataset.id);
+    if (!note) return;
+
+    if (btn.dataset.act === 'edit') {
+      focusEnd(row.querySelector('.note-body'));
+      return;
+    }
+
+    if (btn.dataset.act === 'ai') {
+      startReading(note, true);
+      return;
+    }
+
+    if (btn.dataset.act === 'delete') {
+      const idx = current().notes.findIndex((n) => n.id === note.id);
+      if (idx < 0) return;
+      row.classList.add('removing');
+      window.setTimeout(() => {
+        current().notes.splice(idx, 1);
+        renderNotes();
+        showToast('已删除这条笔记', '撤销', () => {
+          current().notes.splice(idx, 0, note);
+          renderNotes();
+          scrollToBottom(false);
+        });
+      }, 140);
+    }
+  });
+
+  /* ── capture ──────────────────────────────────────────── */
+
+  function grow() {
+    captureInput.style.height = 'auto';
+    captureInput.style.height = Math.min(captureInput.scrollHeight, 168) + 'px';
+  }
+
+  function syncCommit() {
+    commitBtn.disabled = !captureInput.value.trim();
+    grow();
+  }
+
+  captureInput.addEventListener('input', () => {
+    syncCommit();
+    saveState.textContent = '草稿';
+    saveState.classList.remove('is-saving');
+  });
+
+  captureInput.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      commitCapture();
+    }
+  });
+
+  commitBtn.addEventListener('click', commitCapture);
+  plusBtn.addEventListener('click', () => captureInput.focus());
+
+  function commitCapture() {
+    const text = captureInput.value.trim();
+    if (!text) { captureInput.focus(); return; }
+    const card = current();
+    const note = { id: uid(), time: nowTime(), edited: false, body: text };
+    card.notes.push(note);
+    card.draft = '';
+    captureInput.value = '';
+    syncCommit();
+    setSaved();
+    renderNotes();
+    const row = notesEl.querySelector(`.note[data-id="${note.id}"]`);
+    if (row) {
+      row.classList.add('is-new');
+      window.setTimeout(() => row.classList.remove('is-new'), 260);
+    }
+    requestAnimationFrame(() => {
+      scrollToBottom(true);
+      captureInput.focus();
+    });
+    startReading(note, false);
+  }
+
+  seedBtn.addEventListener('click', () => {
+    const card = current();
+    const note = {
+      id: uid(),
+      time: nowTime(),
+      edited: false,
+      body: '先从最近一次“不敢停下来”的时刻写起：当时你在做什么，身体是什么感觉？'
+    };
+    card.notes.push(note);
+    setSaved();
+    renderNotes();
+    const row = notesEl.querySelector(`.note[data-id="${note.id}"]`);
+    if (row) {
+      row.classList.add('is-new');
+      window.setTimeout(() => row.classList.remove('is-new'), 260);
+    }
+    requestAnimationFrame(() => scrollToBottom(true));
+    startReading(note, false);
+  });
+
+  /* ── reading / annotations ───────────────────────────── */
+
+  function startReading(note, fromAction) {
+    const card = current();
+    const token = ++state.readingToken;
+    state.reading = true;
+    renderMargin();
+
+    window.setTimeout(() => {
+      if (token !== state.readingToken) return;
+      state.reading = false;
+
+      if (note) {
+        const templates = [
+          { kicker: '关于 ' + note.time, body: '这句话里有一个可以往下走的点：把它换成一个具体的场景，读者才能看见。' },
+          { kicker: '缺口', body: '你还差一个反例：什么时候“停下来”其实是安全的？找到那个时刻，文章才有出口。' },
+          { kicker: '可以追问', body: '如果这句话是文章的第一句，下一句会是什么？先别解释，写一个画面。' }
+        ];
+        const t = templates[card.annos.length % templates.length];
+        card.annos.push({
+          kicker: t.kicker,
+          quote: truncate(note.body, 48),
+          body: t.body
+        });
+      }
+
+      renderMargin();
+      if (!note) showToast('批注已更新', null, null);
+    }, fromAction ? 1500 : 2100);
+  }
+
+  function annoHtml(a) {
+    return `
+      <div class="anno">
+        <div class="anno-kicker">${esc(a.kicker)}</div>
+        ${a.quote ? `<blockquote>“${esc(a.quote)}”</blockquote>` : ''}
+        <p>${esc(a.body)}</p>
+      </div>`;
+  }
+
+  function readingHtml() {
+    return `
+      <div class="reading">
+        <span class="dot"></span>
+        正在读这张卡…
+      </div>`;
+  }
+
+  function footHtml() {
+    return `
+      <div class="margin-foot">
+        <button class="reanalyze" type="button" data-reanalyze>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 8a5.2 5.2 0 1 1-1.5-3.6"/><path d="M13.3 2.6v3.2h-3.2"/></svg>
+          重新分析
+        </button>
+      </div>`;
+  }
+
+  function renderMargin() {
+    const card = current();
+    const count = card.annos.length;
+
+    annoCount.textContent = String(count);
+    drawerCount.textContent = String(count);
+    marginBtnCount.textContent = String(count);
+    const body = state.reading
+      ? readingHtml()
+      : (count === 0
+        ? '<p class="margin-empty">还没有批注。写下第一句，我会在旁边读。</p>'
+        : card.annos.map(annoHtml).join('') + footHtml());
+
+    marginBody.innerHTML = body;
+    drawerBody.innerHTML = body;
+    syncSidebar();
+  }
+
+  function bindMarginBody(el) {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('[data-reanalyze]')) {
+        startReading(null, true);
+        showToast('正在重新读这张卡…', null, null);
+      }
+    });
+  }
+
+  bindMarginBody(marginBody);
+  bindMarginBody(drawerBody);
+
+  /* ── drawer ───────────────────────────────────────────── */
+
+  let drawerTimer = 0;
+
+  function openDrawer() {
+    window.clearTimeout(drawerTimer);
+    renderMargin();
+    drawer.hidden = false;
+    drawerBackdrop.hidden = false;
+    syncSidebar();
+    requestAnimationFrame(() => {
+      drawer.dataset.open = 'true';
+      drawerBackdrop.dataset.open = 'true';
+      drawerClose.focus({ preventScroll: true });
+    });
+  }
+
+  function closeDrawer() {
+    drawer.dataset.open = 'false';
+    drawerBackdrop.dataset.open = 'false';
+    syncSidebar();
+    window.clearTimeout(drawerTimer);
+    drawerTimer = window.setTimeout(() => {
+      drawer.hidden = true;
+      drawerBackdrop.hidden = true;
+      syncSidebar();
+      if (isNarrow()) marginBtn.focus({ preventScroll: true });
+    }, 200);
+  }
+
+  function syncSidebar() {
+    const hidden = document.documentElement.classList.contains('sidebar-hidden');
+    const narrow = isNarrow();
+    const shown = narrow ? !drawer.hidden : !hidden;
+    marginBtn.setAttribute('aria-expanded', String(shown));
+    marginBtn.setAttribute('aria-controls', narrow ? 'drawer' : 'margin');
+    marginBtn.setAttribute('aria-label', narrow
+      ? (shown ? '关闭 AI 批注' : '打开 AI 批注')
+      : (shown ? '隐藏 AI 批注' : '显示 AI 批注') + '（' + current().annos.length + ' 条）');
+    marginBtn.title = narrow
+      ? (shown ? '关闭批注' : '打开批注')
+      : (shown ? '隐藏批注' : '显示批注');
+  }
+
+  marginBtn.addEventListener('click', () => {
+    if (isNarrow()) {
+      if (!drawer.hidden) closeDrawer();
+      else openDrawer();
+      return;
+    }
+    const hidden = document.documentElement.classList.toggle('sidebar-hidden');
+    try { localStorage.setItem('pms-focus-sidebar', hidden ? 'hidden' : 'shown'); } catch (_) {}
+    syncSidebar();
+  });
+  drawerClose.addEventListener('click', closeDrawer);
+  drawerBackdrop.addEventListener('click', closeDrawer);
+
+  /* ── cards / navigation ──────────────────────────────── */
+
+  function renderCard() {
+    const card = current();
+
+    titleEl.textContent = card.title;
+    statusDot.hidden = !card.mature;
+    progressText.textContent = card.position + ' / ' + card.total;
+    progressBar.style.width = Math.round((card.position / card.total) * 100) + '%';
+
+    captureInput.value = card.draft || '';
+    syncCommit();
+    if (!captureInput.value) saveState.textContent = '已保存 · ' + (card.notes[card.notes.length - 1]?.time || nowTime());
+    else saveState.textContent = '草稿';
+    saveState.classList.remove('is-saving');
+
+    state.reading = false;
+    state.readingToken++;
+    renderNotes();
+    renderMargin();
+    notesScroll.scrollTop = 0;
+    toLatest.hidden = true;
+    updateMenuLabel();
+  }
+
+  function go(delta) {
+    if (state.transitioning) return;
+
+    // “下一张”不是发送：先把这一句停下，让批注有机会出现；
+    // 再点一次才真的换卡。
+    if (delta > 0 && captureInput.value.trim()) {
+      commitCapture();
+      showToast('已记下。看一眼批注，再换下一张', null, null);
+      return;
+    }
+
+    current().draft = captureInput.value;
+    const next = state.index + delta;
+    if (next < 0 || next >= CARDS.length) {
+      showToast(delta > 0 ? '已经是最后一张' : '已经是第一张', null, null);
+      return;
+    }
+    state.transitioning = true;
+    sheet.classList.add('is-leaving');
+    window.setTimeout(() => {
+      state.index = next;
+      renderCard();
+      sheet.classList.remove('is-leaving');
+      state.transitioning = false;
+    }, 140);
+  }
+
+  nextBtn.addEventListener('click', () => go(1));
+  backBtn.addEventListener('click', () => go(-1));
+
+  /* ── scroll ───────────────────────────────────────────── */
+
+  notesScroll.addEventListener('scroll', syncLatest, { passive: true });
+
+  toLatest.addEventListener('click', () => scrollToBottom(true));
+
+  /* ── menu ─────────────────────────────────────────────── */
+
+  function closeMenu() {
+    const hadFocus = menu.contains(document.activeElement);
+    menu.hidden = true;
+    moreBtn.setAttribute('aria-expanded', 'false');
+    if (hadFocus) moreBtn.focus();
+  }
+
+  function openMenu() {
+    menu.hidden = false;
+    moreBtn.setAttribute('aria-expanded', 'true');
+    const first = menu.querySelector('.menu-item');
+    if (first) first.focus();
+  }
+
+  moreBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    menu.hidden ? openMenu() : closeMenu();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!menu.hidden && !menu.contains(e.target) && !moreBtn.contains(e.target)) closeMenu();
+  });
+
+  function updateMenuLabel() {
+    matureLabel.textContent = current().mature ? '取消成熟标记' : '标记为成熟';
+  }
+
+  menu.addEventListener('click', (e) => {
+    const item = e.target.closest('[data-menu]');
+    if (!item) return;
+    const action = item.dataset.menu;
+
+    if (action === 'mature') {
+      const card = current();
+      card.mature = !card.mature;
+      statusDot.hidden = !card.mature;
+      updateMenuLabel();
+      showToast(card.mature ? '已标记为成熟' : '已取消成熟标记', null, null);
+      closeMenu();
+      return;
+    }
+
+    if (action === 'copy') {
+      const text = current().title;
+      const done = () => showToast('标题已复制', null, null);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+      } else {
+        fallbackCopy(text, done);
+      }
+      closeMenu();
+      return;
+    }
+
+    if (action === 'delete') {
+      showToast('原型里先不执行删除', null, null);
+      closeMenu();
+    }
+  });
+
+  function fallbackCopy(text, done) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (_) {}
+    ta.remove();
+  }
+
+  /* ── theme ────────────────────────────────────────────── */
+
+  themeBtn.addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('pms-focus-theme', next); } catch (_) {}
+  });
+
+  /* ── keyboard ─────────────────────────────────────────── */
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (!menu.hidden) { closeMenu(); return; }
+      if (!drawer.hidden) { closeDrawer(); return; }
+      const active = document.activeElement;
+      if (active && (active.classList.contains('note-body') || active === captureInput)) active.blur();
+      return;
+    }
+
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      const active = document.activeElement;
+      if (active && active.classList.contains('note-body')) {
+        e.preventDefault();
+        active.blur();
+      } else if (active !== captureInput) {
+        e.preventDefault();
+        commitCapture();
+      }
+    }
+  });
+
+  /* ── resize ───────────────────────────────────────────── */
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 1080 && !drawer.hidden) closeDrawer();
+    syncSidebar();
+  });
+
+  /* ── boot ─────────────────────────────────────────────── */
+
+  renderCard();
+  syncSidebar();
+  requestAnimationFrame(() => {
+    if (!isNarrow()) captureInput.focus({ preventScroll: true });
+  });
+})();
+</script>
+</body>
+</html>
+
+
