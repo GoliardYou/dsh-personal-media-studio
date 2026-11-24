@@ -1,8 +1,10 @@
 # 个人媒体工作室
 
-这是一个跑在 **DeepSeek Harness（DSH）** 里的原生插件，不是独立网页。侧栏有三个入口：选题、生产改稿、渲染。工作室里同一排标签也能切换，地址哈希是 `#pms/topics`、`#pms/drafts`、`#pms/render`。生产改稿是一篇完整 Markdown；渲染用小红书长文出图编辑器分页，并导出 PNG、`body.txt` 和 `article.md`。
+这是一个跑在 **DeepSeek Harness（DSH）** 里的原生插件，不是独立网页。侧栏有四个入口：选题、草稿、渲染、灵感。工作室里同一排标签也能切换，地址哈希是 `#pms/topics`、`#pms/drafts`、`#pms/render`、`#pms/inspiration`。改稿是一篇完整 Markdown；渲染用小红书长文出图编辑器分页，并导出 PNG、`body.txt` 和 `article.md`。
 
-你选一张卡，把判断、故事和犹豫写进去；暂存后立刻换下一张。分析在后台进行：核心判断、案例、缺口、正反视角、追问，以及本地素材库里对得上的文件。原文只追加，不覆盖。只有你自己点「进入内容生产」之后，才会整理标题、小标题、金句、加黑，并匹配真实本地图片。最终审定是三栏所见即所得，导出 1242×1660 的 PNG、正文、结构和带来源的素材清单，再把成稿回写进素材库。
+你选一张卡，在纸感编辑台里把判断、故事和犹豫写进去；点原话可以直接改，保存后立刻换下一张。分析在后台进行：核心判断、案例、缺口、正反视角、追问，以及本地素材库里对得上的文件。只有你自己点「进入内容生产」之后，才会整理标题、小标题、金句、加黑，并匹配真实本地图片。最终审定是纸感工作台里的所见即所得：点标题、正文、金句、图注或品牌字段就能改，输入框失焦即存；导出 1242×1660 的 PNG、正文、结构和带来源的素材清单，再把成稿回写进素材库。
+
+「灵感」是收件箱，不是自动写稿机：你丢一句原话、一个链接、一段观察进去，它只收下、不改写、不替你判断；你点「通过，进选题」才变成一张待写的卡。素材库、千帆互动、千帆交易目前是「未接」状态，不会装成已同步。DSH 里的助手可以通过工具读收件箱、按词搜索、提议候选，但不能替你通过，也不能直接建卡。
 
 ## 环境
 
@@ -51,7 +53,7 @@ dsh web --no-open
 ## 开发
 
 ```bash
-npm test          # vitest：迁移、中文 FTS、去重、卡片生命周期、任务版本守卫、导出、Cordis 热重载
+npm test          # vitest：迁移、中文 FTS、去重、卡片生命周期、灵感收件/通过/略过、任务版本守卫、导出、Cordis 热重载
 npm run typecheck
 npm run build
 ```
@@ -70,13 +72,23 @@ node scripts/seed-library.mjs examples/library
 | --- | --- | --- |
 | Host 插件 | `src/index.ts` | Cordis `apply`，注入 `tools`、`llm`、`connection` |
 | 服务 | `PersonalMediaStudioService` | Web 与 `media_*` 工具调用同一 `StudioRuntime` |
-| 存储 | `node:sqlite` | 17 张业务表、FTS5 trigram、本地向量 |
+| 存储 | `node:sqlite` | 20 张业务表、FTS5 trigram、本地向量 |
 | 素材 | Chokidar + Sharp | 只读扫描、SHA-256 去重、缩略图、可选 OCR 命令 |
 | 任务 | `jobs` 表 | 与界面解耦，重试，输入版本过期则跳过，启动时恢复 `running` |
 | 通道 | `connection.fetch` | `POST /api/personal-media-studio/rpc` |
 | 界面 | `src/client/app.tsx` | `main` 槽全页 + `sidebar.panellist` 图标 |
 
 推进生产和开始生产必须由界面签发一次性 intent。模型工具可以读卡、追加、搁置、搜索素材；自己编造的 intent 会被拒绝。
+
+灵感相关工具：
+
+| 工具 | 作用 |
+| --- | --- |
+| `media_list_inspiration` | 读灵感来源、收件和待确认/已通过/已略过候选 |
+| `media_search_inspiration` | 按原话、理由、来源名搜索候选 |
+| `media_propose_inspiration` | 以「助手提议」身份放进一条 pending 候选；不通过、不建卡 |
+
+完整的来源分层、归因和后续连接器设计见 [docs/INSPIRATION-SOURCES.md](docs/INSPIRATION-SOURCES.md)。
 
 进入排版之前有一步「纯文字定稿」：原文只读展示，建议要你点了才算数。导出的 `article.md` 按小红书出图工具的 front matter、` ```product ` 和 ` ```screenshot ` 来写，可以直接交给 `xhs_render.py`。`render.engine` 设为 `xhs_render` 且填了 `render.xhsRenderPy` 时，会调用那个脚本；默认仍用插件内置的 1080×1440 渲染。三套版式是头像绿（默认）、深蓝金、公文风。
 
