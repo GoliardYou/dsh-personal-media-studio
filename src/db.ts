@@ -231,9 +231,9 @@ export class StudioDb {
     if (count.n > 0) return
     const insert = this.db.prepare('INSERT INTO style_profiles(id, name, template, tokens_json, builtin) VALUES (?, ?, ?, ?, 1)')
     const styles = [
-      ['knowledge', '知识分享风', 'knowledge', { paper: '#f6f1e7', ink: '#1c1917', accent: '#c4552a' }],
-      ['tech', '科技专业风', 'tech', { paper: '#0b1220', ink: '#e8eef9', accent: '#3ee0c5' }],
-      ['opinion', '个人观点风', 'opinion', { paper: '#fff7f2', ink: '#3b2416', accent: '#d4533a' }],
+      ['avatar-green', '头像绿', 'avatar-green', { paper: '#F5F6F0', ink: '#34906C', accent: '#D4A54A' }],
+      ['navy-gold', '深蓝金', 'navy-gold', { paper: '#F6F1E8', ink: '#173A52', accent: '#B8903A' }],
+      ['gongwen', '公文风', 'gongwen', { paper: '#FFFFFF', ink: '#000000', accent: '#000000' }],
     ] as const
     for (const [id, name, template, tokens] of styles) insert.run(id, name, template, JSON.stringify(tokens))
   }

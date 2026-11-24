@@ -67,14 +67,15 @@ interface CardDetail {
 interface ProjectView {
   project: { id: string, template: string, status: string }
   draft: { id: string, title: string, version: number }
-  pages: PageModel[]
+  pages: Array<PageModel & { html?: string }>
   relations: Array<{ id: string, asset_id: string, status: string, rationale: string, source_path: string, draft_page_id: string }>
+  themeCss?: string
 }
 
 const THEMES = {
-  knowledge: { paper: '#f6f1e7', ink: '#1c1917', accent: '#c4552a', font: '"Songti SC","WenQuanYi Micro Hei",serif', quote: '#efe4d4' },
-  tech: { paper: '#0b1220', ink: '#e7eefc', accent: '#3ee0c5', font: '"Segoe UI","WenQuanYi Micro Hei",sans-serif', quote: '#132033' },
-  opinion: { paper: '#fff7f2', ink: '#3b2416', accent: '#d4533a', font: '"WenQuanYi Micro Hei",sans-serif', quote: '#ffe8df' },
+  'avatar-green': { paper: '#F5F6F0', ink: '#1E5A43', accent: '#D4A54A', font: '"Noto Serif CJK SC","Songti SC",serif', quote: '#F2E2A0' },
+  'navy-gold': { paper: '#F6F1E8', ink: '#102A3C', accent: '#B8903A', font: '"Noto Serif CJK SC","Songti SC",serif', quote: '#E8D29A' },
+  gongwen: { paper: '#FFFFFF', ink: '#000000', accent: '#000000', font: '"FandolFang","FangSong","Noto Serif CJK SC",serif', quote: '#F4F4F4' },
 } as const
 
 async function rpc<T>(op: string, payload?: object): Promise<T> {
@@ -150,7 +151,7 @@ function StudioApp() {
   const [boot, setBoot] = useState<{ engine: { mode: string, reason: string }, libraryCount: number, cards: CardRow[] } | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<'home' | 'card' | 'production' | 'review'>('home')
+  const [view, setView] = useState<'home' | 'card' | 'text' | 'production' | 'review'>('home')
   const [cardId, setCardId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ id: string, title: string } | null>(null)
 
@@ -198,9 +199,10 @@ function StudioApp() {
             cardId={cardId}
             onShelved={() => { setView('home'); void refresh() }}
             onDeleted={id => { setToast({ id, title: '卡片已删除' }); setView('home'); void refresh() }}
-            onProduce={() => setView('production')}
+            onProduce={() => setView('text')}
           />
         )}
+        {view === 'text' && cardId && <TextGate cardId={cardId} onConfirmed={() => setView('production')} />}
         {view === 'production' && cardId && <Production cardId={cardId} onReview={() => setView('review')} />}
         {view === 'review' && cardId && <Workbench cardId={cardId} />}
       </div>
@@ -294,7 +296,6 @@ function CardWorkspace({ cardId, onShelved, onDeleted, onProduce }: { cardId: st
     setBusy(true)
     try {
       await rpc('promote', { cardId })
-      await rpc('startProduction', { cardId })
       onProduce()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -453,7 +454,7 @@ function Production({ cardId, onReview }: { cardId: string, onReview: () => void
 function Workbench({ cardId }: { cardId: string }) {
   const [project, setProject] = useState<ProjectView | null>(null)
   const [pages, setPages] = useState<PageModel[]>([])
-  const [template, setTemplate] = useState<keyof typeof THEMES>('knowledge')
+  const [template, setTemplate] = useState<keyof typeof THEMES>('avatar-green')
   const [current, setCurrent] = useState(0)
   const [past, setPast] = useState<PageModel[][]>([])
   const [future, setFuture] = useState<PageModel[][]>([])
@@ -469,14 +470,15 @@ function Workbench({ cardId }: { cardId: string }) {
     void rpc<ProjectView>('getProject', { cardId }).then(value => {
       setProject(value)
       setPages(value.pages)
-      if (value.project.template in THEMES) setTemplate(value.project.template as keyof typeof THEMES)
+      const incoming = value.project.template === 'tech' ? 'navy-gold' : value.project.template === 'knowledge' ? 'avatar-green' : value.project.template === 'opinion' ? 'gongwen' : value.project.template
+      if (incoming in THEMES) setTemplate(incoming as keyof typeof THEMES)
     }).catch(err => setError(err instanceof Error ? err.message : String(err)))
   }, [cardId])
 
   useEffect(() => {
     const node = stageRef.current
     if (!node) return
-    const apply = () => setScale(Math.min(0.72, Math.max(0.28, (node.clientWidth - 24) / 1242)))
+    const apply = () => setScale(Math.min(0.72, Math.max(0.28, (node.clientWidth - 24) / 1080)))
     apply()
     const observer = new ResizeObserver(apply)
     observer.observe(node)
@@ -536,26 +538,10 @@ function Workbench({ cardId }: { cardId: string }) {
         <button className="pms-btn" disabled={pages.length < 2} onClick={() => { const next = pages.filter((_, index) => index !== current); commit(next); setCurrent(Math.max(0, current - 1)) }}>删除此页</button>
       </aside>
       <section className="pms-stage" ref={stageRef} data-testid="page-canvas">
-        <div className="pms-canvas-wrap" style={{ transform: `scale(${scale})` }}>
-          <article className="pms-page" style={{ background: page.style.background || theme.paper, color: theme.ink, fontFamily: theme.font }}>
-            <div className="kicker" style={{ color: page.style.accent || theme.accent }} contentEditable suppressContentEditableWarning onBlur={event => updatePage({ kicker: event.currentTarget.innerText })}>{page.kicker}</div>
-            <h2
-              style={{ fontSize: page.style.titleSize ?? (page.role === 'cover' ? 84 : 64) }}
-              contentEditable
-              suppressContentEditableWarning
-              data-testid="page-title"
-              onBlur={event => updatePage({ title: event.currentTarget.innerText })}
-            >{page.title}</h2>
-            {page.blocks.map(block => block.type === 'image' ? (
-              <figure key={block.id} className="pms-figure">
-                <div className="pms-figure-stage" style={{ background: theme.quote }}>
-                  <img alt={block.caption || ''} src={assetUrl(block.assetId || '')} style={imageFrame(block.crop)} />
-                </div>
-              </figure>
-            ) : (
-              <EditableBlock key={block.id} block={block} quoteBg={theme.quote} accent={page.style.accent || theme.accent} bodySize={page.style.bodySize ?? 36} onCommit={next => updatePage({ blocks: page.blocks.map(item => item.id === block.id ? next : item) })} />
-            ))}
-          </article>
+        <div className="pms-canvas-wrap" style={{ width: 1080 * scale, height: 1440 * scale }}>
+          <div style={{ width: 1080, height: 1440, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+            <BrandFrame page={page} template={template} index={current} total={pages.length} />
+          </div>
         </div>
       </section>
       <aside className="pms-col pms-props" data-testid="properties">
@@ -567,10 +553,12 @@ function Workbench({ cardId }: { cardId: string }) {
         <div className="pms-field">
           <label>模板</label>
           <select data-testid="template" value={template} onChange={event => setTemplate(event.target.value as keyof typeof THEMES)}>
-            <option value="knowledge">知识分享风</option>
-            <option value="tech">科技专业风</option>
-            <option value="opinion">个人观点风</option>
+            <option value="avatar-green">头像绿（默认）</option>
+            <option value="navy-gold">深蓝金</option>
+            <option value="gongwen">公文风</option>
           </select>
+          <label htmlFor="page-title">这一页标题</label>
+          <input id="page-title" data-testid="page-title" value={page.title} onChange={event => updatePage({ title: event.target.value })} />
         </div>
         <ColorField label="背景" value={page.style.background || theme.paper} presets={['#f6f1e7', '#fffaf3', '#0b1220', '#fff7f2', '#1c1917']} onChange={color => updatePage({ style: { ...page.style, background: color } })} />
         <ColorField label="强调色" value={page.style.accent || theme.accent} presets={['#c4552a', '#3ee0c5', '#d4533a', '#1c1917', '#f6f1e7']} onChange={color => updatePage({ style: { ...page.style, accent: color } })} />
@@ -625,6 +613,41 @@ function VersionList({ draftId, token, onRestore }: { draftId: string, token: st
       {rows.slice(0, 5).map(row => <button key={row.id} className="pms-btn" onClick={() => void rpc('restoreVersion', { versionId: row.id }).then(onRestore)}>{row.label}</button>)}
     </div>
   )
+}
+
+function TextGate({ cardId, onConfirmed }: { cardId: string, onConfirmed: () => void }) {
+  const [gate, setGate] = useState<{ verbatim: string, note: string, suggestions: Array<{ id: string, text: string }>, warnings: string[], duplicate: string } | null>(null)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { void rpc<NonNullable<typeof gate>>('textGate', { cardId }).then(setGate).catch(err => setError(err instanceof Error ? err.message : String(err))) }, [cardId])
+  if (!gate) return <div className="pms-empty">{error || '正在取出你的原话…'}</div>
+  return (
+    <div data-testid="text-gate" className="pms-col">
+      <h2 style={{ marginTop: 0 }}>纯文字定稿</h2>
+      <p>{gate.note}</p>
+      {gate.duplicate && <p className="pms-badge warn">{gate.duplicate}</p>}
+      {gate.warnings.map(item => <p key={item} className="pms-badge warn">{item}</p>)}
+      <pre data-testid="verbatim" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>{gate.verbatim}</pre>
+      <h3>可以采纳的建议（不改原句）</h3>
+      <ul>{gate.suggestions.map(item => <li key={item.id}>{item.text}</li>)}</ul>
+      {error && <div className="pms-error">{error}</div>}
+      <button className="pms-btn primary" data-testid="confirm-text" disabled={busy} onClick={() => {
+        setBusy(true)
+        void rpc('startProduction', { cardId }).then(() => onConfirmed()).catch(err => setError(err instanceof Error ? err.message : String(err))).finally(() => setBusy(false))
+      }}>确认定稿，进入排版</button>
+    </div>
+  )
+}
+
+function BrandFrame({ page, template, index, total }: { page: PageModel, template: string, index: number, total: number }) {
+  const [html, setHtml] = useState('')
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      void rpc<{ html: string }>('previewPage', { page, template, index, total }).then(result => setHtml(result.html)).catch(() => undefined)
+    }, 180)
+    return () => window.clearTimeout(handle)
+  }, [page, template, index, total])
+  return <iframe title="1080×1440 预览" data-testid="brand-frame" srcDoc={html} style={{ width: 1080, height: 1440, border: 0, background: '#F5F6F0' }} />
 }
 
 function imageFrame(crop?: { x: number, y: number, scale: number }) {

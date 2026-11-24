@@ -1,0 +1,23 @@
+# 一个路人甲的素材库。只读扫描，不改原文件。
+# 辅导导图和辅导转录默认排除；个人微信二维码也不会入库。
+- id: personal-media-studio
+  name: dsh-personal-media-studio
+  config:
+    libraryProfile: lurenjia
+    libraryRoots:
+      - C:\Users\yigel\一个路人甲小红书素材库
+    excludeGlobs:
+      - "**/.git/**"
+      - "**/node_modules/**"
+      - "**/Coaching_Mindmaps*/**"
+      - "**/Coaching_Transcription*/**"
+      - "**/一个路人甲个人微信二维码.jpg"
+    brand:
+      author: 一个路人甲
+      role: 自学面试上岸
+    render:
+      engine: auto
+      size: standard
+      xhsRenderPy: ""
+    privacy:
+      sendImagesToCloud: false

@@ -20,6 +20,7 @@ const profilePatch = join(home, 'profiles', 'web', 'cordis.patch.yml')
 const override = `- id: personal-media-studio
   name: dsh-personal-media-studio
   config:
+    libraryProfile: lurenjia
     dataDir: ${JSON.stringify(join(home, 'personal-media-studio'))}
     libraryRoots:
       - ${JSON.stringify(library)}
@@ -32,8 +33,13 @@ const override = `- id: personal-media-studio
       sendImagesToCloud: false
     ocr:
       command: ""
+    brand:
+      author: 一个路人甲
+      role: 自学面试上岸
     render:
       engine: auto
+      size: standard
+      xhsRenderPy: ""
 `
 const header = `# Profile patch for the Personal Media Studio verification profile.
 `
@@ -108,7 +114,6 @@ try {
     console.log('PANEL', await page.getByTestId('analysis-panel').innerText())
     throw error
   }
-  await page.screenshot({ path: join(artifacts, '02-card-workspace-ai-analysis.png') })
   const questions = await page.getByTestId('questions').innerText()
   await page.getByTestId('thought-input').fill('再补一个画面：酒店窗边，杯子先被温热。')
   await page.getByRole('button', { name: '追加保存' }).click()
@@ -129,6 +134,9 @@ try {
 
   await page.getByTestId('topic-card').filter({ hasText: '差评' }).first().click()
   await page.getByTestId('promote').click()
+  await page.getByTestId('text-gate').waitFor({ timeout: 15000 })
+  await page.screenshot({ path: join(artifacts, '02-card-workspace-ai-analysis.png') })
+  await page.getByTestId('confirm-text').click()
   await page.getByTestId('production').waitFor({ timeout: 20000 })
   await page.getByTestId('asset-relation').first().waitFor()
   await page.getByTestId('accept-asset').first().click()
@@ -140,7 +148,7 @@ try {
   await page.keyboard.press('Control+A')
   await page.keyboard.type('慢，是这台机器的句子')
   await page.keyboard.press('Tab')
-  await page.getByTestId('template').selectOption('tech')
+  await page.getByTestId('template').selectOption('avatar-green')
   await page.getByTestId('save-state').filter({ hasText: '已自动保存' }).waitFor({ timeout: 8000 })
   await page.getByTestId('add-page').click()
   await page.getByRole('button', { name: '撤销' }).click()

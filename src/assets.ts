@@ -6,7 +6,8 @@ import chokidar, { type FSWatcher } from 'chokidar'
 import sharp from 'sharp'
 import { StudioDb } from './db.ts'
 import { EMBED_DIM, EMBED_MODEL, blobToVector, cosine, embedText, vectorToBlob } from './embed.ts'
-import { excludedPath, nowIso, uid } from './util.ts'
+import { classifyLibraryPath, priceWarnings } from './library/profile.ts'
+import { decodeLibraryName, excludedPath, nowIso, uid } from './util.ts'
 
 const TEXT_EXT = new Set(['.md', '.markdown', '.txt'])
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif'])
@@ -66,7 +67,7 @@ export class AssetLibrary {
       }
       liveRoots.add(absRoot)
       for (const file of walk(absRoot)) {
-        const rel = relative(absRoot, file)
+        const rel = decodeLibraryName(relative(absRoot, file))
         if (excludedPath(rel, this.excludeGlobs)) continue
         const key = `${absRoot}${sep}${rel}`
         seen.add(key)
@@ -155,6 +156,12 @@ export class AssetLibrary {
       if (kind === 'text') tags.add('笔记')
       if (/评|评论|差评/.test(text)) tags.add('评论')
       if (/产品|卖点/.test(text + title)) tags.add('产品')
+      const klass = classifyLibraryPath(rel)
+      if (klass === 'review') tags.add('好评截图')
+      if (klass === 'product-page') tags.add('产品页')
+      if (klass === 'qa') tags.add('学员提问')
+      if (klass === 'published') tags.add('已发布')
+      if (priceWarnings(`${title}\n${text}`).length) tags.add('待确认')
       const insertTag = this.db.db.prepare(`INSERT INTO asset_tags(asset_id, tag) VALUES (?, ?)`)
       for (const tag of tags) insertTag.run(id, tag)
       this.db.indexText('asset', id, `${title}\n${text}`)

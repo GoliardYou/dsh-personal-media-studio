@@ -1,36 +1,19 @@
 import { readFileSync } from 'node:fs'
 import { extname } from 'node:path'
-import type { Block, PageModel, Span, TemplateId } from './model.ts'
+import { pageDocument, PAGE_H, PAGE_W, type BrandSize } from './brand/html.ts'
+export type { BrandSize }
+import type { PageModel } from './model.ts'
 import { spansToText } from './model.ts'
 
-export const PAGE_W = 1242
-export const PAGE_H = 1660
+export { PAGE_W, PAGE_H }
 
-const THEMES: Record<TemplateId, { paper: string, ink: string, muted: string, accent: string, font: string, quoteBg: string }> = {
-  knowledge: {
-    paper: '#f6f1e7',
-    ink: '#1c1917',
-    muted: '#6f655b',
-    accent: '#c4552a',
-    font: '"Songti SC","Noto Serif CJK SC","Source Han Serif SC","WenQuanYi Micro Hei",serif',
-    quoteBg: '#efe4d4',
-  },
-  tech: {
-    paper: '#0b1220',
-    ink: '#e7eefc',
-    muted: '#93a4c3',
-    accent: '#3ee0c5',
-    font: '"Segoe UI","PingFang SC","WenQuanYi Micro Hei",sans-serif',
-    quoteBg: '#132033',
-  },
-  opinion: {
-    paper: '#fff7f2',
-    ink: '#3b2416',
-    muted: '#8d6758',
-    accent: '#d4533a',
-    font: '"PingFang SC","WenQuanYi Micro Hei","Noto Sans CJK SC",sans-serif',
-    quoteBg: '#ffe8df',
-  },
+const PAPERS: Record<string, { paper: string, ink: string, accent: string }> = {
+  'avatar-green': { paper: '#F5F6F0', ink: '#1E5A43', accent: '#D4A54A' },
+  knowledge: { paper: '#F5F6F0', ink: '#1E5A43', accent: '#D4A54A' },
+  'navy-gold': { paper: '#F6F1E8', ink: '#102A3C', accent: '#B8903A' },
+  tech: { paper: '#F6F1E8', ink: '#102A3C', accent: '#B8903A' },
+  gongwen: { paper: '#FFFFFF', ink: '#000000', accent: '#000000' },
+  opinion: { paper: '#FFFFFF', ink: '#000000', accent: '#000000' },
 }
 
 export interface RenderAsset {
@@ -39,92 +22,13 @@ export interface RenderAsset {
   title: string
 }
 
-export function renderPageHtml(page: PageModel, template: TemplateId, assets: RenderAsset[]): string {
-  const theme = THEMES[template] ?? THEMES.knowledge
-  const background = page.style.background || theme.paper
-  const accent = page.style.accent || theme.accent
-  const titleSize = page.style.titleSize ?? (page.role === 'cover' ? 68 : 56)
-  const bodySize = page.style.bodySize ?? 36
-  const images = new Map(assets.map(asset => [asset.id, asset]))
-  const body = page.blocks.map(block => renderBlock(block, images, bodySize)).join('\n')
-  return `<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8" />
-<style>
-  html, body { margin: 0; padding: 0; width: ${PAGE_W}px; height: ${PAGE_H}px; overflow: hidden; background: ${background}; }
-  .page {
-    width: ${PAGE_W}px; height: ${PAGE_H}px; box-sizing: border-box;
-    padding: 96px 88px; color: ${theme.ink};
-    font-family: ${theme.font};
-    background: ${background};
-    display: flex; flex-direction: column; gap: 28px;
-  }
-  .kicker { color: ${accent}; letter-spacing: 0.18em; font-size: 26px; font-weight: 700; }
-  h1 { margin: 0; font-size: ${titleSize}px; line-height: 1.18; font-weight: 700; letter-spacing: -0.02em; }
-  .paragraph { margin: 0; font-size: ${bodySize}px; line-height: 1.65; }
-  strong { font-weight: 800; }
-  mark { background: ${accent}33; color: inherit; padding: 0 0.12em; }
-  .quote {
-    background: ${theme.quoteBg}; color: ${theme.ink};
-    padding: 36px 40px; font-size: 42px; line-height: 1.45; border-left: 10px solid ${accent};
-  }
-  figure { margin: 8px 0 0; }
-  .stage {
-    height: 460px; border-radius: 20px; overflow: hidden;
-    background: ${theme.quoteBg};
-    border: 1px solid ${accent}55;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .stage img {
-    width: 100%; height: 100%; object-fit: contain; object-position: center;
-    transform-origin: center center; display: block; background: transparent;
-  }
-  figcaption { color: ${theme.muted}; font-size: 24px; margin-top: 12px; }
-  .rule { height: 1px; background: ${accent}; opacity: 0.45; }
-</style>
-</head>
-<body>
-<article class="page">
-  <div class="kicker">${escapeHtml(page.kicker)}</div>
-  <h1>${escapeHtml(page.title)}</h1>
-  <div class="rule"></div>
-  ${body}
-</article>
-</body>
-</html>`
+export function renderPageHtml(page: PageModel, template: string, assets: RenderAsset[], size: BrandSize = 'standard', index = 0, total = 1): string {
+  const images = new Map(assets.filter(asset => asset.absPath).map(asset => [asset.id, dataUrl(asset.absPath)]))
+  return pageDocument(page, template, size, index, total, images)
 }
 
-function renderBlock(block: Block, images: Map<string, RenderAsset>, bodySize: number): string {
-  if (block.type === 'image' && block.assetId) {
-    const asset = images.get(block.assetId)
-    if (!asset) return `<p class="paragraph">素材缺失</p>`
-    const crop = block.crop ?? { x: 50, y: 50, scale: 1 }
-    const src = dataUrl(asset.absPath)
-    const shiftX = ((crop.x - 50) * 0.7).toFixed(2)
-    const shiftY = ((crop.y - 50) * 0.7).toFixed(2)
-    return `<figure><div class="stage"><img alt="${escapeHtml(asset.title)}" src="${src}" style="transform: translate(${shiftX}%, ${shiftY}%) scale(${crop.scale})" /></div><figcaption>${escapeHtml(block.caption || asset.title)}</figcaption></figure>`
-  }
-  if (block.type === 'quote') {
-    return `<blockquote class="quote">${escapeHtml(block.text ?? spansToText(block.spans))}</blockquote>`
-  }
-  if (block.type === 'heading') {
-    return `<h1 style="font-size:${Math.round(bodySize * 1.35)}px">${escapeHtml(block.text ?? '')}</h1>`
-  }
-  return `<p class="paragraph">${renderSpans(block.spans ?? [{ text: block.text ?? '' }])}</p>`
-}
-
-function renderSpans(spans: Span[]): string {
-  return spans.map(span => {
-    let html = escapeHtml(span.text)
-    if (span.highlight) html = `<mark>${html}</mark>`
-    if (span.bold) html = `<strong>${html}</strong>`
-    return html
-  }).join('')
-}
-
-export function renderPageSvg(page: PageModel, template: TemplateId, assets: RenderAsset[]): string {
-  const theme = THEMES[template] ?? THEMES.knowledge
+export function renderPageSvg(page: PageModel, template: string, assets: RenderAsset[]): string {
+  const theme = PAPERS[template] ?? PAPERS['avatar-green']
   const background = page.style.background || theme.paper
   const accent = page.style.accent || theme.accent
   const lines: string[] = []
@@ -136,15 +40,15 @@ export function renderPageSvg(page: PageModel, template: TemplateId, assets: Ren
     y += page.role === 'cover' ? 88 : 72
   }
   y += 20
-  lines.push(`<rect x="88" y="${y}" width="180" height="6" fill="${accent}" />`)
+  lines.push(`<rect x="88" y="${y}" width="180" height="6" fill="${theme.accent}" />`)
   y += 64
   for (const block of page.blocks) {
     if (block.type === 'image' && block.assetId) {
       const asset = assets.find(item => item.id === block.assetId)
       if (asset && y < 1400) {
         const href = dataUrl(asset.absPath)
-        lines.push(`<rect x="88" y="${y}" width="1066" height="460" rx="20" fill="${theme.quoteBg}" />`)
-        lines.push(`<image href="${href}" x="88" y="${y}" width="1066" height="460" preserveAspectRatio="xMidYMid meet" />`)
+        lines.push(`<rect x="88" y="${y}" width="900" height="420" rx="20" fill="${theme.paper}" />`)
+        lines.push(`<image href="${href}" x="88" y="${y}" width="900" height="420" preserveAspectRatio="xMidYMid meet" />`)
         y += 500
       }
       continue
@@ -166,10 +70,10 @@ export function renderPageSvg(page: PageModel, template: TemplateId, assets: Ren
 </svg>`
 }
 
-export async function renderPagePng(page: PageModel, template: TemplateId, assets: RenderAsset[], engine: 'auto' | 'playwright' | 'sharp'): Promise<{ png: Buffer, engine: 'playwright' | 'sharp' }> {
-  if (engine !== 'sharp') {
+export async function renderPagePng(page: PageModel, template: string, assets: RenderAsset[], engine: 'auto' | 'playwright' | 'sharp' | 'xhs_render', index = 0, total = 1, size: BrandSize = 'standard'): Promise<{ png: Buffer, engine: 'playwright' | 'sharp' }> {
+  if (engine !== 'sharp' && engine !== 'xhs_render') {
     try {
-      const png = await renderWithPlaywright(renderPageHtml(page, template, assets))
+      const png = await renderWithPlaywright(renderPageHtml(page, template, assets, size, index, total))
       return { png, engine: 'playwright' }
     } catch (error) {
       if (engine === 'playwright') throw error

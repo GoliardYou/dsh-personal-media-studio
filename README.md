@@ -77,3 +77,23 @@ node scripts/seed-library.mjs examples/library
 | 界面 | `src/client/app.tsx` | `main` 槽全页 + `sidebar.panellist` 图标 |
 
 推进生产和开始生产必须由界面签发一次性 intent。模型工具可以读卡、追加、搁置、搜索素材；自己编造的 intent 会被拒绝。
+
+进入排版之前有一步「纯文字定稿」：原文只读展示，建议要你点了才算数。导出的 `article.md` 按小红书出图工具的 front matter、` ```product ` 和 ` ```screenshot ` 来写，可以直接交给 `xhs_render.py`。`render.engine` 设为 `xhs_render` 且填了 `render.xhsRenderPy` 时，会调用那个脚本；默认仍用插件内置的 1080×1440 渲染。三套版式是头像绿（默认）、深蓝金、公文风。
+
+## Windows 11 安装
+
+需要 Node.js 24 或更新（内置 `node:sqlite`），以及已安装的 DSH `0.2.2-rc.5`。在 PowerShell 里：
+
+```powershell
+node -v
+cd C:\path\to\dsh-personal-media-studio
+npm install
+npm run build
+npm run pack
+dsh plugin --profile web add .\dist\dsh-personal-media-studio
+dsh web --no-open
+```
+
+`npm run pack` 会在 `dist\dsh-personal-media-studio.zip` 里打好一份带 `lib/` 和 `brand/` 的目录，不依赖这个私有仓库。也可以把 zip 解开后，对解开的目录执行 `dsh plugin add`。
+
+素材库示例配置在 `examples/lurenjia.cordis.patch.yml`。默认不扫描 `Coaching_Mindmaps_*`、`Coaching_Transcription_*`，也不收录 `一个路人甲个人微信二维码.jpg`。文件名里的零宽字符会被去掉。旧价格和退款承诺只标成「待确认」。

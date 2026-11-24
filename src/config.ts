@@ -3,6 +3,7 @@ import Schema from '@deepseek-ai/schemastery'
 export interface StudioConfig {
   dataDir: string
   libraryRoots: string[]
+  libraryProfile: 'generic' | 'lurenjia'
   excludeGlobs: string[]
   exportDir: string
   watch: boolean
@@ -16,14 +17,21 @@ export interface StudioConfig {
   ocr: {
     command: string
   }
+  brand: {
+    author: string
+    role: string
+  }
   render: {
-    engine: 'auto' | 'playwright' | 'sharp'
+    engine: 'auto' | 'playwright' | 'sharp' | 'xhs_render'
+    size: 'small' | 'standard' | 'large'
+    xhsRenderPy: string
   }
 }
 
 export const Config: Schema<StudioConfig> = Schema.object({
   dataDir: Schema.string().default(''),
   libraryRoots: Schema.array(Schema.string()).default([]),
+  libraryProfile: Schema.union(['generic', 'lurenjia']).default('generic'),
   excludeGlobs: Schema.array(Schema.string()).default(['**/.git/**', '**/node_modules/**', '**/.DS_Store']),
   exportDir: Schema.string().default(''),
   watch: Schema.boolean().default(true),
@@ -37,7 +45,13 @@ export const Config: Schema<StudioConfig> = Schema.object({
   ocr: Schema.object({
     command: Schema.string().default(''),
   }),
+  brand: Schema.object({
+    author: Schema.string().default('一个路人甲'),
+    role: Schema.string().default('自学面试上岸'),
+  }),
   render: Schema.object({
-    engine: Schema.union(['auto', 'playwright', 'sharp']).default('auto'),
+    engine: Schema.union(['auto', 'playwright', 'sharp', 'xhs_render']).default('auto'),
+    size: Schema.union(['small', 'standard', 'large']).default('standard'),
+    xhsRenderPy: Schema.string().default(''),
   }),
 })

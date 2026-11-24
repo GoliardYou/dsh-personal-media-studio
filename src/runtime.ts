@@ -8,6 +8,10 @@ import type { StudioConfig } from './config.ts'
 import { StudioDb } from './db.ts'
 import { textToSpans, type PageModel, type TemplateId } from './model.ts'
 import { PAGE_H, PAGE_W, renderPageHtml, renderPagePng, type RenderAsset } from './render.ts'
+import { toXhsMarkdown } from './brand/markdown.ts'
+import { pageInner, themeCss, shotCss, normalizeTheme, type BrandSize } from './brand/html.ts'
+import { mergeExcludes } from './library/profile.ts'
+import { spawn } from 'node:child_process'
 import { StudioError, fingerprint, nowIso, parseJson, uid } from './util.ts'
 
 interface Intent {
@@ -58,7 +62,7 @@ export class StudioRuntime {
     mkdirSync(exportDir, { recursive: true })
     const db = new StudioDb(join(dataDir, 'studio.sqlite'))
     recoverJobs(db)
-    const assets = new AssetLibrary(db, config.libraryRoots.map(root => resolve(root)), config.excludeGlobs, join(dataDir, 'thumbs'), config.ocr.command)
+    const assets = new AssetLibrary(db, config.libraryRoots.map(root => resolve(root)), mergeExcludes(config.libraryProfile, config.excludeGlobs), join(dataDir, 'thumbs'), config.ocr.command)
     await assets.start(config.watch)
     const llm = createLlmBridge(ctx, config.llm.provider, config.llm.model)
     const runtime = new StudioRuntime(db, assets, llm, dataDir, exportDir, config)
@@ -103,8 +107,10 @@ export class StudioRuntime {
   private seedTopics() {
     const count = this.db.db.prepare(`SELECT COUNT(*) AS n FROM cards`).get() as { n: number }
     if (count.n > 0) return
+    const qa = this.db.db.prepare(`SELECT title, text_content FROM assets WHERE deleted_at IS NULL AND rel_path LIKE '%Xhs_QA%' ORDER BY title LIMIT 8`).all() as Array<{ title: string, text_content: string }>
+    const seeds = qa.length > 0 ? qa.map(row => [row.title.replace(/\.md$/i, ''), row.text_content.replace(/^#.*\n+/, '').replace(/\s+/g, ' ').slice(0, 72)] as [string, string]) : RECOMMENDED
     const stamp = nowIso()
-    for (const [title, summary] of RECOMMENDED) {
+    for (const [title, summary] of seeds) {
       const topicId = uid()
       this.db.db.prepare(`INSERT INTO topics(id, title, summary, source, created_at, updated_at) VALUES (?, ?, ?, 'ai', ?, ?)`).run(topicId, title, summary, stamp, stamp)
       const cardId = uid()
@@ -216,6 +222,26 @@ export class StudioRuntime {
     return this.getCard(cardId)
   }
 
+  previewAssets() {
+    return (this.db.db.prepare(`SELECT id, abs_path AS absPath, title FROM assets WHERE deleted_at IS NULL`).all() as Array<{ id: string, absPath: string, title: string }>)
+  }
+
+  textGate(cardId: string) {
+    const card = this.requireCard(cardId)
+    const verbatim = this.rawText(cardId)
+    const published = this.db.db.prepare(`SELECT title FROM assets WHERE deleted_at IS NULL AND (rel_path LIKE '%Archive_%' OR rel_path LIKE '%Deliverables_%')`).all() as Array<{ title: string }>
+    const clash = published.map(row => row.title.replace(/\.md$/i, '')).find(title => title && (String(card.title).includes(title) || title.includes(String(card.title))))
+    return {
+      cardId,
+      title: String(card.title),
+      verbatim,
+      note: '这是你写过的原话。建议只供参考，确认之前不会改写，也不会进入排版。',
+      suggestions: [{ id: 'keep-wording', kind: 'guidance', text: '排版时保留原句，只加分节和你点过的加粗。' }],
+      warnings: /元|退款|¥|￥/.test(verbatim) ? ['文里有价格或退款表述，导出时标为待确认，不会自动沿用。'] : [],
+      duplicate: clash ? `和已发布「${clash}」可能撞题。` : '',
+    }
+  }
+
   async startProduction(cardId: string, intentId: string) {
     this.consumeIntent(cardId, 'produce', intentId)
     const card = this.requireCard(cardId)
@@ -232,7 +258,7 @@ export class StudioRuntime {
     const pages = plan.pages.map((page, ordinal) => this.pageFromPlan(page, ordinal, plan.highlights, hits.filter(hit => hit.kind === 'image')))
     this.db.tx(() => {
       if (!existing) {
-        this.db.db.prepare(`INSERT INTO projects(id, card_id, status, template, created_at, updated_at) VALUES (?, ?, 'drafting', 'knowledge', ?, ?)`).run(projectId, cardId, stamp, stamp)
+        this.db.db.prepare(`INSERT INTO projects(id, card_id, status, template, created_at, updated_at) VALUES (?, ?, 'drafting', 'avatar-green', ?, ?)`).run(projectId, cardId, stamp, stamp)
       } else {
         this.db.db.prepare(`UPDATE projects SET status = 'drafting', updated_at = ? WHERE id = ?`).run(stamp, projectId)
       }
@@ -261,7 +287,14 @@ export class StudioRuntime {
     if (!draft) return { project, draft: null, pages: [], relations: [] }
     const pages = this.readPages(draft.id as string)
     const relations = this.db.db.prepare(`SELECT * FROM asset_relations WHERE project_id = ? ORDER BY created_at ASC`).all(project.id as string)
-    return { project, draft, pages, relations }
+    const theme = normalizeTheme(String(project.template || 'avatar-green'))
+    let css = ''
+    try { css = `${themeCss(theme)}\n${shotCss()}` } catch { css = '' }
+    const decorated = pages.map((page, index) => ({
+      ...page,
+      html: pageInner(page, theme, this.config.render.size, index, pages.length, new Map()),
+    }))
+    return { project, draft, pages: decorated, relations, themeCss: css }
   }
 
   decideAsset(relationId: string, decision: 'accepted' | 'rejected' | 'replaced', replacementAssetId?: string, crop?: { x: number, y: number, scale: number }) {
@@ -351,7 +384,8 @@ export class StudioRuntime {
     const draftId = loaded.draft.id as string
     const version = this.snapshot(draftId, '导出')
     const pages = this.readPages(draftId)
-    const template = ((loaded.project.template as TemplateId) || 'knowledge')
+    const template = normalizeTheme(String(loaded.project.template || 'avatar-green'))
+    const size = this.config.render.size
     const assetRows = (this.db.db.prepare(`SELECT id, abs_path, title FROM assets WHERE deleted_at IS NULL`).all() as Array<{ id: string, abs_path: string, title: string }>).map(row => ({ id: row.id, absPath: row.abs_path, title: row.title })) satisfies RenderAsset[]
     const dir = join(this.exportDir, String(loaded.project.id), stampDir())
     const pageDir = join(dir, 'pages')
@@ -359,7 +393,7 @@ export class StudioRuntime {
     const files: string[] = []
     let usedEngine = ''
     for (const [index, page] of pages.entries()) {
-      const rendered = await renderPagePng(page, template, assetRows, this.config.render.engine)
+      const rendered = await renderPagePng(page, template, assetRows, this.config.render.engine, index, pages.length, size)
       usedEngine = rendered.engine
       const name = `${String(index + 1).padStart(2, '0')}-${page.role}.png`
       writeFileSync(join(pageDir, name), rendered.png)
@@ -375,6 +409,26 @@ export class StudioRuntime {
       return lines.join('\n\n')
     }).join('\n\n')
     writeFileSync(join(dir, 'body.md'), `# ${loaded.draft.title}\n\n${body}\n`, 'utf8')
+    const article = toXhsMarkdown({
+      title: String(loaded.draft.title),
+      subtitle: pages.find(page => page.role === 'cover')?.blocks.find(block => block.type === 'paragraph')?.spans?.map(span => span.text).join('') || String(loaded.draft.title),
+      theme: template,
+      size,
+      coverTitle: pages.find(page => page.role === 'cover')?.title || String(loaded.draft.title),
+      author: this.config.brand.author,
+      role: this.config.brand.role,
+      sections: pages.filter(page => page.role !== 'cover').map(page => ({
+        heading: page.title,
+        paragraphs: page.blocks.filter(block => block.type === 'paragraph').map(block => block.spans?.map(span => span.bold ? `**${span.text}**` : span.text).join('') ?? ''),
+      })),
+      quotes: pages.flatMap(page => page.blocks.filter(block => block.type === 'quote').map(block => block.text ?? '')),
+      screenshots: pages.flatMap(page => page.blocks.filter(block => block.type === 'image' && block.assetId).map(block => ({ src: assetRows.find(asset => asset.id === block.assetId)?.absPath ?? '', caption: block.caption }))),
+      products: [{ name: String(loaded.draft.title), tagline: '结构见正文，价格与获取方式待确认', points: ['待确认'] }],
+    })
+    writeFileSync(join(dir, 'article.md'), article, 'utf8')
+    if (this.config.render.engine === 'xhs_render' && this.config.render.xhsRenderPy) {
+      await runXhsRender(this.config.render.xhsRenderPy, join(dir, 'article.md'), pageDir, template, size)
+    }
     writeFileSync(join(dir, 'body.txt'), `${loaded.draft.title}\n\n${body.replace(/[#>*[\]]/g, '')}\n`, 'utf8')
     const structure = { title: loaded.draft.title, template, width: PAGE_W, height: PAGE_H, pages }
     writeFileSync(join(dir, 'structure.json'), JSON.stringify(structure, null, 2))
@@ -617,6 +671,8 @@ export class StudioRuntime {
       case 'renameCard': return this.renameCard(String(payload.cardId), String(payload.title ?? ''))
       case 'deleteCard': return this.deleteCard(String(payload.cardId))
       case 'restoreCard': return this.restoreCard(String(payload.cardId))
+      case 'textGate': return this.textGate(String(payload.cardId))
+      case 'previewPage': return { html: (await import('./render.ts')).renderPageHtml(payload.page as PageModel, String(payload.template || 'avatar-green'), this.previewAssets(), this.config.render.size, Number(payload.index || 0), Number(payload.total || 1)) }
       case 'promote': {
         const cardId = String(payload.cardId)
         return this.promote(cardId, this.issueIntent(cardId, 'promote'))
@@ -638,6 +694,19 @@ export class StudioRuntime {
       default: throw new StudioError('unknown_op', `未知操作 ${op}`)
     }
   }
+}
+
+function runXhsRender(script: string, markdown: string, outDir: string, theme: string, size: string) {
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn('python3', [script, markdown, '--theme', theme, '--size', size, '-o', outDir, '--no-zip', '--json'], { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stderr = ''
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+    child.on('error', reject)
+    child.on('close', code => {
+      if (code === 0) resolve()
+      else reject(new Error(stderr || `xhs_render.py exited ${code}`))
+    })
+  })
 }
 
 function recoverJobs(db: StudioDb) {

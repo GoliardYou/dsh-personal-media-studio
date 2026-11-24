@@ -25,13 +25,15 @@ function config(dir: string, library: string, engine: StudioConfig['render']['en
   return {
     dataDir: join(dir, 'data'),
     libraryRoots: [library],
+    libraryProfile: 'generic',
     excludeGlobs: ['**/.git/**', '**/node_modules/**'],
     exportDir: join(dir, 'exports'),
     watch: false,
     llm: { provider: '', model: '' },
     privacy: { sendImagesToCloud: false },
     ocr: { command: '' },
-    render: { engine },
+    brand: { author: '一个路人甲', role: '自学面试上岸' },
+    render: { engine, size: 'standard', xhsRenderPy: '' },
   }
 }
 
