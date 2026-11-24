@@ -602,7 +602,7 @@ function StageList({ rows, empty, testId, rowTestId, onOpen }: { rows: StageRow[
           <div className="pms-paper-list">
             {rows.map((row, index) => (
               <button key={row.id} className="pms-paper-topic" data-testid={rowTestId} onClick={() => onOpen(row.id)}>
-                <time dateTime={row.updatedAt}>{formatWhen(row.updatedAt).slice(5)}</time>
+                <time dateTime={row.updatedAt}>{formatWhen(row.updatedAt).slice(5, 10)}</time>
                 <span className="pms-paper-topic__body">
                   <span className="pms-paper-topic__title">{row.title}</span>
                   <span className="pms-paper-topic__meta">
@@ -941,7 +941,7 @@ function Home({ cards, libraryCount, pool, view, onView, onOpen, onChanged }: {
                 <div className="pms-paper-list">
                   {cards.map((card, index) => (
                     <button key={card.id} className="pms-paper-topic" data-testid="topic-card" onClick={() => onOpen(card.id)}>
-                      <time dateTime={card.updatedAt}>{formatWhen(card.updatedAt ?? '').slice(5)}</time>
+                      <time dateTime={card.updatedAt}>{formatWhen(card.updatedAt ?? '').slice(5, 10)}</time>
                       <span className="pms-paper-topic__body">
                         <span className="pms-paper-topic__title">{card.title}</span>
                         <span className="pms-paper-topic__excerpt">{card.latestThesis || '还没有写过。点开就能直接说。'}</span>
