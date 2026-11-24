@@ -92,6 +92,29 @@ describe('inspiration inbox', () => {
     expect(noCard.cardId).toBeNull()
     await studio.dispose()
   })
+
+  it('lets the assistant propose without approving or creating a card', async () => {
+    const dir = temp()
+    const studio = await openStudio(dir, join(dir, 'library'))
+    const before = studio.listCards().length
+    studio.captureInspiration('面试开口卡壳，不是没背，是没练过开口。')
+    const proposed = studio.captureInspiration(
+      '高收藏笔记里反复出现的一句话：先练开口，再背答案。',
+      'https://example.com/high-save',
+      'agent',
+      '这条笔记收藏 111，评论里多人提到“开口就空白”。',
+    )
+    const candidate = proposed.candidates.find(item => item.sourceName === '助手提议')
+    expect(candidate?.status).toBe('pending')
+    expect(candidate?.why).toContain('开口就空白')
+    expect(proposed.counts.approved).toBe(0)
+    expect(studio.listCards()).toHaveLength(before)
+
+    const found = studio.searchInspiration('开口')
+    expect(found.candidates.length).toBeGreaterThanOrEqual(2)
+    expect(found.candidates.every(item => item.angle.includes('开口') || item.why.includes('开口') || item.itemBody.includes('开口'))).toBe(true)
+    await studio.dispose()
+  })
 })
 
 describe('atomic focus advance', () => {
@@ -350,6 +373,13 @@ describe('cordis plugin', () => {
     const toolService = ctx.tools as unknown as FakeTools
     expect(toolService.defs.has('media_promote_card')).toBe(true)
     expect(toolService.defs.has('media_list_cards')).toBe(true)
+    expect(toolService.defs.has('media_list_inspiration')).toBe(true)
+    expect(toolService.defs.has('media_search_inspiration')).toBe(true)
+    expect(toolService.defs.has('media_propose_inspiration')).toBe(true)
+    const propose = toolService.defs.get('media_propose_inspiration')!
+    const proposed = JSON.parse(String(await propose.execute({ body: '先把开口练熟，再背答案。', why: '口述角度' }))) as { ok: boolean, inspiration: { candidates: Array<{ id: string, sourceName: string, status: string }> } }
+    expect(proposed.ok).toBe(true)
+    expect(proposed.inspiration.candidates.some(item => item.sourceName === '助手提议' && item.status === 'pending')).toBe(true)
     const connection = (ctx as unknown as { connection: FakeConnection }).connection
     expect(connection.routes).toHaveLength(3)
     const promote = toolService.defs.get('media_promote_card')!

@@ -185,7 +185,7 @@ export class StudioRuntime {
     return { sources, items, candidates, counts }
   }
 
-  captureInspiration(body: string, url = '') {
+  captureInspiration(body: string, url = '', source: 'manual' | 'agent' = 'manual', why = '') {
     const text = body.trim()
     if (!text) throw new StudioError('empty_inspiration', '先写一句再收下。')
     const stamp = nowIso()
@@ -193,19 +193,36 @@ export class StudioRuntime {
     // 只接受可点击的 http(s) 链接，避免把 javascript: 之类塞进 href。
     const rawUrl = url.trim().slice(0, 2048)
     const safeUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : ''
+    const sourceId = source === 'agent' ? 'agent' : 'manual'
+    const sourceName = sourceId === 'agent' ? '灵感助手' : '手动收件箱'
     const itemId = uid()
     const candidateId = uid()
     this.db.tx(() => {
       this.db.db.prepare(`
         INSERT INTO inspiration_items(id, source_id, title, body, url, provenance, captured_at, created_at)
-        VALUES (?, 'manual', ?, ?, ?, ?, ?, ?)
-      `).run(itemId, title, text, safeUrl, `手动收件箱 · ${stamp.slice(0, 10)}`, stamp, stamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(itemId, sourceId, title, text, safeUrl, `${sourceName} · ${stamp.slice(0, 10)}`, stamp, stamp)
       this.db.db.prepare(`
         INSERT INTO inspiration_candidates(id, item_id, angle, why, status, created_at)
         VALUES (?, ?, ?, ?, 'pending', ?)
-      `).run(candidateId, itemId, title, '你手动收下的原话，未做改写；通过后才进入选题。', stamp)
+      `).run(candidateId, itemId, title, why.trim() || (sourceId === 'agent'
+        ? '助手提议，未改写；通过后才进入选题。'
+        : '你手动收下的原话，未做改写；通过后才进入选题。'), stamp)
     })
     return this.listInspiration()
+  }
+
+  searchInspiration(query: string) {
+    const all = this.listInspiration()
+    const needle = query.trim().toLowerCase()
+    if (!needle) return all
+    const hits = (value: string) => value.toLowerCase().includes(needle)
+    return {
+      ...all,
+      items: all.items.filter(item => hits(item.title) || hits(item.body) || hits(item.provenance)),
+      candidates: all.candidates.filter(candidate =>
+        hits(candidate.angle) || hits(candidate.why) || hits(candidate.itemTitle) || hits(candidate.itemBody) || hits(candidate.sourceName)),
+    }
   }
 
   decideInspiration(candidateId: string, decision: 'approved' | 'rejected') {

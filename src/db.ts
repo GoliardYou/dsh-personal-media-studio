@@ -301,6 +301,7 @@ export class StudioDb {
     `)
     const sources = [
       ['manual', 'manual', '手动收件箱', 'connected', '你贴进来的句子、链接和想法'],
+      ['agent', 'agent', '助手提议', 'connected', '灵感助手收进来的候选；仍要你判断'],
       ['library', 'library', '素材库', 'not_connected', '只读索引；尚未接入本地素材库'],
       ['qianfan-notes', 'qianfan', '千帆 · 互动', 'not_connected', '帖子曝光、观看、收藏、评论'],
       ['qianfan-orders', 'qianfan', '千帆 · 交易', 'not_connected', '订单、退款、客单'],
