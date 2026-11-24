@@ -334,10 +334,10 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
           />
         )}
         {stage === 'drafts' && cardId && (
-          <DraftDetail cardId={cardId} onBack={() => { go('topics', cardId); void refresh() }} onRender={() => { go('render', cardId); void refresh() }} />
+          <ArticleStudio cardId={cardId} onBack={() => { go('topics', cardId); void refresh() }} onRender={() => { go('render', cardId); void refresh() }} />
         )}
         {stage === 'render' && cardId && (
-          <Workbench cardId={cardId} onReturn={() => { go('drafts', cardId); void refresh() }} />
+          <XhsStage cardId={cardId} onReturn={() => { go('drafts', cardId); void refresh() }} />
         )}
       </div>
       {toast && (
@@ -373,22 +373,139 @@ function formatWhen(value: string) {
   return value.replace('T', ' ').slice(0, 16)
 }
 
-function DraftDetail({ cardId, onBack, onRender }: { cardId: string, onBack: () => void, onRender: () => void }) {
-  const [mode, setMode] = useState<'loading' | 'gate' | 'draft'>('loading')
+interface ArticleDoc {
+  draftId: string
+  title: string
+  markdown: string
+  suggestions: Array<{ id: string, text: string, status: string }>
+  versions: Array<{ id: string, label: string, created_at: string }>
+}
+
+function ArticleStudio({ cardId, onBack, onRender }: { cardId: string, onBack: () => void, onRender: () => void }) {
+  const [doc, setDoc] = useState<ArticleDoc | null>(null)
+  const [markdown, setMarkdown] = useState('')
+  const [saved, setSaved] = useState('正在生成文稿…')
+  const [error, setError] = useState('')
+  const [read, setRead] = useState(false)
+  const [drawer, setDrawer] = useState(false)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    void rpc<ArticleDoc>('openArticle', { cardId }).then(value => {
+      setDoc(value)
+      setMarkdown(value.markdown)
+      setSaved('已生成，改字会自动保存')
+    }).catch(err => setError(err instanceof Error ? err.message : String(err)))
+  }, [cardId])
+  useEffect(() => {
+    if (!doc || markdown === doc.markdown) return
+    const handle = window.setTimeout(() => {
+      setSaved('保存中…')
+      void rpc('saveArticle', { cardId, markdown }).then(() => setSaved('已自动保存')).catch(err => setSaved(err instanceof Error ? err.message : '保存失败'))
+    }, 700)
+    return () => window.clearTimeout(handle)
+  }, [markdown, doc, cardId])
+  const outline = markdown.split('\n').filter(line => /^#{1,3}\s/.test(line))
+  if (error) return <div className="pms-error">{error}</div>
+  if (!doc) return <div className="pms-empty">正在把你的原话收成一篇稿…</div>
+  return (
+    <div className="pms-article" data-testid="article-editor">
+      <div className="pms-article-bar">
+        <button className="pms-btn" onClick={() => { void rpc('returnToTopics', { cardId }).then(onBack) }}>退回选题</button>
+        <button className="pms-btn" onClick={() => setRead(value => !value)}>{read ? '只看原文' : '阅读视图'}</button>
+        <button className="pms-btn" onClick={() => setDrawer(value => !value)}>建议 {doc.suggestions.length}</button>
+        <span className="pms-meta" data-testid="save-state">{saved}</span>
+        <button className="pms-btn" onClick={() => void rpc('snapshotArticle', { cardId, label: '手动版本' }).then(result => setDoc(current => current ? { ...current, versions: (result as { versions: ArticleDoc['versions'] }).versions } : current))}>保存版本</button>
+        <button className="pms-btn primary" data-testid="confirm-text" disabled={busy} onClick={() => {
+          setBusy(true)
+          void rpc('saveArticle', { cardId, markdown }).then(() => rpc('confirmForRender', { cardId })).then(onRender).catch(err => setError(err instanceof Error ? err.message : String(err))).finally(() => setBusy(false))
+        }}>定稿，送去渲染</button>
+      </div>
+      <div className={read ? 'pms-article-split' : 'pms-article-main'}>
+        <textarea data-testid="article-md" value={markdown} spellCheck={false} onChange={event => setMarkdown(event.target.value)} />
+        {read && (
+          <aside className="pms-article-read">
+            <h3>大纲</h3>
+            {outline.length === 0 && <p className="pms-note">这篇还没有小标题。</p>}
+            <ol>{outline.map(line => <li key={line}>{line.replace(/^#+\s/, '')}</li>)}</ol>
+            <article data-testid="article-read">{markdown}</article>
+          </aside>
+        )}
+      </div>
+      {drawer && (
+        <aside className="pms-suggest" data-testid="suggestion-drawer">
+          <h3>建议</h3>
+          <p className="pms-note">建议不会改你的句子。要收进正文，自己贴进去。</p>
+          {doc.suggestions.length === 0 && <p>还没有新的建议。</p>}
+          <ul>{doc.suggestions.map(item => <li key={item.id}>{item.text}</li>)}</ul>
+          <h3>版本</h3>
+          {doc.versions.slice(0, 8).map(row => (
+            <button key={row.id} className="pms-btn" onClick={() => void rpc<ArticleDoc>('restoreVersion', { versionId: row.id }).then(() => rpc<ArticleDoc>('openArticle', { cardId })).then(value => { setDoc(value); setMarkdown(value.markdown) })}>{row.label}</button>
+          ))}
+        </aside>
+      )}
+    </div>
+  )
+}
+
+function XhsStage({ cardId, onReturn }: { cardId: string, onReturn: () => void }) {
+  const frame = useRef<HTMLIFrameElement>(null)
+  const pending = useRef<Record<string, string> | null>(null)
+  const [picker, setPicker] = useState<'screenshot' | 'product' | null>(null)
+  const [assets, setAssets] = useState<AssetHit[]>([])
+  const [query, setQuery] = useState('')
   const [error, setError] = useState('')
   useEffect(() => {
-    void rpc<ProjectView | null>('getProject', { cardId }).then(project => setMode(project?.draft ? 'draft' : 'gate')).catch(err => setError(err instanceof Error ? err.message : String(err)))
-  }, [cardId])
-  if (error) return <div className="pms-error">{error}</div>
-  if (mode === 'loading') return <div className="pms-empty">正在打开这篇稿…</div>
-  if (mode === 'gate') return <TextGate cardId={cardId} onConfirmed={() => setMode('draft')} />
+    const post = (message: object) => frame.current?.contentWindow?.postMessage(message, '*')
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string, state?: Record<string, string>, kind?: 'screenshot' | 'product', index?: number }
+      if (!data?.type) return
+      if (data.type === 'pms:ready' && pending.current) post({ type: 'pms:load', state: pending.current })
+      if (data.type === 'pms:change' && data.state) {
+        void rpc('saveRenderState', { cardId, state: data.state }).catch(err => setError(err instanceof Error ? err.message : String(err)))
+      }
+      if (data.type === 'pms:back') {
+        void rpc('returnToDrafts', { cardId }).then(onReturn)
+      }
+      if (data.type === 'pms:request-asset' && (data.kind === 'screenshot' || data.kind === 'product')) {
+        setPicker(data.kind)
+        void rpc<AssetHit[]>('searchAssets', { query: '' }).then(setAssets)
+      }
+      if (data.type === 'pms:export' || data.type === 'pms:export-page') {
+        void rpc<{ dir: string, manifest: { files: string[] } }>('exportProject', { cardId }).then(result => {
+          post({ type: 'pms:exported', href: '#', name: '已写入导出目录' })
+          setError(`成片已写入 ${result.dir}`)
+        }).catch(() => post({ type: 'pms:export-fallback', index: data.index }))
+      }
+    }
+    window.addEventListener('message', onMessage)
+    void rpc<{ state: Record<string, string> }>('renderDocument', { cardId }).then(doc => {
+      pending.current = doc.state
+      post({ type: 'pms:load', state: doc.state })
+    }).catch(err => setError(err instanceof Error ? err.message : String(err)))
+    return () => window.removeEventListener('message', onMessage)
+  }, [cardId, onReturn])
   return (
-    <div>
-      <div className="pms-row" style={{ marginBottom: 12 }}>
-        <button className="pms-btn" onClick={() => { void rpc('returnToTopics', { cardId }).then(onBack) }}>退回选题</button>
-      </div>
-      <Production cardId={cardId} onReview={() => { void rpc('confirmForRender', { cardId }).then(onRender).catch(err => setError(err instanceof Error ? err.message : String(err))) }} />
-      {error && <div className="pms-error">{error}</div>}
+    <div className="pms-xhs" data-testid="workbench">
+      {error && <div className="pms-note">{error}</div>}
+      <iframe ref={frame} title="小红书长文出图" data-testid="xhs-editor" src="/api/personal-media-studio/editor?embed=1" />
+      {picker && (
+        <aside className="pms-suggest" data-testid="asset-picker">
+          <h3>{picker === 'product' ? '插入商品页' : '插入截图页'}</h3>
+          <input aria-label="搜索素材" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索文件名" />
+          <button className="pms-btn" onClick={() => void rpc<AssetHit[]>('searchAssets', { query }).then(setAssets)}>搜索</button>
+          {assets.map(asset => (
+            <button key={asset.assetId} className="pms-btn" onClick={() => {
+              const src = `/api/personal-media-studio/asset?id=${asset.assetId}`
+              const markdown = picker === 'product'
+                ? `\`\`\`product\nname: ${asset.title}\ntagline: 待确认\npoints:\n- 待确认\nprice: 待确认\nhow: 待确认\nimage: ${src}\ncaption: ${asset.title}\n\`\`\``
+                : `\`\`\`screenshot\nsrc: ${src}\ncaption: ${asset.title}\n\`\`\``
+              frame.current?.contentWindow?.postMessage({ type: 'pms:insert', markdown }, '*')
+              setPicker(null)
+            }}>{asset.title}</button>
+          ))}
+          <button className="pms-btn" onClick={() => setPicker(null)}>关闭</button>
+        </aside>
+      )}
     </div>
   )
 }

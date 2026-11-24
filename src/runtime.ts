@@ -13,6 +13,8 @@ import { pageInner, themeCss, shotCss, normalizeTheme, type BrandSize } from './
 import { mergeExcludes } from './library/profile.ts'
 import { rebuildQaBoard } from './qa/seed.ts'
 import { stageOf } from './stages.ts'
+import { composeArticle } from './article.ts'
+import { editorHtml, renderEditorPngs, type EditorState } from './xhs-export.ts'
 import { spawn } from 'node:child_process'
 import { StudioError, fingerprint, nowIso, parseJson, uid } from './util.ts'
 
@@ -493,10 +495,10 @@ export class StudioRuntime {
   snapshot(draftId: string, label: string) {
     const draft = this.requireDraft(draftId)
     const pages = this.readPages(draftId)
-    const project = this.db.db.prepare(`SELECT template FROM projects WHERE id = ?`).get(draft.project_id) as { template: string }
+    const project = this.db.db.prepare(`SELECT template, page_size FROM projects WHERE id = ?`).get(draft.project_id) as { template: string, page_size: string }
     const id = uid()
     this.db.db.prepare(`INSERT INTO versions(id, draft_id, label, snapshot_json, created_at) VALUES (?, ?, ?, ?, ?)`).run(
-      id, draftId, label || `版本 ${draft.version}`, JSON.stringify({ title: draft.title, template: project.template, pages }), nowIso(),
+      id, draftId, label || `版本 ${draft.version}`, JSON.stringify({ title: draft.title, template: project.template, pageSize: project.page_size, pages, markdown: draft.body_md, structure: draft.structure_json }), nowIso(),
     )
     return { id }
   }
@@ -509,8 +511,120 @@ export class StudioRuntime {
   restoreVersion(versionId: string) {
     const version = this.db.db.prepare(`SELECT * FROM versions WHERE id = ?`).get(versionId) as { id: string, draft_id: string, snapshot_json: string } | undefined
     if (!version) throw new StudioError('missing_version', '找不到这个版本。')
-    const snapshot = parseJson<{ title: string, template: TemplateId, pages: PageModel[] }>(version.snapshot_json, { title: '', template: 'knowledge', pages: [] })
+    const snapshot = parseJson<{ title: string, template: TemplateId, pages: PageModel[], markdown?: string, pageSize?: string, structure?: string }>(version.snapshot_json, { title: '', template: 'knowledge', pages: [] })
+    if (snapshot.markdown != null) {
+      const stamp = nowIso()
+      this.db.db.prepare(`UPDATE drafts SET body_md = ?, title = ?, structure_json = COALESCE(?, structure_json), updated_at = ? WHERE id = ?`).run(snapshot.markdown, snapshot.title || '', snapshot.structure ?? null, stamp, version.draft_id)
+    }
     return this.saveDraft(version.draft_id, snapshot)
+  }
+
+  openArticle(cardId: string) {
+    const card = this.requireCard(cardId)
+    const thoughts = (this.db.db.prepare(`SELECT body FROM interactions WHERE card_id = ? AND kind = 'thought' ORDER BY created_at ASC`).all(cardId) as Array<{ body: string }>).map(row => row.body)
+    const accepted = (this.db.db.prepare(`SELECT text FROM ai_suggestions WHERE card_id = ? AND status = 'accepted' ORDER BY created_at ASC`).all(cardId) as Array<{ text: string }>).map(row => row.text)
+    const suggestions = this.db.db.prepare(`SELECT id, text, status FROM ai_suggestions WHERE card_id = ? AND status = 'open' ORDER BY created_at ASC`).all(cardId)
+    const raw = thoughts.map(item => item.trim()).filter(Boolean).join('\n\n')
+    const composed = composeArticle(String(card.title), thoughts, accepted)
+    const stamp = nowIso()
+    let project = this.latestProject(cardId)
+    if (!project) {
+      const projectId = uid()
+      this.db.db.prepare(`INSERT INTO projects(id, card_id, status, template, created_at, updated_at) VALUES (?, ?, 'drafting', 'avatar-green', ?, ?)`).run(projectId, cardId, stamp, stamp)
+      project = { id: projectId, status: 'drafting' }
+    } else if (project.status === 'paused' || project.status === 'open') {
+      this.db.db.prepare(`UPDATE projects SET status = 'drafting', updated_at = ? WHERE id = ?`).run(stamp, project.id)
+    }
+    let draft = this.db.db.prepare(`SELECT id, title, body_md, structure_json FROM drafts WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`).get(project.id) as { id: string, title: string, body_md: string, structure_json: string } | undefined
+    if (!draft) {
+      const draftId = uid()
+      this.db.db.prepare(`INSERT INTO drafts(id, project_id, title, body_md, structure_json, version, created_at, updated_at) VALUES (?, ?, ?, ?, '{}', 1, ?, ?)`).run(draftId, project.id, card.title, composed, stamp, stamp)
+      this.snapshot(draftId, '生成文稿')
+      draft = { id: draftId, title: String(card.title), body_md: composed, structure_json: '{}' }
+    } else if (!draft.body_md.trim() || draft.body_md.trim() === raw) {
+      this.db.db.prepare(`UPDATE drafts SET body_md = ?, updated_at = ? WHERE id = ?`).run(composed, stamp, draft.id)
+      draft.body_md = composed
+    }
+    return {
+      cardId,
+      draftId: draft.id,
+      title: draft.title || card.title,
+      markdown: draft.body_md,
+      suggestions,
+      versions: this.listVersions(draft.id),
+    }
+  }
+
+  saveArticle(cardId: string, markdown: string) {
+    const draft = this.articleDraft(cardId)
+    const stamp = nowIso()
+    this.db.db.prepare(`UPDATE drafts SET body_md = ?, version = version + 1, updated_at = ? WHERE id = ?`).run(markdown, stamp, draft.id)
+    this.db.db.prepare(`UPDATE projects SET updated_at = ? WHERE id = ?`).run(stamp, draft.project_id)
+    return { draftId: draft.id, saved: true }
+  }
+
+  snapshotArticle(cardId: string, label: string) {
+    const draft = this.articleDraft(cardId)
+    return { ...this.snapshot(draft.id, label), versions: this.listVersions(draft.id) }
+  }
+
+  renderDocument(cardId: string) {
+    const card = this.requireCard(cardId)
+    const draft = this.articleDraft(cardId)
+    const project = this.db.db.prepare(`SELECT template, page_size FROM projects WHERE id = ?`).get(draft.project_id) as { template: string, page_size: string }
+    const stored = parseJson<{ cover?: Partial<EditorState>, theme?: string, size?: string }>(draft.structure_json || '{}', {})
+    const theme = stored.theme === 'v1' || stored.theme === 'v2' || stored.theme === 'v3' ? stored.theme : themeToEditor(project.template)
+    const size = stored.size === 'small' || stored.size === 'large' || stored.size === 'standard' ? stored.size : (project.page_size === 'small' || project.page_size === 'large' ? project.page_size : 'standard')
+    return {
+      cardId,
+      draftId: draft.id,
+      state: {
+        markdown: draft.body_md,
+        theme,
+        size,
+        cover_title: stored.cover?.cover_title || String(card.title),
+        subtitle: stored.cover?.subtitle || String(card.title),
+        author: stored.cover?.author || this.config.brand.author,
+        role: stored.cover?.role || this.config.brand.role,
+        cover_kicker: stored.cover?.cover_kicker || '面试方法论',
+        badge: stored.cover?.badge || '考公面试干货',
+        series: stored.cover?.series || String(card.title),
+      } satisfies EditorState,
+      versions: this.listVersions(draft.id),
+    }
+  }
+
+  saveRenderState(cardId: string, state: EditorState) {
+    const draft = this.articleDraft(cardId)
+    const stamp = nowIso()
+    const template = state.theme === 'v1' ? 'navy-gold' : state.theme === 'v3' ? 'gongwen' : 'avatar-green'
+    const structure = JSON.stringify({
+      kind: 'article',
+      theme: state.theme,
+      size: state.size,
+      cover: {
+        cover_title: state.cover_title,
+        subtitle: state.subtitle,
+        author: state.author,
+        role: state.role,
+        cover_kicker: state.cover_kicker,
+        badge: state.badge,
+        series: state.series,
+      },
+    })
+    this.db.tx(() => {
+      this.db.db.prepare(`UPDATE drafts SET body_md = ?, structure_json = ?, version = version + 1, updated_at = ? WHERE id = ?`).run(state.markdown, structure, stamp, draft.id)
+      this.db.db.prepare(`UPDATE projects SET template = ?, page_size = ?, updated_at = ? WHERE id = ?`).run(template, state.size, stamp, draft.project_id)
+    })
+    return { saved: true }
+  }
+
+  private articleDraft(cardId: string) {
+    const project = this.latestProject(cardId)
+    if (!project) throw new StudioError('missing_project', '还没有稿件。')
+    const draft = this.db.db.prepare(`SELECT id, project_id, body_md, structure_json FROM drafts WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`).get(project.id) as { id: string, project_id: string, body_md: string, structure_json: string } | undefined
+    if (!draft) throw new StudioError('missing_project', '还没有稿件。')
+    return draft
   }
 
   async proposeEdit(draftId: string, pageId: string, instruction: string) {
@@ -537,6 +651,7 @@ export class StudioRuntime {
   async exportProject(cardId: string) {
     const loaded = this.getProject(cardId)
     if (!loaded?.draft) throw new StudioError('missing_project', '还没有可导出的稿件。')
+    if (String(loaded.draft.body_md || '').trim()) return this.exportMarkdownArticle(cardId, loaded)
     const draftId = loaded.draft.id as string
     const version = this.snapshot(draftId, '导出')
     const pages = this.readPages(draftId)
@@ -609,6 +724,64 @@ export class StudioRuntime {
     this.db.db.prepare(`UPDATE cards SET status = 'exported', updated_at = ? WHERE id = ?`).run(nowIso(), cardId)
     this.db.db.prepare(`UPDATE projects SET status = 'exported', updated_at = ? WHERE id = ?`).run(nowIso(), loaded.project.id)
     return { exportId, dir, manifest, files }
+  }
+
+  private async exportMarkdownArticle(cardId: string, loaded: NonNullable<ReturnType<StudioRuntime['getProject']>>) {
+    const draft = loaded.draft
+    if (!draft) throw new StudioError('missing_project', '还没有可导出的稿件。')
+    const draftId = String(draft.id)
+    const version = this.snapshot(draftId, '导出')
+    const doc = this.renderDocument(cardId)
+    const state = { ...doc.state, markdown: this.inlineAssetUrls(doc.state.markdown) }
+    const pngs = await renderEditorPngs(state)
+    const dir = join(this.exportDir, String(loaded.project.id), stampDir())
+    const pageDir = join(dir, 'pages')
+    mkdirSync(pageDir, { recursive: true })
+    const files = pngs.map((png, index) => {
+      const name = `pages/${String(index + 1).padStart(2, '0')}.png`
+      writeFileSync(join(dir, name), png)
+      return name
+    })
+    const article = doc.state.markdown.startsWith('---') ? doc.state.markdown : `---\ntheme: ${doc.state.theme}\nsize: ${doc.state.size}\ncover_title: ${doc.state.cover_title}\nauthor: ${doc.state.author}\nrole: ${doc.state.role}\n---\n\n${doc.state.markdown}`
+    writeFileSync(join(dir, 'article.md'), article.endsWith('\n') ? article : `${article}\n`, 'utf8')
+    writeFileSync(join(dir, 'body.md'), article, 'utf8')
+    writeFileSync(join(dir, 'body.txt'), `${draft.title}\n\n${article.replace(/[#>*]/g, '')}\n`, 'utf8')
+    const manifestAssets = (loaded.relations as Array<Record<string, unknown>>).map(relation => ({
+      relationId: relation.id,
+      assetId: relation.asset_id,
+      status: relation.status,
+      sourcePath: relation.source_path,
+      rationale: relation.rationale,
+    }))
+    writeFileSync(join(dir, 'assets.json'), JSON.stringify({ assets: manifestAssets }, null, 2))
+    writeFileSync(join(dir, 'version.json'), JSON.stringify({ versionId: version.id, renderer: 'xhs-editor', pages: pngs.length }, null, 2))
+    const knowledge = this.writeKnowledge(String(draft.title), article, dir)
+    await this.assets.scanAll()
+    const manifest = { dir, files: [...files, 'article.md', 'body.md', 'body.txt', 'assets.json', 'version.json'], knowledge, version }
+    writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2))
+    this.db.db.prepare(`INSERT INTO exports(id, project_id, version_id, dir, manifest_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).run(uid(), loaded.project.id, version.id, dir, JSON.stringify(manifest), nowIso())
+    this.db.db.prepare(`UPDATE cards SET status = 'exported', updated_at = ? WHERE id = ?`).run(nowIso(), cardId)
+    this.db.db.prepare(`UPDATE projects SET status = 'exported', updated_at = ? WHERE id = ?`).run(nowIso(), loaded.project.id)
+    return { dir, manifest, files }
+  }
+
+  private inlineAssetUrls(markdown: string) {
+    return markdown.replace(/\/api\/personal-media-studio\/asset\?id=([A-Za-z0-9-]+)/g, (full, id: string) => {
+      const asset = this.assets.get(id)
+      if (!asset || asset.deleted_at || typeof asset.abs_path !== 'string') return full
+      try {
+        const bytes = readFileSync(String(asset.abs_path))
+        const ext = String(asset.abs_path).toLowerCase()
+        const mime = ext.endsWith('.png') ? 'image/png' : ext.endsWith('.webp') ? 'image/webp' : ext.endsWith('.gif') ? 'image/gif' : 'image/jpeg'
+        return `data:${mime};base64,${bytes.toString('base64')}`
+      } catch {
+        return full
+      }
+    })
+  }
+
+  handleEditor() {
+    return new Response(editorHtml(), { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } })
   }
 
   searchAssets(query: string) {
@@ -689,7 +862,7 @@ export class StudioRuntime {
   }
 
   private requireDraft(draftId: string) {
-    const draft = this.db.db.prepare(`SELECT * FROM drafts WHERE id = ?`).get(draftId) as { id: string, project_id: string, title: string, version: number } | undefined
+    const draft = this.db.db.prepare(`SELECT * FROM drafts WHERE id = ?`).get(draftId) as { id: string, project_id: string, title: string, version: number, body_md: string, structure_json: string } | undefined
     if (!draft) throw new StudioError('missing_draft', '找不到稿件。')
     return draft
   }
@@ -858,6 +1031,11 @@ export class StudioRuntime {
       case 'proposeEdit': return this.proposeEdit(String(payload.draftId), String(payload.pageId), String(payload.instruction ?? ''))
       case 'confirmEdit': return this.confirmEdit(String(payload.draftId), String(payload.pageId), arrayOf(payload.paragraphs))
       case 'exportProject': return this.exportProject(String(payload.cardId))
+      case 'openArticle': return this.openArticle(String(payload.cardId))
+      case 'saveArticle': return this.saveArticle(String(payload.cardId), String(payload.markdown ?? ''))
+      case 'snapshotArticle': return this.snapshotArticle(String(payload.cardId), String(payload.label ?? '版本'))
+      case 'renderDocument': return this.renderDocument(String(payload.cardId))
+      case 'saveRenderState': return this.saveRenderState(String(payload.cardId), payload.state as EditorState)
       case 'searchAssets': return this.searchAssets(String(payload.query ?? ''))
       case 'searchPool': return this.searchPool(String(payload.query ?? ''))
       case 'promotePool': return this.promotePool(String(payload.topicId ?? ''))
@@ -894,6 +1072,12 @@ function runXhsRender(script: string, markdown: string, outDir: string, theme: s
       else reject(new Error(stderr || `xhs_render.py exited ${code}`))
     })
   })
+}
+
+function themeToEditor(template: string): 'v1' | 'v2' | 'v3' {
+  if (template === 'navy-gold' || template === 'tech') return 'v1'
+  if (template === 'gongwen' || template === 'opinion') return 'v3'
+  return 'v2'
 }
 
 function presentPool(topic: { id: string, title: string, summary: string, ask_count: number }) {

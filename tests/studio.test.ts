@@ -272,7 +272,7 @@ describe('cordis plugin', () => {
     expect(toolService.defs.has('media_promote_card')).toBe(true)
     expect(toolService.defs.has('media_list_cards')).toBe(true)
     const connection = (ctx as unknown as { connection: FakeConnection }).connection
-    expect(connection.routes).toHaveLength(2)
+    expect(connection.routes).toHaveLength(3)
     const promote = toolService.defs.get('media_promote_card')!
     const card = toolService.defs.get('media_create_card')!
     const created = JSON.parse(String(await card.execute({ title: '工具创建' }))) as { card: { card: { id: string } } }

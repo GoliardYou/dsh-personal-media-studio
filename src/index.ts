@@ -46,4 +46,10 @@ export async function apply(ctx: Context, config: StudioConfig) {
     requestBody: 'buffered',
     fetch: request => runtime.handleAsset(request),
   })
+  connection.fetch.register({
+    path: '/api/personal-media-studio/editor',
+    methods: ['GET', 'HEAD'],
+    requestBody: 'buffered',
+    fetch: () => runtime.handleEditor(),
+  })
 }

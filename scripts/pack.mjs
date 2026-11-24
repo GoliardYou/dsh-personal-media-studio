@@ -7,7 +7,7 @@ const root = process.cwd()
 const stage = join(root, 'dist', 'dsh-personal-media-studio')
 rmSync(stage, { recursive: true, force: true })
 mkdirSync(stage, { recursive: true })
-for (const name of ['package.json', 'cordis.patch.yml', 'icon.svg', 'README.md', 'lib', 'brand', 'locale']) {
+for (const name of ['package.json', 'cordis.patch.yml', 'icon.svg', 'README.md', 'lib', 'brand', 'locale', 'editor']) {
   cpSync(join(root, name), join(stage, name), { recursive: true })
 }
 const packed = JSON.parse(readFileSync(join(stage, 'package.json'), 'utf8'))
