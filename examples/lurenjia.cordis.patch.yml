@@ -6,6 +6,8 @@
     libraryProfile: lurenjia
     libraryRoots:
       - C:\Users\yigel\一个路人甲小红书素材库
+    # 留空则写到 dataDir/knowledge，不会写进素材库。只有你亲自把 knowledgeDir 指进库里，才会写到那里。
+    knowledgeDir: ""
     excludeGlobs:
       - "**/.git/**"
       - "**/node_modules/**"

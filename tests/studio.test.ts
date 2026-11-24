@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -26,6 +26,7 @@ function config(dir: string, library: string, engine: StudioConfig['render']['en
     dataDir: join(dir, 'data'),
     libraryRoots: [library],
     libraryProfile: 'generic',
+    knowledgeDir: '',
     excludeGlobs: ['**/.git/**', '**/node_modules/**'],
     exportDir: join(dir, 'exports'),
     watch: false,
@@ -174,6 +175,50 @@ describe('production and export', () => {
     expect(readFileSync(join(exported.dir, 'assets.json'), 'utf8')).toContain(relation.source_path)
     expect(readFileSync(manifest.knowledge, 'utf8')).toContain('回写')
     await studio.dispose()
+  })
+})
+
+describe('read-only library and QA topics', () => {
+  it('writes knowledge outside library roots and creates Xhs_QA topics when the scan finishes', async () => {
+    const dir = temp()
+    const library = join(dir, 'library')
+    mkdirSync(join(library, 'Xhs_QA_小红书问答'), { recursive: true })
+    writeFileSync(join(library, 'Xhs_QA_小红书问答', '背模板.md'), '# 结构化面试是不是背模板\n\n同学问是不是背下来就行。')
+    const ctx = { llm: { listProviders: () => [], stream: async function* () {} } } as unknown as Context
+    const studio = await StudioRuntime.open(ctx, { ...config(dir, library), libraryProfile: 'lurenjia' })
+    const topics = () => (studio.db.db.prepare('SELECT COUNT(*) AS n FROM topics').get() as { n: number }).n
+    expect(topics()).toBeGreaterThan(0)
+    expect(studio.listCards().some(card => String((card as { title?: string }).title).includes('背模板'))).toBe(true)
+    const before = topics()
+    await studio.assets.scanAll()
+    expect(topics()).toBe(before)
+    const note = studio.writeKnowledge('定稿回写', '原文保持不动。', join(dir, 'export'))
+    expect(note.startsWith(join(dir, 'data', 'knowledge'))).toBe(true)
+    expect(note.startsWith(library)).toBe(false)
+    await studio.assets.scanAll()
+    const found = studio.searchAssets('定稿回写')
+    expect(found.some(hit => hit.sourcePath === note)).toBe(true)
+
+    const inside = join(library, '我指定的回写')
+    const explicit = await StudioRuntime.open(ctx, {
+      ...config(join(dir, 'explicit'), library),
+      libraryProfile: 'lurenjia',
+      knowledgeDir: inside,
+    })
+    const placed = explicit.writeKnowledge('指定回写', '用户明确要求写在这里。', join(dir, 'export'))
+    expect(placed.startsWith(inside)).toBe(true)
+
+    const nested = await StudioRuntime.open(ctx, {
+      ...config(join(dir, 'nested'), library),
+      dataDir: join(library, 'plugin-data'),
+      libraryProfile: 'lurenjia',
+      knowledgeDir: '',
+    })
+    const outside = nested.writeKnowledge('不能进库', '正文', join(dir, 'export'))
+    expect(outside.startsWith(library)).toBe(false)
+    await studio.dispose()
+    await explicit.dispose()
+    await nested.dispose()
   })
 })
 

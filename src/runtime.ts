@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { AssetLibrary, type AssetHit } from './assets.ts'
 import { analyzeCard, createLlmBridge, planDraft, reviewEdit, type LlmBridge, type Maturity } from './ai.ts'
@@ -39,6 +39,7 @@ export class StudioRuntime {
   private readonly intents = new Map<string, Intent>()
   readonly dataDir: string
   readonly exportDir: string
+  readonly knowledgeDir: string
 
   private constructor(
     db: StudioDb,
@@ -46,6 +47,7 @@ export class StudioRuntime {
     llm: LlmBridge,
     dataDir: string,
     exportDir: string,
+    knowledgeDir: string,
     private readonly config: StudioConfig,
   ) {
     this.db = db
@@ -53,6 +55,7 @@ export class StudioRuntime {
     this.llm = llm
     this.dataDir = dataDir
     this.exportDir = exportDir
+    this.knowledgeDir = knowledgeDir
   }
 
   static async open(ctx: Context, config: StudioConfig) {
@@ -60,12 +63,16 @@ export class StudioRuntime {
     const exportDir = config.exportDir ? resolve(config.exportDir) : join(dataDir, 'exports')
     mkdirSync(dataDir, { recursive: true })
     mkdirSync(exportDir, { recursive: true })
+    const knowledgeDir = resolveKnowledgeDir(config, dataDir)
+    mkdirSync(knowledgeDir, { recursive: true })
     const db = new StudioDb(join(dataDir, 'studio.sqlite'))
     recoverJobs(db)
-    const assets = new AssetLibrary(db, config.libraryRoots.map(root => resolve(root)), mergeExcludes(config.libraryProfile, config.excludeGlobs), join(dataDir, 'thumbs'), config.ocr.command)
+    const scanRoots = [...new Set([...config.libraryRoots.map(root => resolve(root)), knowledgeDir])]
+    const assets = new AssetLibrary(db, scanRoots, mergeExcludes(config.libraryProfile, config.excludeGlobs), join(dataDir, 'thumbs'), config.ocr.command)
     await assets.start(config.watch)
     const llm = createLlmBridge(ctx, config.llm.provider, config.llm.model)
-    const runtime = new StudioRuntime(db, assets, llm, dataDir, exportDir, config)
+    const runtime = new StudioRuntime(db, assets, llm, dataDir, exportDir, knowledgeDir, config)
+    assets.setOnScanned(() => runtime.seedTopics())
     runtime.seedTopics()
     runtime.timer = setInterval(() => { void runtime.pump() }, 400)
     return runtime
@@ -104,19 +111,33 @@ export class StudioRuntime {
     }
   }
 
-  private seedTopics() {
-    const count = this.db.db.prepare(`SELECT COUNT(*) AS n FROM cards`).get() as { n: number }
-    if (count.n > 0) return
-    const qa = this.db.db.prepare(`SELECT title, text_content FROM assets WHERE deleted_at IS NULL AND rel_path LIKE '%Xhs_QA%' ORDER BY title LIMIT 8`).all() as Array<{ title: string, text_content: string }>
-    const seeds = qa.length > 0 ? qa.map(row => [row.title.replace(/\.md$/i, ''), row.text_content.replace(/^#.*\n+/, '').replace(/\s+/g, ' ').slice(0, 72)] as [string, string]) : RECOMMENDED
+  seedTopics() {
+    const qa = this.db.db.prepare(`
+      SELECT title, text_content, rel_path FROM assets
+      WHERE deleted_at IS NULL AND (rel_path LIKE '%Xhs_QA%' OR rel_path LIKE '%小红书问答%')
+      ORDER BY rel_path
+    `).all() as Array<{ title: string, text_content: string, rel_path: string }>
     const stamp = nowIso()
-    for (const [title, summary] of seeds) {
-      const topicId = uid()
-      this.db.db.prepare(`INSERT INTO topics(id, title, summary, source, created_at, updated_at) VALUES (?, ?, ?, 'ai', ?, ?)`).run(topicId, title, summary, stamp, stamp)
-      const cardId = uid()
-      this.db.db.prepare(`INSERT INTO cards(id, topic_id, title, status, maturity, input_version, source, created_at, updated_at) VALUES (?, ?, ?, 'open', 'seed', 0, 'ai', ?, ?)`).run(cardId, topicId, title, stamp, stamp)
-      this.db.indexText('card', cardId, `${title}\n${summary}`)
+    if (qa.length === 0) {
+      const cards = this.db.db.prepare(`SELECT COUNT(*) AS n FROM cards`).get() as { n: number }
+      if (cards.n > 0) return
+      for (const [title, summary] of RECOMMENDED) this.insertTopicCard(title, summary, stamp)
+      return
     }
+    for (const row of qa) {
+      const title = row.title.replace(/\.(md|markdown|txt)$/i, '').trim() || row.rel_path
+      if (this.db.db.prepare(`SELECT id FROM topics WHERE title = ?`).get(title)) continue
+      const summary = row.text_content.replace(/^#.*\n+/, '').replace(/\s+/g, ' ').slice(0, 72)
+      this.insertTopicCard(title, summary, stamp)
+    }
+  }
+
+  private insertTopicCard(title: string, summary: string, stamp: string) {
+    const topicId = uid()
+    this.db.db.prepare(`INSERT INTO topics(id, title, summary, source, created_at, updated_at) VALUES (?, ?, ?, 'ai', ?, ?)`).run(topicId, title, summary, stamp, stamp)
+    const cardId = uid()
+    this.db.db.prepare(`INSERT INTO cards(id, topic_id, title, status, maturity, input_version, source, created_at, updated_at) VALUES (?, ?, ?, 'open', 'seed', 0, 'ai', ?, ?)`).run(cardId, topicId, title, stamp, stamp)
+    this.db.indexText('card', cardId, `${title}\n${summary}`)
   }
 
   listCards() {
@@ -444,6 +465,7 @@ export class StudioRuntime {
     const versionInfo = { versionId: version.id, draftVersion: loaded.draft.version, exportedAt: nowIso(), renderer: usedEngine, page: { width: PAGE_W, height: PAGE_H } }
     writeFileSync(join(dir, 'version.json'), JSON.stringify(versionInfo, null, 2))
     const knowledge = this.writeKnowledge(String(loaded.draft.title), body, dir)
+    await this.assets.scanAll()
     const manifest = { dir, files: [...files, 'body.md', 'body.txt', 'structure.json', 'assets.json', 'version.json'], knowledge, version: versionInfo, htmlPreview: pages.map(page => renderPageHtml(page, template, assetRows)).length }
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2))
     const exportId = uid()
@@ -462,8 +484,11 @@ export class StudioRuntime {
     while (progressed) progressed = await this.pump()
   }
 
-  private writeKnowledge(title: string, body: string, exportDir: string) {
-    const root = this.config.libraryRoots[0] ? resolve(this.config.libraryRoots[0]) : join(this.dataDir, 'knowledge')
+  writeKnowledge(title: string, body: string, exportDir: string) {
+    const root = this.knowledgeDir
+    if (!this.config.knowledgeDir.trim() && isInsideLibrary(root, this.config.libraryRoots)) {
+      throw new StudioError('library_readonly', '回写目录落在素材库里。素材库是只读的，请把 knowledgeDir 指到库外，或明确设成库内的某个目录。')
+    }
     mkdirSync(root, { recursive: true })
     const file = join(root, `回写-${title.replace(/[\\/:*?"<>|]/g, '').slice(0, 24) || '稿件'}.md`)
     const note = `# ${title}\n\n这条笔记由个人媒体工作室在导出后回写，供下次检索。\n\n- 导出目录：\`${exportDir}\`\n\n${body}\n`
@@ -654,7 +679,7 @@ export class StudioRuntime {
     if (!asset || asset.deleted_at || typeof asset.abs_path !== 'string') {
       return new Response('not found', { status: 404 })
     }
-    const rootOk = this.config.libraryRoots.some(root => String(asset.abs_path).startsWith(resolve(root)))
+    const rootOk = this.config.libraryRoots.some(root => isInsideLibrary(String(asset.abs_path), [root])) || isInsideLibrary(String(asset.abs_path), [this.knowledgeDir])
     if (!rootOk) return new Response('forbidden', { status: 403 })
     const bytes = readFileSyncSafe(String(asset.abs_path))
     if (!bytes) return new Response('not found', { status: 404 })
@@ -694,6 +719,23 @@ export class StudioRuntime {
       default: throw new StudioError('unknown_op', `未知操作 ${op}`)
     }
   }
+}
+
+function resolveKnowledgeDir(config: StudioConfig, dataDir: string): string {
+  if (config.knowledgeDir.trim()) return resolve(config.knowledgeDir)
+  const fallback = join(dataDir, 'knowledge')
+  if (!isInsideLibrary(fallback, config.libraryRoots)) return fallback
+  const outside = join(homedir(), '.dsh', 'personal-media-studio', 'knowledge')
+  return isInsideLibrary(outside, config.libraryRoots) ? join(dataDir, '..', 'personal-media-studio-knowledge') : outside
+}
+
+function isInsideLibrary(target: string, roots: string[]): boolean {
+  const abs = resolve(target)
+  return roots.some(root => {
+    const base = resolve(root)
+    const rel = relative(base, abs)
+    return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+  })
 }
 
 function runXhsRender(script: string, markdown: string, outDir: string, theme: string, size: string) {

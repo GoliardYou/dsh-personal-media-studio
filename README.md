@@ -96,4 +96,4 @@ dsh web --no-open
 
 `npm run pack` 会在 `dist\dsh-personal-media-studio.zip` 里打好一份带 `lib/` 和 `brand/` 的目录，不依赖这个私有仓库。也可以把 zip 解开后，对解开的目录执行 `dsh plugin add`。
 
-素材库示例配置在 `examples/lurenjia.cordis.patch.yml`。默认不扫描 `Coaching_Mindmaps_*`、`Coaching_Transcription_*`，也不收录 `一个路人甲个人微信二维码.jpg`。文件名里的零宽字符会被去掉。旧价格和退款承诺只标成「待确认」。
+素材库示例配置在 `examples/lurenjia.cordis.patch.yml`。默认不扫描 `Coaching_Mindmaps_*`、`Coaching_Transcription_*`，也不收录 `一个路人甲个人微信二维码.jpg`。文件名里的零宽字符会被去掉。旧价格和退款承诺只标成「待确认」。导出回写的笔记进 `knowledgeDir`（默认 `dataDir/knowledge`），不会写进 `libraryRoots`，除非你自己把 `knowledgeDir` 指到库里。`Xhs_QA_小红书问答` 里的笔记会在扫描结束时自动变成选题卡。

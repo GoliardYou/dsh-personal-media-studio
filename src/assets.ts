@@ -32,7 +32,12 @@ export class AssetLibrary {
     private readonly excludeGlobs: string[],
     private readonly thumbDir: string,
     private readonly ocrCommand: string,
+    private onScanned?: () => void,
   ) {}
+
+  setOnScanned(callback: () => void) {
+    this.onScanned = callback
+  }
 
   async start(watch: boolean) {
     mkdirSync(this.thumbDir, { recursive: true })
@@ -81,6 +86,7 @@ export class AssetLibrary {
         this.db.db.prepare(`UPDATE assets SET deleted_at = ?, updated_at = ? WHERE id = ?`).run(nowIso(), nowIso(), row.id)
       }
     }
+    this.onScanned?.()
   }
 
   private async ingest(root: string, rel: string, abs: string) {

@@ -4,6 +4,8 @@ export interface StudioConfig {
   dataDir: string
   libraryRoots: string[]
   libraryProfile: 'generic' | 'lurenjia'
+  /** Where finished notes are written. Empty means dataDir/knowledge, never a library root. */
+  knowledgeDir: string
   excludeGlobs: string[]
   exportDir: string
   watch: boolean
@@ -32,6 +34,7 @@ export const Config: Schema<StudioConfig> = Schema.object({
   dataDir: Schema.string().default(''),
   libraryRoots: Schema.array(Schema.string()).default([]),
   libraryProfile: Schema.union(['generic', 'lurenjia']).default('generic'),
+  knowledgeDir: Schema.string().default(''),
   excludeGlobs: Schema.array(Schema.string()).default(['**/.git/**', '**/node_modules/**', '**/.DS_Store']),
   exportDir: Schema.string().default(''),
   watch: Schema.boolean().default(true),
