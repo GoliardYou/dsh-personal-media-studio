@@ -1,5 +1,6 @@
 node_modules/
 lib/
+dist/
 *.log
 .DS_Store
 coverage/
@@ -7,4 +8,17 @@ coverage/
 playwright-report/
 test-results/
 
-dist/
+# Local databases and editor scratch
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Secrets. DSH credentials stay in the user's DSH profile, never in this repo.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+credentials.json
