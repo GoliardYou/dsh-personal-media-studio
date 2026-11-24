@@ -588,19 +588,28 @@ function StudioSkeleton() {
 }
 
 function StageList({ rows, empty, testId, rowTestId, onOpen }: { rows: StageRow[], empty: string, testId: string, rowTestId: string, onOpen: (id: string) => void }) {
+  const heading = testId === 'render-center' ? '排好版，再看一遍' : '接下来写哪一篇'
+  const kicker = testId === 'render-center' ? '渲染队列' : '草稿'
   return (
-    <div className="pms-view" data-testid={testId}>
+    <div className="pms-view pms-paper-screens" data-testid={testId}>
       <div className="pms-scroll">
-        <div className="pms-reading">
-          {rows.length === 0 && <div className="pms-empty">{empty}</div>}
-          <div className="pms-stage-list">
-            {rows.map(row => (
-              <button key={row.id} className="pms-stage-row" data-testid={rowTestId} onClick={() => onOpen(row.id)}>
-                <div>
-                  <strong>{row.title}</strong>
-                  <span className="pms-meta">{statusLabel(row.projectStatus || row.status)} · {maturityLabel(row.maturity)}</span>
-                </div>
-                <time dateTime={row.updatedAt}>{formatWhen(row.updatedAt)}</time>
+        <div className="pms-paper-page">
+          <header className="pms-paper-pagehead">
+            <p className="pms-paper-kicker">{kicker} · {rows.length}</p>
+            <h1>{heading}</h1>
+          </header>
+          {rows.length === 0 && <div className="pms-paper-empty">{empty}</div>}
+          <div className="pms-paper-list">
+            {rows.map((row, index) => (
+              <button key={row.id} className="pms-paper-topic" data-testid={rowTestId} onClick={() => onOpen(row.id)}>
+                <time dateTime={row.updatedAt}>{formatWhen(row.updatedAt).slice(5)}</time>
+                <span className="pms-paper-topic__body">
+                  <span className="pms-paper-topic__title">{row.title}</span>
+                  <span className="pms-paper-topic__meta">
+                    {String(index + 1).padStart(2, '0')} · {statusLabel(row.projectStatus || row.status)} · {maturityLabel(row.maturity)}
+                  </span>
+                </span>
+                <span className="pms-paper-topic__arrow" aria-hidden="true">→</span>
               </button>
             ))}
           </div>
@@ -879,8 +888,8 @@ function Home({ cards, libraryCount, pool, view, onView, onOpen, onChanged }: {
   }
 
   return (
-    <div className="pms-view" data-testid="topic-center">
-      <div className="pms-toolbar pms-toolbar--sub">
+    <div className="pms-view pms-paper-screens" data-testid="topic-center">
+      <div className="pms-toolbar pms-toolbar--sub pms-paper-subbar">
         <TopicTabs
           view={view}
           boardCount={cards.length}
@@ -915,50 +924,63 @@ function Home({ cards, libraryCount, pool, view, onView, onOpen, onChanged }: {
 
       <div className="pms-scroll" role="tabpanel" id="pms-topic-panel" aria-labelledby={topicTabId(view)}>
         {view === 'board' && (
-          cards.length === 0
-            ? (
-              <div className="pms-empty">
-                <strong>看板上还没有推荐卡</strong>
-                <span>切到问答池挑一个方向，或者右上角新建一张。</span>
-              </div>
-              )
-            : (
-              <div className="pms-board">
-                {cards.map(card => (
-                  <button key={card.id} className="pms-card pms-card--interactive" data-testid="topic-card" onClick={() => onOpen(card.id)}>
-                    <div className="pms-row">
-                      <span className="pms-badge pms-badge--accent">{card.source === 'user' ? '我的' : '推荐'}</span>
-                      {Number(card.ask_count) > 0 && <span className="pms-badge">{card.ask_count} 人问过</span>}
-                      <span className="pms-badge">{statusLabel(card.status)}</span>
-                    </div>
-                    <h2>{card.title}</h2>
-                    <p>{card.latestThesis || '还没有写过。点开就能直接说。'}</p>
-                    <div className="pms-meta"><span>{maturityLabel(card.maturity)}</span></div>
-                  </button>
-                ))}
-              </div>
-              )
+          <div className="pms-paper-page">
+            <header className="pms-paper-pagehead">
+              <p className="pms-paper-kicker">选题库 · {cards.length}</p>
+              <h1>手上有什么值得写的</h1>
+              <p className="pms-paper-lede">从一个具体的问题开始。点开一张卡，先写下你真正想说的那一句。</p>
+            </header>
+            {cards.length === 0
+              ? (
+                <div className="pms-paper-empty">
+                  <strong>看板上还没有推荐卡</strong>
+                  <span>切到问答池挑一个方向，或者右上角新建一张。</span>
+                </div>
+                )
+              : (
+                <div className="pms-paper-list">
+                  {cards.map((card, index) => (
+                    <button key={card.id} className="pms-paper-topic" data-testid="topic-card" onClick={() => onOpen(card.id)}>
+                      <time dateTime={card.updatedAt}>{formatWhen(card.updatedAt ?? '').slice(5)}</time>
+                      <span className="pms-paper-topic__body">
+                        <span className="pms-paper-topic__title">{card.title}</span>
+                        <span className="pms-paper-topic__excerpt">{card.latestThesis || '还没有写过。点开就能直接说。'}</span>
+                        <span className="pms-paper-topic__meta">
+                          {String(index + 1).padStart(2, '0')} · {card.source === 'user' ? '我的' : '推荐'} · {maturityLabel(card.maturity)}
+                          {Number(card.ask_count) > 0 ? ` · ${card.ask_count} 人问过` : ''}
+                        </span>
+                      </span>
+                      <span className="pms-paper-topic__arrow" aria-hidden="true">→</span>
+                    </button>
+                  ))}
+                </div>
+                )}
+          </div>
         )}
 
         {view === 'pool' && (
-          <div data-testid="qa-pool">
+          <div className="pms-paper-page" data-testid="qa-pool">
+            <header className="pms-paper-pagehead">
+              <p className="pms-paper-kicker">问答池 · {total}</p>
+              <h1>有人一直在问的</h1>
+              <p className="pms-paper-lede">同类问题并成一个方向。挑一个，放回看板。</p>
+            </header>
             {poolError && <div className="pms-error">{poolError}</div>}
-            {hits.length === 0 && <div className="pms-empty">选题池里没有对得上的方向。</div>}
-            <div className="pms-pool-list">
+            {hits.length === 0 && <div className="pms-paper-empty">选题池里没有对得上的方向。</div>}
+            <div className="pms-paper-list">
               {hits.map(topic => (
-                <article key={topic.id} className="pms-pool-item" data-testid="pool-topic">
-                  <div className="pms-row">
-                    <h3>{topic.title}</h3>
-                    <span className="pms-badge">{topic.askCount} 人问过</span>
-                    <span className="pms-spacer" />
-                    <button className="pms-btn pms-btn--sm" type="button" onClick={() => {
-                      void rpc<{ card: { id: string } }>('promotePool', { topicId: topic.id }).then(result => {
-                        onChanged()
-                        onOpen(result.card.id)
-                      }).catch(err => setPoolError(err instanceof Error ? err.message : String(err)))
-                    }}>放到看板上</button>
-                  </div>
-                  <p>{topic.summary}</p>
+                <article key={topic.id} className="pms-paper-topic pms-paper-topic--static" data-testid="pool-topic">
+                  <span className="pms-paper-topic__body">
+                    <span className="pms-paper-topic__title">{topic.title}</span>
+                    <span className="pms-paper-topic__excerpt">{topic.summary}</span>
+                    <span className="pms-paper-topic__meta">{topic.askCount} 人问过</span>
+                  </span>
+                  <button className="pms-paper-topic__action" type="button" onClick={() => {
+                    void rpc<{ card: { id: string } }>('promotePool', { topicId: topic.id }).then(result => {
+                      onChanged()
+                      onOpen(result.card.id)
+                    }).catch(err => setPoolError(err instanceof Error ? err.message : String(err)))
+                  }}>放到看板上</button>
                 </article>
               ))}
             </div>
