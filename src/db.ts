@@ -220,10 +220,33 @@ export class StudioDb {
   }
 
   private markMigration() {
-    const row = this.db.prepare('SELECT version FROM schema_migrations WHERE version = 1').get() as { version: number } | undefined
-    if (!row) {
-      this.db.prepare('INSERT INTO schema_migrations(version, applied_at) VALUES (1, ?)').run(new Date().toISOString())
-    }
+    this.mark(1)
+    const columns = new Set((this.db.prepare(`PRAGMA table_info(topics)`).all() as Array<{ name: string }>).map(column => column.name))
+    if (!columns.has('placement')) this.db.exec(`ALTER TABLE topics ADD COLUMN placement TEXT NOT NULL DEFAULT 'board'`)
+    if (!columns.has('ask_count')) this.db.exec(`ALTER TABLE topics ADD COLUMN ask_count INTEGER NOT NULL DEFAULT 0`)
+    if (!columns.has('cluster_key')) this.db.exec(`ALTER TABLE topics ADD COLUMN cluster_key TEXT NOT NULL DEFAULT ''`)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS qa_items (
+        id TEXT PRIMARY KEY,
+        asset_id TEXT,
+        source_asset_id TEXT,
+        title TEXT NOT NULL,
+        question TEXT NOT NULL,
+        answer TEXT NOT NULL,
+        created_at_src TEXT NOT NULL DEFAULT '',
+        source_file TEXT NOT NULL DEFAULT '',
+        rel_path TEXT NOT NULL,
+        cluster_key TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_qa_items_cluster ON qa_items(cluster_key);
+    `)
+    this.mark(2)
+  }
+
+  private mark(version: number) {
+    const row = this.db.prepare('SELECT version FROM schema_migrations WHERE version = ?').get(version) as { version: number } | undefined
+    if (!row) this.db.prepare('INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)').run(version, new Date().toISOString())
   }
 
   private seedStyles() {

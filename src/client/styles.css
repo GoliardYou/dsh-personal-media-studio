@@ -70,7 +70,29 @@
 }
 .pms-card:hover { border-color: var(--dsw-alias-border-selected, var(--dsw-alias-state-business-primary, currentColor)); }
 .pms-card h2 { margin: 0; font-size: 18px; line-height: 1.35; }
-.pms-card p { margin: 0; color: var(--dsw-alias-label-secondary, color-mix(in srgb, currentColor 70%, transparent)); font-size: 13px; line-height: 1.5; }
+.pms-card p {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary, color-mix(in srgb, currentColor 70%, transparent));
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 12;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pms-pool { margin-top: 28px; display: flex; flex-direction: column; gap: 12px; }
+.pms-pool h2 { margin: 0; font-size: 20px; }
+.pms-pool-list { display: flex; flex-direction: column; gap: 10px; }
+.pms-pool-item {
+  border: 1px solid var(--dsw-alias-border-default, color-mix(in srgb, currentColor 12%, transparent));
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: var(--dsw-alias-bg-layer-2, color-mix(in srgb, currentColor 3%, transparent));
+}
+.pms-pool-item h3 { margin: 0; font-size: 16px; }
+.pms-pool-item p { margin: 8px 0 0; white-space: pre-wrap; font-size: 13px; line-height: 1.55; color: var(--dsw-alias-label-secondary, color-mix(in srgb, currentColor 70%, transparent)); }
+.pms-pool input { min-width: min(100%, 280px); }
 .pms-meta { margin-top: auto; display: flex; gap: 8px; font-size: 12px; color: var(--dsw-alias-label-tertiary, color-mix(in srgb, currentColor 55%, transparent)); }
 .pms-split { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.8fr); gap: 18px; min-height: 100%; }
 .pms-col, .pms-panel {
@@ -87,7 +109,7 @@
   white-space: pre-wrap;
   line-height: 1.6;
 }
-.pms-composer textarea, .pms-field input:not([type="color"]):not([type="range"]), .pms-field textarea, .pms-field select {
+.pms-composer textarea, .pms-field input:not([type="color"]):not([type="range"]), .pms-field textarea, .pms-field select, .pms-pool input {
   width: 100%;
   border-radius: 12px;
   border: 1px solid var(--dsw-alias-border-default, color-mix(in srgb, currentColor 16%, transparent));

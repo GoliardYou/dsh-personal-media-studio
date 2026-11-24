@@ -35,6 +35,7 @@ function config(dir: string, library: string, engine: StudioConfig['render']['en
     ocr: { command: '' },
     brand: { author: '一个路人甲', role: '自学面试上岸' },
     render: { engine, size: 'standard', xhsRenderPy: '' },
+    topicSeed: { maxCards: 12 },
   }
 }
 
@@ -54,7 +55,7 @@ describe('database', () => {
     for (const table of ['assets', 'asset_chunks', 'asset_tags', 'asset_embeddings', 'topics', 'cards', 'interactions', 'ai_analyses', 'ai_suggestions', 'jobs', 'projects', 'drafts', 'draft_pages', 'asset_relations', 'style_profiles', 'versions', 'exports']) {
       expect(names).toContain(table)
     }
-    expect((db.db.prepare(`SELECT COUNT(*) AS n FROM schema_migrations`).get() as { n: number }).n).toBe(1)
+    expect((db.db.prepare(`SELECT COUNT(*) AS n FROM schema_migrations`).get() as { n: number }).n).toBe(2)
     expect((db.db.prepare(`SELECT COUNT(*) AS n FROM style_profiles`).get() as { n: number }).n).toBe(3)
     db.indexText('asset', 'a1', '个人媒体工作室的选题卡片与金句提取')
     const hit = db.searchText('金句提')

@@ -28,6 +28,9 @@ export interface StudioConfig {
     size: 'small' | 'standard' | 'large'
     xhsRenderPy: string
   }
+  topicSeed: {
+    maxCards: number
+  }
 }
 
 export const Config: Schema<StudioConfig> = Schema.object({
@@ -56,5 +59,8 @@ export const Config: Schema<StudioConfig> = Schema.object({
     engine: Schema.union(['auto', 'playwright', 'sharp', 'xhs_render']).default('auto'),
     size: Schema.union(['small', 'standard', 'large']).default('standard'),
     xhsRenderPy: Schema.string().default(''),
+  }),
+  topicSeed: Schema.object({
+    maxCards: Schema.number().default(12),
   }),
 })

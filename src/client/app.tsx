@@ -37,7 +37,14 @@ interface CardRow {
   maturity: string
   source: string
   latestThesis?: string
+  ask_count?: number
   updated_at: string
+}
+interface PoolTopic {
+  id: string
+  title: string
+  askCount: number
+  summary: string
 }
 interface AssetHit {
   assetId: string
@@ -59,6 +66,10 @@ interface AnalysisView {
 }
 interface CardDetail {
   card: CardRow & { input_version: number }
+  topicSummary?: string
+  askCount?: number
+  sourceAssetId?: string | null
+  sourceFile?: string
   interactions: Array<{ id: string, body: string, created_at: string, attachments_json: string }>
   analysis: AnalysisView | null
   suggestions: Array<{ id: string, kind: string, text: string, status: string }>
@@ -148,7 +159,7 @@ function StudioIcon({ size = 22 }: { size?: number, active?: boolean }) {
 }
 
 function StudioApp() {
-  const [boot, setBoot] = useState<{ engine: { mode: string, reason: string }, libraryCount: number, cards: CardRow[] } | null>(null)
+  const [boot, setBoot] = useState<{ engine: { mode: string, reason: string }, libraryCount: number, cards: CardRow[], pool?: { total: number, topics: PoolTopic[] } } | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'home' | 'card' | 'text' | 'production' | 'review'>('home')
@@ -192,7 +203,7 @@ function StudioApp() {
         {loading && <div className="pms-empty" data-testid="loading">正在打开你的选题卡片…</div>}
         {error && <div className="pms-error" data-testid="error">{error}</div>}
         {!loading && !error && view === 'home' && boot && (
-          <Home cards={boot.cards} libraryCount={boot.libraryCount} onOpen={openCard} />
+          <Home cards={boot.cards} libraryCount={boot.libraryCount} pool={boot.pool ?? { total: 0, topics: [] }} onOpen={openCard} onChanged={() => { void refresh() }} />
         )}
         {view === 'card' && cardId && (
           <CardWorkspace
@@ -231,16 +242,21 @@ function NewCard({ onCreated }: { onCreated: (id: string) => void }) {
   )
 }
 
-function Home({ cards, libraryCount, onOpen }: { cards: CardRow[], libraryCount: number, onOpen: (id: string) => void }) {
+function Home({ cards, libraryCount, pool, onOpen, onChanged }: { cards: CardRow[], libraryCount: number, pool: { total: number, topics: PoolTopic[] }, onOpen: (id: string) => void, onChanged: () => void }) {
+  const [query, setQuery] = useState('')
+  const [hits, setHits] = useState(pool.topics)
+  const [total, setTotal] = useState(pool.total)
+  const [poolError, setPoolError] = useState('')
   return (
     <div data-testid="topic-center">
-      <p className="pms-sub">本地素材 {libraryCount} 条。推荐卡来自工作室，你创建的卡会标成「我的」。</p>
-      {cards.length === 0 && <div className="pms-empty">还没有卡片。先新建一张选题，或者等素材库扫描出推荐。</div>}
+      <p className="pms-sub">本地素材 {libraryCount} 条。看板上是最常被问、最近还在问、而且发布记录里还没写过的方向。</p>
+      {cards.length === 0 && <div className="pms-empty">看板上还没有推荐卡。下面的问答选题池可以搜，也可以自己新建一张。</div>}
       <div className="pms-grid">
         {cards.map(card => (
           <button key={card.id} className="pms-card" data-testid="topic-card" onClick={() => onOpen(card.id)}>
             <div className="pms-row">
               <span className="pms-badge">{card.source === 'user' ? '我的' : '推荐'}</span>
+              {Number(card.ask_count) > 0 && <span className="pms-badge">{card.ask_count} 人问过</span>}
               <span className="pms-meta">{statusLabel(card.status)}</span>
             </div>
             <h2>{card.title}</h2>
@@ -249,6 +265,43 @@ function Home({ cards, libraryCount, onOpen }: { cards: CardRow[], libraryCount:
           </button>
         ))}
       </div>
+      <section className="pms-pool" data-testid="qa-pool">
+        <div className="pms-row">
+          <h2>问答选题池</h2>
+          <span className="pms-meta">{total} 个方向没有放到看板上</span>
+        </div>
+        <p className="pms-sub">同一类问题并成一个方向。其余的留在这里，可以搜到，不会一张截图一张卡。</p>
+        <form className="pms-row" onSubmit={event => {
+          event.preventDefault()
+          void rpc<{ total: number, topics: PoolTopic[] }>('searchPool', { query }).then(result => {
+            setHits(result.topics)
+            setTotal(query.trim() ? result.total : pool.total)
+            setPoolError('')
+          }).catch(err => setPoolError(err instanceof Error ? err.message : String(err)))
+        }}>
+          <input aria-label="搜索问答选题池" data-testid="pool-search" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜同学原话，或一个方向" />
+          <button className="pms-btn" type="submit">搜索选题池</button>
+        </form>
+        {poolError && <div className="pms-error">{poolError}</div>}
+        {hits.length === 0 && <div className="pms-empty">选题池里没有对得上的方向。</div>}
+        <div className="pms-pool-list">
+          {hits.map(topic => (
+            <article key={topic.id} className="pms-pool-item" data-testid="pool-topic">
+              <div className="pms-row">
+                <h3>{topic.title}</h3>
+                <span className="pms-badge">{topic.askCount} 人问过</span>
+                <button className="pms-btn" type="button" onClick={() => {
+                  void rpc<{ card: { id: string } }>('promotePool', { topicId: topic.id }).then(result => {
+                    onChanged()
+                    onOpen(result.card.id)
+                  }).catch(err => setPoolError(err instanceof Error ? err.message : String(err)))
+                }}>放到看板上</button>
+              </div>
+              <p>{topic.summary}</p>
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }
@@ -313,6 +366,15 @@ function CardWorkspace({ cardId, onShelved, onDeleted, onProduce }: { cardId: st
           <h2 style={{ margin: 0 }}>{detail.card.title}</h2>
           <span className="pms-badge">{statusLabel(String(detail.card.status))}</span>
         </div>
+        {detail.topicSummary && (
+          <article className="pms-thought" data-testid="qa-evidence">{detail.topicSummary}</article>
+        )}
+        {detail.sourceAssetId && (
+          <figure className="pms-asset">
+            <img alt={detail.sourceFile || '学员截图'} src={assetUrl(detail.sourceAssetId)} />
+            <div><strong>来源截图</strong><small>{detail.sourceFile}</small></div>
+          </figure>
+        )}
         <div className="pms-timeline" data-testid="expressions">
           {detail.interactions.length === 0 && <div className="pms-empty">这里会按时间保留你写过的每一句，分析不会覆盖原文。</div>}
           {detail.interactions.map(item => <article key={item.id} className="pms-thought" data-testid="thought">{item.body}</article>)}

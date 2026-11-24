@@ -21,5 +21,8 @@
       engine: auto
       size: standard
       xhsRenderPy: ""
+    # 看板上最多放这么多张问答推荐卡，其余进问答选题池。
+    topicSeed:
+      maxCards: 12
     privacy:
       sendImagesToCloud: false

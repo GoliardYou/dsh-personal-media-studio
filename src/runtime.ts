@@ -11,6 +11,7 @@ import { PAGE_H, PAGE_W, renderPageHtml, renderPagePng, type RenderAsset } from 
 import { toXhsMarkdown } from './brand/markdown.ts'
 import { pageInner, themeCss, shotCss, normalizeTheme, type BrandSize } from './brand/html.ts'
 import { mergeExcludes } from './library/profile.ts'
+import { rebuildQaBoard } from './qa/seed.ts'
 import { spawn } from 'node:child_process'
 import { StudioError, fingerprint, nowIso, parseJson, uid } from './util.ts'
 
@@ -108,28 +109,56 @@ export class StudioRuntime {
       libraryCount: (this.db.db.prepare(`SELECT COUNT(*) AS n FROM assets WHERE deleted_at IS NULL`).get() as { n: number }).n,
       templates: this.db.db.prepare(`SELECT id, name, template, tokens_json, builtin FROM style_profiles ORDER BY builtin DESC, name`).all(),
       cards: this.listCards(),
+      pool: this.searchPool(''),
     }
   }
 
   seedTopics() {
-    const qa = this.db.db.prepare(`
-      SELECT title, text_content, rel_path FROM assets
-      WHERE deleted_at IS NULL AND (rel_path LIKE '%Xhs_QA%' OR rel_path LIKE '%小红书问答%')
-      ORDER BY rel_path
-    `).all() as Array<{ title: string, text_content: string, rel_path: string }>
+    const seeded = rebuildQaBoard(this.db, this.config.topicSeed?.maxCards ?? 12)
+    if (seeded.notes > 0) return
+    const cards = this.db.db.prepare(`SELECT COUNT(*) AS n FROM cards WHERE deleted_at IS NULL`).get() as { n: number }
+    if (cards.n > 0) return
     const stamp = nowIso()
-    if (qa.length === 0) {
-      const cards = this.db.db.prepare(`SELECT COUNT(*) AS n FROM cards`).get() as { n: number }
-      if (cards.n > 0) return
-      for (const [title, summary] of RECOMMENDED) this.insertTopicCard(title, summary, stamp)
-      return
+    for (const [title, summary] of RECOMMENDED) this.insertTopicCard(title, summary, stamp)
+  }
+
+  searchPool(query: string) {
+    const q = query.trim()
+    const total = (this.db.db.prepare(`SELECT COUNT(*) AS n FROM topics WHERE source = 'qa' AND placement = 'pool'`).get() as { n: number }).n
+    if (!q) {
+      const topics = this.db.db.prepare(`
+        SELECT id, title, summary, ask_count FROM topics
+        WHERE source = 'qa' AND placement = 'pool'
+        ORDER BY ask_count DESC, updated_at DESC
+        LIMIT 8
+      `).all() as Array<{ id: string, title: string, summary: string, ask_count: number }>
+      return { total, topics: topics.map(presentPool) }
     }
-    for (const row of qa) {
-      const title = row.title.replace(/\.(md|markdown|txt)$/i, '').trim() || row.rel_path
-      if (this.db.db.prepare(`SELECT id FROM topics WHERE title = ?`).get(title)) continue
-      const summary = row.text_content.replace(/^#.*\n+/, '').replace(/\s+/g, ' ').slice(0, 72)
-      this.insertTopicCard(title, summary, stamp)
+    const hits = this.db.searchText(q, 40).filter(hit => hit.entity_type === 'topic')
+    const topics = hits.flatMap(hit => {
+      const topic = this.db.db.prepare(`SELECT id, title, summary, ask_count, source, placement FROM topics WHERE id = ?`).get(hit.entity_id) as { id: string, title: string, summary: string, ask_count: number, source: string, placement: string } | undefined
+      if (!topic || topic.source !== 'qa' || topic.placement !== 'pool') return []
+      return [presentPool(topic)]
+    })
+    return { total: topics.length, topics }
+  }
+
+  promotePool(topicId: string) {
+    const topic = this.db.db.prepare(`SELECT id, title, source FROM topics WHERE id = ?`).get(topicId) as { id: string, title: string, source: string } | undefined
+    if (!topic || topic.source !== 'qa') throw new StudioError('not_found', '选题池里没有这个方向。')
+    const stamp = nowIso()
+    const existing = this.db.db.prepare(`SELECT id FROM cards WHERE topic_id = ? AND deleted_at IS NULL`).get(topicId) as { id: string } | undefined
+    if (!existing) {
+      const cardId = uid()
+      this.db.tx(() => {
+        this.db.db.prepare(`INSERT INTO cards(id, topic_id, title, status, maturity, input_version, source, created_at, updated_at) VALUES (?, ?, ?, 'open', 'seed', 0, 'ai', ?, ?)`).run(cardId, topicId, topic.title, stamp, stamp)
+        this.db.db.prepare(`UPDATE topics SET placement = 'board', updated_at = ? WHERE id = ?`).run(stamp, topicId)
+        this.db.indexText('card', cardId, topic.title)
+      })
+      return this.getCard(cardId)
     }
+    this.db.db.prepare(`UPDATE topics SET placement = 'board', updated_at = ? WHERE id = ?`).run(stamp, topicId)
+    return this.getCard(existing.id)
   }
 
   private insertTopicCard(title: string, summary: string, stamp: string) {
@@ -142,7 +171,7 @@ export class StudioRuntime {
 
   listCards() {
     const cards = this.db.db.prepare(`
-      SELECT c.*, t.summary AS topic_summary
+      SELECT c.*, t.summary AS topic_summary, t.ask_count AS ask_count
       FROM cards c LEFT JOIN topics t ON t.id = c.topic_id
       WHERE c.deleted_at IS NULL
       ORDER BY c.updated_at DESC
@@ -168,12 +197,22 @@ export class StudioRuntime {
 
   getCard(cardId: string) {
     const card = this.requireCard(cardId, true)
+    const topic = card.topic_id
+      ? this.db.db.prepare(`SELECT summary, ask_count FROM topics WHERE id = ?`).get(String(card.topic_id)) as { summary: string, ask_count: number } | undefined
+      : undefined
+    const sourceAsset = topic
+      ? this.db.db.prepare(`SELECT source_asset_id, source_file FROM qa_items WHERE cluster_key = (SELECT cluster_key FROM topics WHERE id = ?) AND source_asset_id IS NOT NULL LIMIT 1`).get(String(card.topic_id)) as { source_asset_id: string, source_file: string } | undefined
+      : undefined
     const interactions = this.db.db.prepare(`SELECT * FROM interactions WHERE card_id = ? ORDER BY created_at ASC`).all(cardId)
     const analysis = this.db.db.prepare(`SELECT * FROM ai_analyses WHERE card_id = ? ORDER BY created_at DESC LIMIT 1`).get(cardId) as Record<string, unknown> | undefined
     const suggestions = this.db.db.prepare(`SELECT * FROM ai_suggestions WHERE card_id = ? ORDER BY created_at ASC`).all(cardId)
     const job = this.db.db.prepare(`SELECT id, status, error, input_version FROM jobs WHERE card_id = ? AND type = 'analyze' ORDER BY created_at DESC LIMIT 1`).get(cardId)
     return {
       card,
+      topicSummary: topic?.summary ?? '',
+      askCount: topic?.ask_count ?? 0,
+      sourceAssetId: sourceAsset?.source_asset_id ?? null,
+      sourceFile: sourceAsset?.source_file ?? '',
       interactions,
       analysis: analysis ? decodeAnalysis(analysis) : null,
       suggestions,
@@ -716,6 +755,8 @@ export class StudioRuntime {
       case 'confirmEdit': return this.confirmEdit(String(payload.draftId), String(payload.pageId), arrayOf(payload.paragraphs))
       case 'exportProject': return this.exportProject(String(payload.cardId))
       case 'searchAssets': return this.searchAssets(String(payload.query ?? ''))
+      case 'searchPool': return this.searchPool(String(payload.query ?? ''))
+      case 'promotePool': return this.promotePool(String(payload.topicId ?? ''))
       default: throw new StudioError('unknown_op', `未知操作 ${op}`)
     }
   }
@@ -749,6 +790,15 @@ function runXhsRender(script: string, markdown: string, outDir: string, theme: s
       else reject(new Error(stderr || `xhs_render.py exited ${code}`))
     })
   })
+}
+
+function presentPool(topic: { id: string, title: string, summary: string, ask_count: number }) {
+  return {
+    id: topic.id,
+    title: topic.title,
+    askCount: topic.ask_count,
+    summary: topic.summary,
+  }
 }
 
 function recoverJobs(db: StudioDb) {

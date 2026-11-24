@@ -96,4 +96,4 @@ dsh web --no-open
 
 `npm run pack` 会在 `dist\dsh-personal-media-studio.zip` 里打好一份带 `lib/` 和 `brand/` 的目录，不依赖这个私有仓库。也可以把 zip 解开后，对解开的目录执行 `dsh plugin add`。
 
-素材库示例配置在 `examples/lurenjia.cordis.patch.yml`。默认不扫描 `Coaching_Mindmaps_*`、`Coaching_Transcription_*`，也不收录 `一个路人甲个人微信二维码.jpg`。文件名里的零宽字符会被去掉。旧价格和退款承诺只标成「待确认」。导出回写的笔记进 `knowledgeDir`（默认 `dataDir/knowledge`），不会写进 `libraryRoots`，除非你自己把 `knowledgeDir` 指到库里。`Xhs_QA_小红书问答` 里的笔记会在扫描结束时自动变成选题卡。
+素材库示例配置在 `examples/lurenjia.cordis.patch.yml`。默认不扫描 `Coaching_Mindmaps_*`、`Coaching_Transcription_*`，也不收录 `一个路人甲个人微信二维码.jpg`。文件名里的零宽字符会被去掉。旧价格和退款承诺只标成「待确认」。导出回写的笔记进 `knowledgeDir`（默认 `dataDir/knowledge`），不会写进 `libraryRoots`，除非你自己把 `knowledgeDir` 指到库里。`Xhs_QA_小红书问答/markdown` 里的 `.md` 会在扫描结束时按主题收成推荐卡，默认最多 `topicSeed.maxCards`（12）张。截图、表格、`backup/` 只当素材，不各占一张卡。其余主题留在问答选题池里。没被动过的旧种子卡（一文件一张、标题是文件名）会在下次启动时清掉；你改过、搁置过或已经拿去生产的卡会留下。
