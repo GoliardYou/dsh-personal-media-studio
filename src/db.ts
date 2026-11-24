@@ -245,6 +245,10 @@ export class StudioDb {
     const projectColumns = new Set((this.db.prepare(`PRAGMA table_info(projects)`).all() as Array<{ name: string }>).map(column => column.name))
     if (!projectColumns.has('page_size')) this.db.exec(`ALTER TABLE projects ADD COLUMN page_size TEXT NOT NULL DEFAULT 'standard'`)
     this.mark(3)
+    // 幂等键：推进操作带 client_op_id，网络重试不会重复追加原话。
+    const interactionColumns = new Set((this.db.prepare(`PRAGMA table_info(interactions)`).all() as Array<{ name: string }>).map(column => column.name))
+    if (!interactionColumns.has('client_op_id')) this.db.exec(`ALTER TABLE interactions ADD COLUMN client_op_id TEXT`)
+    this.db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_interactions_client_op ON interactions(client_op_id) WHERE client_op_id IS NOT NULL`)
   }
 
   private mark(version: number) {

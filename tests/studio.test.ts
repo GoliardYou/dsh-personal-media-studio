@@ -67,6 +67,26 @@ describe('database', () => {
   })
 })
 
+describe('atomic focus advance', () => {
+  it('advances in one transaction and ignores a retried client op', async () => {
+    const dir = temp()
+    const studio = await openStudio(dir, join(dir, 'library'))
+    const id = studio.createCard('聚焦推进的原子性').card.id as string
+    const op = 'focus-op-1'
+    const first = studio.advanceCard(id, '第一句判断', [], 'shelve', op)
+    expect(first.interactions).toHaveLength(1)
+    expect(first.card.status).toBe('shelved')
+    const retry = studio.advanceCard(id, '第一句判断', [], 'shelve', op)
+    expect(retry.interactions).toHaveLength(1)
+    expect(studio.listBoardIds()).toContain(id)
+    const matured = studio.advanceCard(id, '第二句判断', [], 'mature', 'focus-op-2')
+    expect(matured.interactions).toHaveLength(2)
+    expect(matured.card.maturity).toBe('mature')
+    expect(studio.listBoardIds()).not.toContain(id)
+    await studio.dispose()
+  })
+})
+
 describe('library and cards', () => {
   it('scans, dedups by sha256, and keeps thoughts append-only', async () => {
     const dir = temp()
@@ -175,6 +195,34 @@ describe('production and export', () => {
     expect(readFileSync(join(exported.dir, 'body.md'), 'utf8')).toContain('澄白')
     expect(readFileSync(join(exported.dir, 'assets.json'), 'utf8')).toContain(relation.source_path)
     expect(readFileSync(manifest.knowledge, 'utf8')).toContain('回写')
+    await studio.dispose()
+  })
+})
+
+describe('card inspiration', () => {
+  it('returns the untruncated question and answer for the collapsed/expanded source view', async () => {
+    const dir = temp()
+    const library = join(dir, 'library')
+    const qaDir = join(library, 'Xhs_QA_小红书问答')
+    mkdirSync(qaDir, { recursive: true })
+    const answer = '第一段：先承认手会抖，这是身体在准备，不是能力不够。\n\n第二段：把注意力放回问题本身，不要盯着自己的心跳。'.repeat(6)
+    writeFileSync(join(qaDir, '面试紧张.md'), `# 面试紧张怎么办\n\n## 原始问题\n\n面试时手会抖，说话也快，怎么让自己稳下来？\n\n## 回答\n\n${answer}\n`)
+    const ctx = { llm: { listProviders: () => [], stream: async function* () {} } } as unknown as Context
+    const studio = await StudioRuntime.open(ctx, { ...config(dir, library), libraryProfile: 'lurenjia' })
+    const cards = studio.listCards() as unknown as Array<{ id: string, title: string }>
+    const card = cards.find(item => item.title.includes('面试紧张'))
+    expect(card).toBeTruthy()
+    const detail = studio.getCard(String(card!.id))
+    const inspiration = detail.inspiration as { questions: string[], answer: string, images: unknown[], askCount: number } | null
+    expect(inspiration).not.toBeNull()
+    expect(inspiration!.questions[0]).toBe('面试时手会抖，说话也快，怎么让自己稳下来？')
+    expect(inspiration!.answer).toContain('第一段：先承认手会抖')
+    expect(inspiration!.answer).toContain('第二段：把注意力放回问题本身')
+    expect(inspiration!.answer.length).toBeGreaterThan(280)
+    expect(inspiration!.askCount).toBe(1)
+    expect(inspiration!.images).toEqual([])
+    // 看板摘要仍保留旧结构，客户端不再直接展示它。
+    expect(detail.topicSummary).toContain('有 1 位同学问过')
     await studio.dispose()
   })
 })

@@ -39,6 +39,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "prepare": "node scripts/build.mjs",
+    "docs": "node scripts/build-design-system.mjs",
     "test": "vitest run",
     "pack": "node scripts/pack.mjs",
     "typecheck": "tsc --noEmit"

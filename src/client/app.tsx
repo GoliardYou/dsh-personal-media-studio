@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import { createQueue, advanceQueue, queueProgress, type FocusQueue } from './focusQueue'
+import { tidySourceText } from './tidy'
+import tokens from './tokens.css'
+import components from './components.css'
 import css from './styles.css'
 
 type StageId = 'topics' | 'drafts' | 'render'
@@ -24,6 +28,12 @@ function readRoute(fallback: StageId): { stage: StageId, cardId: string | null }
   const match = hash.match(/^pms\/(topics|drafts|render)(?:\/([A-Za-z0-9-]+))?$/)
   if (!match) return { stage: fallback, cardId: null }
   return { stage: match[1] as StageId, cardId: match[2] ?? null }
+}
+
+/** 聚焦视图的直达地址：#pms/topics/focus/<cardId>，便于复现和分享某张卡的聚焦状态。 */
+function focusRouteId(): string | null {
+  const match = location.hash.match(/^#pms\/topics\/focus\/([A-Za-z0-9-]+)$/)
+  return match ? match[1] : null
 }
 
 interface Span { text: string, bold?: boolean, highlight?: boolean }
@@ -98,12 +108,24 @@ interface AnalysisView {
   perspectives: Array<{ stance: string, counter: string }>
   relatedAssets: AssetHit[]
 }
+interface InspirationImage {
+  assetId: string
+  file: string
+}
+interface CardInspiration {
+  questions: string[]
+  answer: string
+  images: InspirationImage[]
+  askCount: number
+  newest?: string
+}
 interface CardDetail {
   card: CardRow & { input_version: number }
   topicSummary?: string
   askCount?: number
   sourceAssetId?: string | null
   sourceFile?: string
+  inspiration?: CardInspiration | null
   interactions: Array<{ id: string, body: string, created_at: string, attachments_json: string }>
   analysis: AnalysisView | null
   suggestions: Array<{ id: string, kind: string, text: string, status: string }>
@@ -139,6 +161,83 @@ function assetUrl(id: string) {
   return `/api/personal-media-studio/asset?id=${encodeURIComponent(id)}`
 }
 
+/**
+ * 灵感：默认只留一行「一句话 + 原始素材」。
+ * 展开后按原文排版，图片点开看大图；这里不做任何改写、摘要或截断。
+ */
+function Inspiration({ data, variant = 'card' }: { data: CardInspiration, variant?: 'card' | 'sheet' }) {
+  const [open, setOpen] = useState(false)
+  const [viewer, setViewer] = useState<InspirationImage | null>(null)
+  // 只在展示层整理空白与断行；data 里的原文不做任何改写。
+  const questions = data.questions.map(tidySourceText).filter(Boolean)
+  const answer = tidySourceText(data.answer)
+  const lead = questions[0] || answer.split('\n')[0] || '原始截图'
+
+  // 大图打开时，Esc 只关大图；用捕获阶段拦下，避免聚焦模式把 Esc 当成「退出聚焦」。
+  useEffect(() => {
+    if (!viewer) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      setViewer(null)
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [viewer])
+
+  return (
+    <>
+      <section className={`pms-inspiration pms-inspiration--${variant}`} data-testid="inspiration">
+        <div className="pms-inspiration__line">
+          <span className="pms-inspiration__label">灵感</span>
+          <span className="pms-inspiration__lead" title={lead}>{lead}</span>
+          {variant === 'card' && Number(data.askCount) > 0 && <span className="pms-inspiration__meta">{data.askCount} 人问过</span>}
+          <button type="button" className="pms-inspiration__toggle" aria-expanded={open} onClick={() => setOpen(value => !value)} data-testid="inspiration-toggle">{open ? '收起' : '原始素材'}</button>
+        </div>
+        {open && (
+          <div className="pms-inspiration__body">
+            <p className="pms-inspiration__note">原文照录，未改写</p>
+            {questions.length > 0 && (
+              <div className="pms-inspiration__section">
+                <h4>提问</h4>
+                <ol>{questions.map(question => <li key={question}>{question}</li>)}</ol>
+              </div>
+            )}
+            {answer && (
+              <div className="pms-inspiration__section">
+                <h4>回答</h4>
+                <p>{answer}</p>
+              </div>
+            )}
+            {data.images.length > 0 && (
+              <div className="pms-inspiration__section">
+                <h4>截图<span>点开看大图</span></h4>
+                <div className="pms-inspiration__shots">
+                  {data.images.map(image => (
+                    <button key={image.assetId} type="button" className="pms-inspiration__shot" aria-label="查看原始截图大图" onClick={() => setViewer(image)}>
+                      <img src={assetUrl(image.assetId)} alt={image.file || '原始截图'} loading="lazy" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+      {viewer && (
+        <div className="pms-lightbox" role="dialog" aria-modal="true" aria-label="原始截图" onClick={event => { if (event.target === event.currentTarget) setViewer(null) }}>
+          <figure className="pms-lightbox__figure">
+            <button type="button" className="pms-lightbox__close" aria-label="关闭大图" autoFocus onClick={() => setViewer(null)}>×</button>
+            <img src={assetUrl(viewer.assetId)} alt={viewer.file || '原始截图'} />
+            {viewer.file && <figcaption>{viewer.file}</figcaption>}
+          </figure>
+        </div>
+      )}
+    </>
+  )
+}
+
 function spanText(spans?: Span[], fallback = '') {
   return spans?.map(span => span.text).join('') || fallback
 }
@@ -165,12 +264,49 @@ function relationLabel(status: string) {
   return map[status] ?? status
 }
 
+/**
+ * 未提交的输入按卡片存 sessionStorage。聚焦与普通卡片视图共用同一个 key，
+ * 这样「退出聚焦」「返回看板」「刷新页面」都不会把已经写下的原话弄丢。
+ */
+function draftKey(cardId: string) {
+  return `pms:draft:${cardId}`
+}
+function readDraft(cardId: string): string {
+  try { return sessionStorage.getItem(draftKey(cardId)) ?? '' } catch { return '' }
+}
+function writeDraft(cardId: string, text: string) {
+  try {
+    if (text) sessionStorage.setItem(draftKey(cardId), text)
+    else sessionStorage.removeItem(draftKey(cardId))
+  } catch { /* 隐私模式下不可写，退化为仅内存草稿 */ }
+}
+
+/** 每次推进生成一次幂等键，重试沿用同一个，避免网络重发导致重复追加原话。 */
+let opCounter = 0
+function clientOpId(prefix: string) {
+  opCounter += 1
+  return `${prefix}:${Date.now().toString(36)}:${opCounter}`
+}
+
+/** toast 不再绑定删除操作；任何操作都能给出一句反馈和可选的撤销入口。 */
+interface Notice {
+  title: string
+  undo?: { label: string, run: () => void }
+  /** 只在标为成熟时盖的骑缝章，不常驻界面。 */
+  seal?: string
+}
+
 export const inject = ['slots', 'layout']
+
+/** 由 scripts/build.mjs 注入；dev 下 tsc 也需要一个声明。 */
+declare const __PMS_BUILD_STAMP__: string | undefined
 
 export function apply(ctx: ClientCtx) {
   const style = document.createElement('style')
   style.dataset.pms = 'personal-media-studio'
-  style.textContent = css
+  style.dataset.pmsBuild = typeof __PMS_BUILD_STAMP__ === 'undefined' ? 'dev' : __PMS_BUILD_STAMP__
+  // 顺序固定：令牌 → 组件 → 布局。改顺序会破坏层叠优先级。
+  style.textContent = `${tokens}\n${components}\n${css}`
   document.head.appendChild(style)
   ctx.effect(() => () => style.remove())
   const openStage = (stage: StageId) => {
@@ -179,13 +315,14 @@ export function apply(ctx: ClientCtx) {
   const stages: StageId[] = ['topics', 'drafts', 'render']
   for (const stage of stages) {
     ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANELS[stage] }, () => <StudioApp stage={stage} openStage={openStage} />))
-    ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
-      name: 'sidebar.panellist',
-      id: PANELS[stage],
-      order: 8 + stages.indexOf(stage),
-      label: () => STAGE_LABEL[stage],
-    }, (props: { size?: number }) => <StageIcon stage={stage} size={props.size} />))
   }
+  // 侧栏只留一个入口；阶段切换只在顶栏出现一次。
+  ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+    name: 'sidebar.panellist',
+    id: PANELS.topics,
+    order: 8,
+    label: () => '媒体工作室',
+  }, (props: { size?: number }) => <StudioIcon size={props.size} />))
   const syncHash = () => {
     if (!location.hash.startsWith('#pms/')) return
     openStage(readRoute('topics').stage)
@@ -199,27 +336,6 @@ export function apply(ctx: ClientCtx) {
     }
     window.setTimeout(boot, 0)
   }
-}
-
-function StageIcon({ stage, size = 22 }: { stage: StageId, size?: number }) {
-  if (stage === 'drafts') {
-    return (
-      <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-        <rect x="6" y="5" width="16" height="22" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
-        <path d="M10 12h8M10 17h8M10 22h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    )
-  }
-  if (stage === 'render') {
-    return (
-      <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-        <rect x="7" y="4" width="18" height="24" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
-        <circle cx="16" cy="14" r="3" fill="currentColor" />
-        <path d="M11 23h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    )
-  }
-  return <StudioIcon size={size} />
 }
 
 function StudioIcon({ size = 22 }: { size?: number, active?: boolean }) {
@@ -240,7 +356,10 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
     const route = readRoute(stage)
     return route.stage === stage ? route.cardId : null
   })
-  const [toast, setToast] = useState<{ id: string, title: string } | null>(null)
+  const [toast, setToast] = useState<(Notice & { id: string }) | null>(null)
+  const [topicView, setTopicView] = useState<'board' | 'pool'>('board')
+  // 聚焦模式的起点由「从哪张卡进来」决定；哈希直达时也在这里恢复。
+  const [focusStart, setFocusStart] = useState<string | null>(() => stage === 'topics' ? focusRouteId() : null)
 
   async function refresh() {
     const data = await rpc<NonNullable<typeof boot>>('bootstrap')
@@ -248,16 +367,56 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
     return data
   }
 
+  function notify(notice: Notice) {
+    setToast({ ...notice, id: clientOpId('toast') })
+  }
+
+  /** 聚焦推进后只等轻量 ID 列表；阶段计数另走一次全量刷新，不堵住换卡。 */
+  async function reloadBoard(): Promise<string[]> {
+    const ids = rpc<string[]>('listBoardIds')
+    void refresh().catch(() => undefined)
+    return ids
+  }
+
+  useEffect(() => {
+    if (!toast) return
+    const duration = toast.undo ? 6000 : 3500
+    const timer = window.setTimeout(() => setToast(current => current?.id === toast.id ? null : current), duration)
+    return () => window.clearTimeout(timer)
+  }, [toast])
+
+  function enterFocus(id: string) {
+    setCardId(null)
+    const hash = `#pms/topics/focus/${id}`
+    if (location.hash !== hash) location.hash = hash
+    setFocusStart(id)
+  }
+
+  function leaveFocus(view?: 'board' | 'pool') {
+    setFocusStart(null)
+    if (view) setTopicView(view)
+    if (focusRouteId()) location.hash = '#pms/topics'
+    void refresh()
+  }
+
   function go(nextStage: StageId, nextCard: string | null) {
     const hash = nextCard ? `#pms/${nextStage}/${nextCard}` : `#pms/${nextStage}`
     if (location.hash !== hash) location.hash = hash
     else openStage(nextStage)
     if (nextStage === stage) setCardId(nextCard)
+    // 点阶段导航的「选题」就是回看板；从卡片进入聚焦时由 enterFocus 随后再设置起点。
+    if (nextStage !== 'topics' || nextCard === null) setFocusStart(null)
   }
 
   useEffect(() => {
     if (!location.hash.startsWith('#pms/')) {
       location.hash = `#pms/${stage}`
+      return
+    }
+    const focused = focusRouteId()
+    if (focused) {
+      setFocusStart(focused)
+      setCardId(null)
       return
     }
     const route = readRoute(stage)
@@ -270,8 +429,15 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
 
   useEffect(() => {
     const onHash = () => {
+      const focused = focusRouteId()
+      if (focused) {
+        setFocusStart(focused)
+        setCardId(null)
+        return
+      }
       const route = readRoute(stage)
       if (route.stage === stage) setCardId(route.cardId)
+      setFocusStart(null)
     }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
@@ -289,35 +455,71 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
 
   return (
     <div className="pms-root" data-testid="studio-root" data-stage={stage}>
-      <header className="pms-top">
-        <div>
-          <p className="pms-kicker">Personal Media Studio</p>
-          <h1>个人媒体工作室</h1>
-          <p className="pms-sub">{stage === 'topics' ? '先把判断写下来。分析在后台发生，成熟了再送去改稿。' : stage === 'drafts' ? '成熟的选题和还在改的稿都在这里。先定文字，再谈版式。' : '文字已经定稿的稿件在这里看版、换主题、导出。'}</p>
-        </div>
-        <div className="pms-actions">
+      {/* 聚焦是一屏只做一件事：藏掉阶段导航，只留聚焦子栏。 */}
+      {!focusStart && (
+      <header className="pms-toolbar">
+        <span className="pms-toolbar__brand">
+          <span className="pms-toolbar__mark" aria-hidden="true">P</span>
+          <span>个人媒体工作室</span>
+        </span>
+        <nav className="pms-segmented" data-testid="stage-nav" aria-label="工作室阶段">
+          {(['topics', 'drafts', 'render'] as const).map(item => (
+            <button
+              key={item}
+              type="button"
+              className="pms-segment"
+              aria-selected={item === stage}
+              aria-current={item === stage ? 'page' : undefined}
+              data-testid={`stage-${item}`}
+              onClick={() => go(item, null)}
+            >
+              {STAGE_LABEL[item]}
+              <span className="pms-segment__count" data-testid="stage-count">{counts[item]}</span>
+            </button>
+          ))}
+        </nav>
+        <span className="pms-spacer" />
+        <div className="pms-toolbar__actions">
           {boot && (
-            <span className={boot.engine.mode === 'llm' ? 'pms-badge' : 'pms-badge warn'} data-testid="engine-badge" title={boot.engine.reason}>
+            <span className={boot.engine.mode === 'llm' ? 'pms-badge pms-badge--accent' : 'pms-badge pms-badge--warn'} data-testid="engine-badge" title={boot.engine.reason}>
               {boot.engine.mode === 'llm' ? '模型已连接' : '本地预览引擎'}
             </span>
           )}
-          {cardId && <button className="pms-btn" onClick={() => { go(stage, null); void refresh() }}>{stage === 'topics' ? '返回选题' : '返回列表'}</button>}
+          {cardId && <button className="pms-btn pms-btn--sm" onClick={() => { go(stage, null); void refresh() }}>{stage === 'topics' ? '返回选题' : '返回列表'}</button>}
           {stage === 'topics' && !cardId && <NewCard onCreated={id => { void refresh(); go('topics', id) }} />}
         </div>
       </header>
-      <nav className="pms-stages" data-testid="stage-nav" aria-label="工作室阶段">
-        {(['topics', 'drafts', 'render'] as const).map(item => (
-          <button key={item} type="button" className={item === stage ? 'on' : ''} data-testid={`stage-${item}`} aria-current={item === stage ? 'page' : undefined} onClick={() => go(item, null)}>
-            {STAGE_LABEL[item]}
-            <span data-testid="stage-count">{counts[item]}</span>
-          </button>
-        ))}
-      </nav>
+      )}
       <div className="pms-body">
-        {loading && <div className="pms-empty" data-testid="loading">正在打开这一阶段…</div>}
-        {error && <div className="pms-error" data-testid="error">{error}</div>}
-        {!loading && !error && stage === 'topics' && !cardId && boot && (
-          <Home cards={topicCards} libraryCount={boot.libraryCount} pool={boot.pool ?? { total: 0, topics: [] }} onOpen={id => go('topics', id)} onChanged={() => { void refresh() }} />
+        {loading && <StudioSkeleton />}
+        {error && (
+          <div className="pms-view pms-view--padded">
+            <div className="pms-error" data-testid="error">{error}</div>
+          </div>
+        )}
+        {!loading && !error && stage === 'topics' && !cardId && !focusStart && boot && (
+          <Home
+            cards={topicCards}
+            libraryCount={boot.libraryCount}
+            pool={boot.pool ?? { total: 0, topics: [] }}
+            view={topicView}
+            onView={setTopicView}
+            onOpen={id => go('topics', id)}
+            onChanged={() => { void refresh() }}
+            onFocus={id => { if (id) enterFocus(id) }}
+          />
+        )}
+        {!loading && !error && stage === 'topics' && !cardId && focusStart && boot && (
+          <FocusWorkbench
+            key={focusStart}
+            cards={topicCards}
+            startId={focusStart}
+            onExit={() => leaveFocus()}
+            onBoard={() => leaveFocus('board')}
+            onPool={() => leaveFocus('pool')}
+            onChanged={reloadBoard}
+            onNotice={notify}
+          />
         )}
         {!loading && !error && stage === 'drafts' && !cardId && (
           <StageList testId="draft-center" rowTestId="draft-row" empty="还没有成熟的选题。在选题里把一张卡标为成熟后，它会出现在这里。" rows={boot?.stages?.drafts ?? []} onOpen={id => go('drafts', id)} />
@@ -328,8 +530,16 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
         {stage === 'topics' && cardId && (
           <CardWorkspace
             cardId={cardId}
+            onFocus={id => enterFocus(id)}
             onShelved={() => { go('topics', null); void refresh() }}
-            onDeleted={id => { setToast({ id, title: '卡片已删除' }); go('topics', null); void refresh() }}
+            onDeleted={id => {
+              notify({
+                title: '卡片已删除',
+                undo: { label: '撤销', run: () => { void rpc('restoreCard', { cardId: id }).then(() => refresh()) } },
+              })
+              go('topics', null)
+              void refresh()
+            }}
             onMature={() => { go('drafts', cardId); void refresh() }}
           />
         )}
@@ -341,29 +551,58 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
         )}
       </div>
       {toast && (
-        <div className="pms-toast" data-testid="undo-toast">
+        <div className="pms-toast" role="status" data-testid="undo-toast">
+          {toast.seal && <span className="pms-toast__seal" aria-hidden="true">{toast.seal}</span>}
           <span>{toast.title}</span>
-          <button className="pms-btn" onClick={() => { void rpc('restoreCard', { cardId: toast.id }).then(() => refresh()); setToast(null) }}>撤销</button>
+          {toast.undo && (
+            <button
+              className="pms-btn pms-btn--sm pms-btn--ghost"
+              type="button"
+              onClick={() => { const undo = toast.undo; setToast(null); undo?.run() }}
+            >{toast.undo.label}</button>
+          )}
         </div>
       )}
     </div>
   )
 }
 
+/** 加载态用骨架而非一行文字：保留版式轮廓，避免内容区高度塌陷后跳动。 */
+function StudioSkeleton() {
+  return (
+    <div className="pms-view pms-view--padded" data-testid="loading" role="status" aria-label="正在打开这一阶段">
+      <div className="pms-board">
+        {[0, 1, 2, 3, 4, 5].map(i => (
+          <div key={i} className="pms-skeleton-card" aria-hidden="true">
+            <div className="pms-skeleton" style={{ height: 18, width: `${40 + (i % 3) * 14}%` }} />
+            <div className="pms-skeleton" style={{ height: 13, width: '92%' }} />
+            <div className="pms-skeleton" style={{ height: 13, width: '78%' }} />
+            <div className="pms-skeleton" style={{ height: 13, width: '52%', marginTop: 'auto' }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function StageList({ rows, empty, testId, rowTestId, onOpen }: { rows: StageRow[], empty: string, testId: string, rowTestId: string, onOpen: (id: string) => void }) {
   return (
-    <div data-testid={testId}>
-      {rows.length === 0 && <div className="pms-empty">{empty}</div>}
-      <div className="pms-stage-list">
-        {rows.map(row => (
-          <button key={row.id} className="pms-stage-row" data-testid={rowTestId} onClick={() => onOpen(row.id)}>
-            <div>
-              <strong>{row.title}</strong>
-              <span className="pms-meta">{statusLabel(row.projectStatus || row.status)} · {maturityLabel(row.maturity)}</span>
-            </div>
-            <time dateTime={row.updatedAt}>{formatWhen(row.updatedAt)}</time>
-          </button>
-        ))}
+    <div className="pms-view" data-testid={testId}>
+      <div className="pms-scroll">
+        <div className="pms-reading">
+          {rows.length === 0 && <div className="pms-empty">{empty}</div>}
+          <div className="pms-stage-list">
+            {rows.map(row => (
+              <button key={row.id} className="pms-stage-row" data-testid={rowTestId} onClick={() => onOpen(row.id)}>
+                <div>
+                  <strong>{row.title}</strong>
+                  <span className="pms-meta">{statusLabel(row.projectStatus || row.status)} · {maturityLabel(row.maturity)}</span>
+                </div>
+                <time dateTime={row.updatedAt}>{formatWhen(row.updatedAt)}</time>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -386,8 +625,9 @@ function ArticleStudio({ cardId, onBack, onRender }: { cardId: string, onBack: (
   const [markdown, setMarkdown] = useState('')
   const [saved, setSaved] = useState('正在生成文稿…')
   const [error, setError] = useState('')
-  const [read, setRead] = useState(false)
-  const [drawer, setDrawer] = useState(false)
+  // 写作与阅读互斥；大纲/建议/版本放进侧栏切页，不再用浮层遮住正文。
+  const [view, setView] = useState<'write' | 'read'>('write')
+  const [panel, setPanel] = useState<'outline' | 'suggestions' | 'versions'>('outline')
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     void rpc<ArticleDoc>('openArticle', { cardId }).then(value => {
@@ -408,41 +648,77 @@ function ArticleStudio({ cardId, onBack, onRender }: { cardId: string, onBack: (
   if (error) return <div className="pms-error">{error}</div>
   if (!doc) return <div className="pms-empty">正在把你的原话收成一篇稿…</div>
   return (
-    <div className="pms-article" data-testid="article-editor">
-      <div className="pms-article-bar">
-        <button className="pms-btn" onClick={() => { void rpc('returnToTopics', { cardId }).then(onBack) }}>退回选题</button>
-        <button className="pms-btn" onClick={() => setRead(value => !value)}>{read ? '只看原文' : '阅读视图'}</button>
-        <button className="pms-btn" onClick={() => setDrawer(value => !value)}>建议 {doc.suggestions.length}</button>
+    <div className="pms-view" data-testid="article-editor">
+      <div className="pms-toolbar pms-toolbar--sub">
+        <button className="pms-btn pms-btn--sm pms-btn--ghost" onClick={() => { void rpc('returnToTopics', { cardId }).then(onBack) }}>退回选题</button>
+        <span className="pms-toolbar__context" title={doc.title}>{doc.title}</span>
+        <div className="pms-segmented" role="tablist" aria-label="编辑视图">
+          <button type="button" role="tab" className="pms-segment" aria-selected={view === 'write'} onClick={() => setView('write')}>写作</button>
+          <button type="button" role="tab" className="pms-segment" aria-selected={view === 'read'} onClick={() => setView('read')}>阅读</button>
+        </div>
         <span className="pms-meta" data-testid="save-state">{saved}</span>
-        <button className="pms-btn" onClick={() => void rpc('snapshotArticle', { cardId, label: '手动版本' }).then(result => setDoc(current => current ? { ...current, versions: (result as { versions: ArticleDoc['versions'] }).versions } : current))}>保存版本</button>
-        <button className="pms-btn primary" data-testid="confirm-text" disabled={busy} onClick={() => {
+        <button className="pms-btn pms-btn--sm" onClick={() => void rpc('snapshotArticle', { cardId, label: '手动版本' }).then(result => setDoc(current => current ? { ...current, versions: (result as { versions: ArticleDoc['versions'] }).versions } : current))}>保存版本</button>
+        <button className="pms-btn pms-btn--sm pms-btn--primary" data-testid="confirm-text" disabled={busy} onClick={() => {
           setBusy(true)
           void rpc('saveArticle', { cardId, markdown }).then(() => rpc('confirmForRender', { cardId })).then(onRender).catch(err => setError(err instanceof Error ? err.message : String(err))).finally(() => setBusy(false))
         }}>定稿，送去渲染</button>
       </div>
-      <div className={read ? 'pms-article-split' : 'pms-article-main'}>
-        <textarea data-testid="article-md" value={markdown} spellCheck={false} onChange={event => setMarkdown(event.target.value)} />
-        {read && (
-          <aside className="pms-article-read">
-            <h3>大纲</h3>
-            {outline.length === 0 && <p className="pms-note">这篇还没有小标题。</p>}
-            <ol>{outline.map(line => <li key={line}>{line.replace(/^#+\s/, '')}</li>)}</ol>
-            <article data-testid="article-read">{markdown}</article>
-          </aside>
+
+      <div className="pms-workarea">
+        {view === 'write' ? (
+          <div className="pms-editor">
+            <textarea data-testid="article-md" value={markdown} spellCheck={false} onChange={event => setMarkdown(event.target.value)} />
+          </div>
+        ) : (
+          <div className="pms-reader">
+            <article className="pms-reader__body" data-testid="article-read">{markdown}</article>
+          </div>
         )}
-      </div>
-      {drawer && (
-        <aside className="pms-suggest" data-testid="suggestion-drawer">
-          <h3>建议</h3>
-          <p className="pms-note">建议不会改你的句子。要收进正文，自己贴进去。</p>
-          {doc.suggestions.length === 0 && <p>还没有新的建议。</p>}
-          <ul>{doc.suggestions.map(item => <li key={item.id}>{item.text}</li>)}</ul>
-          <h3>版本</h3>
-          {doc.versions.slice(0, 8).map(row => (
-            <button key={row.id} className="pms-btn" onClick={() => void rpc<ArticleDoc>('restoreVersion', { versionId: row.id }).then(() => rpc<ArticleDoc>('openArticle', { cardId })).then(value => { setDoc(value); setMarkdown(value.markdown) })}>{row.label}</button>
-          ))}
+
+        <aside className="pms-drawer" data-testid="suggestion-drawer">
+          <div className="pms-segmented" role="tablist" aria-label="侧栏内容">
+            <button type="button" role="tab" className="pms-segment" aria-selected={panel === 'outline'} onClick={() => setPanel('outline')}>大纲</button>
+            <button type="button" role="tab" className="pms-segment" aria-selected={panel === 'suggestions'} onClick={() => setPanel('suggestions')}>
+              建议<span className="pms-segment__count">{doc.suggestions.length}</span>
+            </button>
+            <button type="button" role="tab" className="pms-segment" aria-selected={panel === 'versions'} onClick={() => setPanel('versions')}>
+              版本<span className="pms-segment__count">{doc.versions.length}</span>
+            </button>
+          </div>
+
+          {panel === 'outline' && (
+            <div className="pms-stack">
+              <p className="pms-panel__title">小标题结构</p>
+              {outline.length === 0
+                ? <p className="pms-note">这篇还没有小标题。在正文里用 ## 起一行就会出现在这里。</p>
+                : <ol className="pms-outline">{outline.map(line => <li key={line}>{line.replace(/^#+\s/, '')}</li>)}</ol>}
+            </div>
+          )}
+
+          {panel === 'suggestions' && (
+            <div className="pms-stack">
+              <p className="pms-panel__title">建议</p>
+              <p className="pms-note">建议不会改你的句子。要收进正文，自己贴进去。</p>
+              {doc.suggestions.length === 0 && <p className="pms-note">还没有新的建议。</p>}
+              {doc.suggestions.map(item => <div key={item.id} className="pms-suggestion">{item.text}</div>)}
+            </div>
+          )}
+
+          {panel === 'versions' && (
+            <div className="pms-stack">
+              <p className="pms-panel__title">历史版本</p>
+              {doc.versions.length === 0 && <p className="pms-note">还没有保存过版本。</p>}
+              <div className="pms-version-list">
+                {doc.versions.slice(0, 12).map(row => (
+                  <button key={row.id} className="pms-btn pms-btn--sm" onClick={() => void rpc<ArticleDoc>('restoreVersion', { versionId: row.id }).then(() => rpc<ArticleDoc>('openArticle', { cardId })).then(value => { setDoc(value); setMarkdown(value.markdown) })}>{row.label}</button>
+                ))}
+              </div>
+            </div>
+          )}
         </aside>
-      )}
+      </div>
+
+      {error && <div className="pms-error" style={{ margin: '0 var(--pms-inset-page) var(--pms-space-4)' }}>{error}</div>}
     </div>
   )
 }
@@ -486,24 +762,44 @@ function XhsStage({ cardId, onReturn }: { cardId: string, onReturn: () => void }
   }, [cardId, onReturn])
   return (
     <div className="pms-xhs" data-testid="workbench">
-      {error && <div className="pms-note">{error}</div>}
-      <iframe ref={frame} title="小红书长文出图" data-testid="xhs-editor" src="/api/personal-media-studio/editor?embed=1" />
+      <div className="pms-xhs__frame">
+        <iframe ref={frame} title="小红书长文出图" data-testid="xhs-editor" src="/api/personal-media-studio/editor?embed=1" />
+        {error && <div className="pms-xhs__status">{error}</div>}
+      </div>
       {picker && (
-        <aside className="pms-suggest" data-testid="asset-picker">
-          <h3>{picker === 'product' ? '插入商品页' : '插入截图页'}</h3>
-          <input aria-label="搜索素材" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索文件名" />
-          <button className="pms-btn" onClick={() => void rpc<AssetHit[]>('searchAssets', { query }).then(setAssets)}>搜索</button>
-          {assets.map(asset => (
-            <button key={asset.assetId} className="pms-btn" onClick={() => {
-              const src = `/api/personal-media-studio/asset?id=${asset.assetId}`
-              const markdown = picker === 'product'
-                ? `\`\`\`product\nname: ${asset.title}\ntagline: 待确认\npoints:\n- 待确认\nprice: 待确认\nhow: 待确认\nimage: ${src}\ncaption: ${asset.title}\n\`\`\``
-                : `\`\`\`screenshot\nsrc: ${src}\ncaption: ${asset.title}\n\`\`\``
-              frame.current?.contentWindow?.postMessage({ type: 'pms:insert', markdown }, '*')
-              setPicker(null)
-            }}>{asset.title}</button>
-          ))}
-          <button className="pms-btn" onClick={() => setPicker(null)}>关闭</button>
+        <aside className="pms-drawer" data-testid="asset-picker">
+          <div className="pms-drawer__head">
+            <p className="pms-panel__title">{picker === 'product' ? '插入商品页' : '插入截图页'}</p>
+            <button className="pms-iconbtn pms-iconbtn--sm" type="button" aria-label="关闭素材面板" onClick={() => setPicker(null)}>✕</button>
+          </div>
+          <form
+            className="pms-row"
+            onSubmit={event => {
+              event.preventDefault()
+              void rpc<AssetHit[]>('searchAssets', { query }).then(setAssets)
+            }}
+          >
+            <input className="pms-input" aria-label="搜索素材" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索文件名" />
+            <button className="pms-btn pms-btn--sm" type="submit">搜索</button>
+          </form>
+          <div className="pms-stack">
+            {assets.length === 0 && <p className="pms-note">还没有搜到素材。试试文件名里的关键词。</p>}
+            {assets.map(asset => (
+              <button
+                key={asset.assetId}
+                className="pms-btn pms-btn--sm"
+                style={{ justifyContent: 'flex-start' }}
+                onClick={() => {
+                  const src = `/api/personal-media-studio/asset?id=${asset.assetId}`
+                  const markdown = picker === 'product'
+                    ? `\`\`\`product\nname: ${asset.title}\ntagline: 待确认\npoints:\n- 待确认\nprice: 待确认\nhow: 待确认\nimage: ${src}\ncaption: ${asset.title}\n\`\`\``
+                    : `\`\`\`screenshot\nsrc: ${src}\ncaption: ${asset.title}\n\`\`\``
+                  frame.current?.contentWindow?.postMessage({ type: 'pms:insert', markdown }, '*')
+                  setPicker(null)
+                }}
+              >{asset.title}</button>
+            ))}
+          </div>
         </aside>
       )}
     </div>
@@ -513,114 +809,238 @@ function XhsStage({ cardId, onReturn }: { cardId: string, onReturn: () => void }
 function NewCard({ onCreated }: { onCreated: (id: string) => void }) {
   const [title, setTitle] = useState('')
   const [open, setOpen] = useState(false)
-  if (!open) return <button className="pms-btn primary" data-testid="new-card" onClick={() => setOpen(true)}>新建选题</button>
+  if (!open) return <button className="pms-btn pms-btn--sm" data-testid="new-card" onClick={() => setOpen(true)}>新建选题</button>
   return (
     <form className="pms-row" onSubmit={event => {
       event.preventDefault()
       void rpc<{ card: { id: string } }>('createCard', { title }).then(result => onCreated(result.card.id))
     }}>
       <input aria-label="选题标题" value={title} onChange={event => setTitle(event.target.value)} placeholder="这张卡想讲什么" />
-      <button className="pms-btn primary" type="submit">创建</button>
+      <button className="pms-btn pms-btn--sm pms-btn--primary" type="submit">创建</button>
     </form>
   )
 }
 
-function Home({ cards, libraryCount, pool, onOpen, onChanged }: { cards: CardRow[], libraryCount: number, pool: { total: number, topics: PoolTopic[] }, onOpen: (id: string) => void, onChanged: () => void }) {
-  const [query, setQuery] = useState('')
-  const [hits, setHits] = useState(pool.topics)
-  const [total, setTotal] = useState(pool.total)
-  const [poolError, setPoolError] = useState('')
+type TopicView = 'board' | 'pool'
+
+/** tab 与 tabpanel 用同一组 id 互相指认，读屏器才知道当前选中了哪一页。 */
+function topicTabId(view: TopicView) {
+  return `pms-topic-tab-${view}`
+}
+
+/** 选题页两个数据视图共用一组分段控件；「开始处理」是单独的推进动作，不占 tab。 */
+function TopicTabs({ view, boardCount, poolCount, onBoard, onPool }: {
+  view: TopicView,
+  boardCount: number,
+  poolCount: number,
+  onBoard: () => void,
+  onPool: () => void,
+}) {
   return (
-    <div data-testid="topic-center">
-      <p className="pms-sub">本地素材 {libraryCount} 条。看板上是最常被问、最近还在问、而且发布记录里还没写过的方向。</p>
-      {cards.length === 0 && <div className="pms-empty">看板上还没有推荐卡。下面的问答选题池可以搜，也可以自己新建一张。</div>}
-      <div className="pms-grid">
-        {cards.map(card => (
-          <button key={card.id} className="pms-card" data-testid="topic-card" onClick={() => onOpen(card.id)}>
-            <div className="pms-row">
-              <span className="pms-badge">{card.source === 'user' ? '我的' : '推荐'}</span>
-              {Number(card.ask_count) > 0 && <span className="pms-badge">{card.ask_count} 人问过</span>}
-              <span className="pms-meta">{statusLabel(card.status)}</span>
-            </div>
-            <h2>{card.title}</h2>
-            <p>{card.latestThesis || '还没有写过。点开就能直接说。'}</p>
-            <div className="pms-meta"><span>{maturityLabel(card.maturity)}</span></div>
-          </button>
-        ))}
-      </div>
-      <section className="pms-pool" data-testid="qa-pool">
-        <div className="pms-row">
-          <h2>问答选题池</h2>
-          <span className="pms-meta">{total} 个方向没有放到看板上</span>
-        </div>
-        <p className="pms-sub">同一类问题并成一个方向。其余的留在这里，可以搜到，不会一张截图一张卡。</p>
-        <form className="pms-row" onSubmit={event => {
-          event.preventDefault()
-          void rpc<{ total: number, topics: PoolTopic[] }>('searchPool', { query }).then(result => {
-            setHits(result.topics)
-            setTotal(query.trim() ? result.total : pool.total)
-            setPoolError('')
-          }).catch(err => setPoolError(err instanceof Error ? err.message : String(err)))
-        }}>
-          <input aria-label="搜索问答选题池" data-testid="pool-search" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜同学原话，或一个方向" />
-          <button className="pms-btn" type="submit">搜索选题池</button>
-        </form>
-        {poolError && <div className="pms-error">{poolError}</div>}
-        {hits.length === 0 && <div className="pms-empty">选题池里没有对得上的方向。</div>}
-        <div className="pms-pool-list">
-          {hits.map(topic => (
-            <article key={topic.id} className="pms-pool-item" data-testid="pool-topic">
-              <div className="pms-row">
-                <h3>{topic.title}</h3>
-                <span className="pms-badge">{topic.askCount} 人问过</span>
-                <button className="pms-btn" type="button" onClick={() => {
-                  void rpc<{ card: { id: string } }>('promotePool', { topicId: topic.id }).then(result => {
-                    onChanged()
-                    onOpen(result.card.id)
-                  }).catch(err => setPoolError(err instanceof Error ? err.message : String(err)))
-                }}>放到看板上</button>
-              </div>
-              <p>{topic.summary}</p>
-            </article>
-          ))}
-        </div>
-      </section>
+    <div className="pms-segmented" role="tablist" aria-label="选题视图">
+      <button type="button" role="tab" id={topicTabId('board')} aria-controls="pms-topic-panel" className="pms-segment" aria-selected={view === 'board'} onClick={onBoard}>
+        看板<span className="pms-segment__count">{boardCount}</span>
+      </button>
+      <button type="button" role="tab" id={topicTabId('pool')} aria-controls="pms-topic-panel" className="pms-segment" aria-selected={view === 'pool'} onClick={onPool}>
+        问答池<span className="pms-segment__count">{poolCount}</span>
+      </button>
     </div>
   )
 }
 
-function CardWorkspace({ cardId, onShelved, onDeleted, onMature }: { cardId: string, onShelved: () => void, onDeleted: (id: string) => void, onMature: () => void }) {
+function Home({ cards, libraryCount, pool, view, onView, onOpen, onChanged, onFocus }: {
+  cards: CardRow[],
+  libraryCount: number,
+  pool: { total: number, topics: PoolTopic[] },
+  view: 'board' | 'pool',
+  onView: (view: 'board' | 'pool') => void,
+  onOpen: (id: string) => void,
+  onChanged: () => void,
+  onFocus: (id?: string) => void,
+}) {
+  const [query, setQuery] = useState('')
+  const [hits, setHits] = useState(pool.topics)
+  const [total, setTotal] = useState(pool.total)
+  const [poolError, setPoolError] = useState('')
+
+  function searchPool(nextQuery: string) {
+    void rpc<{ total: number, topics: PoolTopic[] }>('searchPool', { query: nextQuery }).then(result => {
+      setHits(result.topics)
+      setTotal(nextQuery.trim() ? result.total : pool.total)
+      setPoolError('')
+    }).catch(err => setPoolError(err instanceof Error ? err.message : String(err)))
+  }
+
+  return (
+    <div className="pms-view" data-testid="topic-center">
+      <div className="pms-toolbar pms-toolbar--sub">
+        <TopicTabs
+          view={view}
+          boardCount={cards.length}
+          poolCount={total}
+          onBoard={() => onView('board')}
+          onPool={() => onView('pool')}
+        />
+        <span className="pms-toolbar__context">
+          本地素材 {libraryCount} 条 · {view === 'board' ? '还没写、但一直有人问的方向' : '同类问题并成一个方向'}
+        </span>
+        <span className="pms-spacer" />
+        {view === 'board' && (
+          <button
+            className="pms-btn pms-btn--sm pms-btn--primary"
+            type="button"
+            data-testid="start-focus"
+            disabled={cards.length === 0}
+            onClick={() => onFocus(cards[0]?.id)}
+          >开始处理</button>
+        )}
+        {view === 'pool' && (
+          <form
+            className="pms-row"
+            onSubmit={event => {
+              event.preventDefault()
+              searchPool(query)
+            }}
+          >
+            <input
+              className="pms-input pms-pool-search"
+              aria-label="搜索问答选题池"
+              data-testid="pool-search"
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              placeholder="搜同学原话，或一个方向"
+            />
+            <button className="pms-btn pms-btn--sm" type="submit">搜索</button>
+          </form>
+        )}
+      </div>
+
+      <div className="pms-scroll" role="tabpanel" id="pms-topic-panel" aria-labelledby={topicTabId(view)}>
+        {view === 'board' && (
+          cards.length === 0
+            ? (
+              <div className="pms-empty">
+                <strong>看板上还没有推荐卡</strong>
+                <span>切到问答池挑一个方向，或者右上角新建一张。</span>
+              </div>
+              )
+            : (
+              <div className="pms-board">
+                {cards.map(card => (
+                  <button key={card.id} className="pms-card pms-card--interactive" data-testid="topic-card" onClick={() => onOpen(card.id)}>
+                    <div className="pms-row">
+                      <span className="pms-badge pms-badge--accent">{card.source === 'user' ? '我的' : '推荐'}</span>
+                      {Number(card.ask_count) > 0 && <span className="pms-badge">{card.ask_count} 人问过</span>}
+                      <span className="pms-badge">{statusLabel(card.status)}</span>
+                    </div>
+                    <h2>{card.title}</h2>
+                    <p>{card.latestThesis || '还没有写过。点开就能直接说。'}</p>
+                    <div className="pms-meta"><span>{maturityLabel(card.maturity)}</span></div>
+                  </button>
+                ))}
+              </div>
+              )
+        )}
+
+        {view === 'pool' && (
+          <div data-testid="qa-pool">
+            {poolError && <div className="pms-error">{poolError}</div>}
+            {hits.length === 0 && <div className="pms-empty">选题池里没有对得上的方向。</div>}
+            <div className="pms-pool-list">
+              {hits.map(topic => (
+                <article key={topic.id} className="pms-pool-item" data-testid="pool-topic">
+                  <div className="pms-row">
+                    <h3>{topic.title}</h3>
+                    <span className="pms-badge">{topic.askCount} 人问过</span>
+                    <span className="pms-spacer" />
+                    <button className="pms-btn pms-btn--sm" type="button" onClick={() => {
+                      void rpc<{ card: { id: string } }>('promotePool', { topicId: topic.id }).then(result => {
+                        onChanged()
+                        onOpen(result.card.id)
+                      }).catch(err => setPoolError(err instanceof Error ? err.message : String(err)))
+                    }}>放到看板上</button>
+                  </div>
+                  <p>{topic.summary}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CardWorkspace({ cardId, onFocus, onShelved, onDeleted, onMature }: { cardId: string, onFocus: (id: string) => void, onShelved: () => void, onDeleted: (id: string) => void, onMature: () => void }) {
   const [detail, setDetail] = useState<CardDetail | null>(null)
-  const [body, setBody] = useState('')
+  const [body, setBody] = useState(() => readDraft(cardId))
+  const bodyRef = useRef(body)
   const [error, setError] = useState('')
+  const [pollError, setPollError] = useState('')
   const [busy, setBusy] = useState(false)
   const [assets, setAssets] = useState<AssetHit[]>([])
   const [linked, setLinked] = useState<string[]>([])
+  const [analysisOpen, setAnalysisOpen] = useState(false)
+  const [confirmMature, setConfirmMature] = useState(false)
 
-  async function load() {
-    const next = await rpc<CardDetail>('getCard', { cardId })
-    setDetail(next)
+  function updateBody(next: string) {
+    bodyRef.current = next
+    setBody(next)
   }
 
+  // 离开卡片时把未提交的输入留下；与聚焦视图共用同一个草稿 key。
+  useEffect(() => () => { writeDraft(cardId, bodyRef.current) }, [cardId])
+
   useEffect(() => {
-    void load().catch(err => setError(err instanceof Error ? err.message : String(err)))
-    const timer = window.setInterval(() => { void load().catch(() => undefined) }, 1200)
-    return () => window.clearInterval(timer)
+    let alive = true
+    let timer = 0
+    let failures = 0
+    const load = async () => {
+      if (document.hidden) return
+      try {
+        const next = await rpc<CardDetail>('getCard', { cardId })
+        if (!alive) return
+        setDetail(next)
+        if (failures > 0) { setPollError(''); failures = 0 }
+      } catch (err) {
+        if (!alive) return
+        failures += 1
+        setPollError(failures === 1
+          ? (err instanceof Error ? err.message : String(err))
+          : `后台整理暂时读不到，正在重试（第 ${failures} 次）。`)
+      } finally {
+        if (alive) timer = window.setTimeout(() => { void load() }, failures === 0 ? 1200 : Math.min(1200 * 2 ** failures, 12000))
+      }
+    }
+    void load()
+    return () => { alive = false; window.clearTimeout(timer) }
   }, [cardId])
 
   async function save(shelve: boolean) {
+    if (busy) return
     setBusy(true)
     setError('')
     try {
-      if (body.trim() || linked.length > 0) await rpc('appendThought', { cardId, body, attachmentAssetIds: linked })
+      const hasInput = body.trim().length > 0 || linked.length > 0
       if (shelve) {
-        await rpc('shelve', { cardId })
+        // 原子推进：原话和状态一起落库，焦点页与卡页走同一条路径。
+        if (hasInput) {
+          await rpc('advanceCard', { cardId, body, attachmentAssetIds: linked, action: 'shelve', clientOpId: clientOpId(`${cardId}:shelve`) })
+        } else {
+          await rpc('shelve', { cardId })
+        }
+        writeDraft(cardId, '')
+        bodyRef.current = ''
+        setBody('')
         onShelved()
         return
       }
+      if (hasInput) await rpc('appendThought', { cardId, body, attachmentAssetIds: linked })
+      writeDraft(cardId, '')
+      bodyRef.current = ''
       setBody('')
       setLinked([])
-      await load()
+      setDetail(await rpc<CardDetail>('getCard', { cardId }))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -629,9 +1049,20 @@ function CardWorkspace({ cardId, onShelved, onDeleted, onMature }: { cardId: str
   }
 
   async function mature() {
+    if (busy) return
     setBusy(true)
+    setError('')
     try {
-      await rpc('markMature', { cardId })
+      const hasInput = body.trim().length > 0 || linked.length > 0
+      if (hasInput) {
+        // 与聚焦视图同一条原子路径：原话和成熟状态一起落库，失败重试不会重复追加。
+        await rpc('advanceCard', { cardId, body, attachmentAssetIds: linked, action: 'mature', clientOpId: clientOpId(`${cardId}:mature`) })
+      } else {
+        await rpc('markMature', { cardId })
+      }
+      writeDraft(cardId, '')
+      bodyRef.current = ''
+      setBody('')
       onMature()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -642,50 +1073,75 @@ function CardWorkspace({ cardId, onShelved, onDeleted, onMature }: { cardId: str
 
   if (!detail) return <div className="pms-empty">{error || '正在打开卡片…'}</div>
   const analysis = detail.analysis
+  const pending = detail.job?.status === 'queued' || detail.job?.status === 'running'
   return (
-    <div className="pms-split" data-testid="card-workspace">
-      <section className="pms-col">
-        <div className="pms-row">
-          <h2 style={{ margin: 0 }}>{detail.card.title}</h2>
-          <span className="pms-badge">{statusLabel(String(detail.card.status))}</span>
-        </div>
-        {detail.topicSummary && (
-          <article className="pms-thought" data-testid="qa-evidence">{detail.topicSummary}</article>
-        )}
-        {detail.sourceAssetId && (
-          <figure className="pms-asset">
-            <img alt={detail.sourceFile || '学员截图'} src={assetUrl(detail.sourceAssetId)} />
-            <div><strong>来源截图</strong><small>{detail.sourceFile}</small></div>
-          </figure>
-        )}
-        <div className="pms-timeline" data-testid="expressions">
-          {detail.interactions.length === 0 && <div className="pms-empty">这里会按时间保留你写过的每一句，分析不会覆盖原文。</div>}
-          {detail.interactions.map(item => <article key={item.id} className="pms-thought" data-testid="thought">{item.body}</article>)}
-        </div>
-        <div className="pms-composer">
-          <textarea data-testid="thought-input" rows={5} value={body} placeholder="把判断、场景、犹豫都写在这里。保存是追加，不是覆盖。" onChange={event => setBody(event.target.value)} />
-          <div className="pms-row">
-            <button className="pms-btn" type="button" onClick={() => { void rpc<AssetHit[]>('searchAssets', { query: body || detail.card.title }).then(setAssets) }}>关联本地素材</button>
-            {linked.length > 0 && <span className="pms-meta">已关联 {linked.length} 条</span>}
+    <div className="pms-view pms-view--padded" data-testid="card-workspace">
+      <div className={`pms-workarea ${analysisOpen ? 'pms-workarea--analysis' : 'pms-workarea--solo'}`}>
+        <section className="pms-workarea__main">
+          {/* 卡头固定：标题与状态在滚动时始终可见，避免长对话里失去定位 */}
+          <div className="pms-card-head">
+            <div>
+              <h2>{detail.card.title}</h2>
+              <div className="pms-row" style={{ marginTop: 'var(--pms-space-2)' }}>
+                <span className="pms-badge">{statusLabel(String(detail.card.status))}</span>
+                <span className="pms-badge">{detail.interactions.length} 条原话</span>
+              </div>
+            </div>
+            <div className="pms-card-head__actions">
+              <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" data-testid="enter-focus" onClick={() => onFocus(cardId)}>进入聚焦</button>
+              <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" data-testid="analysis-toggle" aria-expanded={analysisOpen} onClick={() => setAnalysisOpen(open => !open)}>
+                后台分析{pending && <span className="pms-pending-dot" aria-label="正在整理" />}
+              </button>
+              <button className="pms-btn pms-btn--sm pms-btn--danger" data-testid="delete-card" onClick={() => { void rpc('deleteCard', { cardId }).then(() => onDeleted(cardId)) }}>删除</button>
+            </div>
           </div>
-          {assets.length > 0 && assets.map(asset => (
-            <label key={asset.assetId} className="pms-asset">
-              <input type="checkbox" checked={linked.includes(asset.assetId)} onChange={() => setLinked(list => list.includes(asset.assetId) ? list.filter(id => id !== asset.assetId) : [...list, asset.assetId])} />
-              <span>{asset.title}<small>{asset.sourcePath}</small></span>
-            </label>
-          ))}
-          {error && <div className="pms-error">{error}</div>}
-          <div className="pms-row">
-            <button className="pms-btn" disabled={busy} onClick={() => void save(false)}>追加保存</button>
-            <button className="pms-btn primary" data-testid="shelve" disabled={busy} onClick={() => void save(true)}>暂存并换一张</button>
-            <button className="pms-btn" data-testid="promote" disabled={busy || detail.interactions.length === 0} onClick={() => void mature()}>标为成熟，送去生产改稿</button>
-            <button className="pms-btn" data-testid="delete-card" onClick={() => { void rpc('deleteCard', { cardId }).then(() => onDeleted(cardId)) }}>删除</button>
+
+          <div className="pms-scroll pms-scroll--flush">
+            <div className="pms-stack">
+              {detail.inspiration && <Inspiration key={detail.card.id} data={detail.inspiration} />}
+              <div className="pms-timeline" data-testid="expressions">
+                {detail.interactions.length === 0 && <div className="pms-empty">这里会按时间保留你写过的每一句，分析不会覆盖原文。</div>}
+                {detail.interactions.map(item => <article key={item.id} className="pms-thought" data-testid="thought">{item.body}</article>)}
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
-      <aside className="pms-panel pms-analysis" data-testid="analysis-panel">
-        <h3>后台分析</h3>
-        {detail.job?.status === 'queued' || detail.job?.status === 'running' ? <p data-testid="analysis-pending">正在后台整理这张卡，你可以先去看别的。</p> : null}
+
+          {/* 输入区固定在视口底部：这是最高频动作，不该沉在长列表末尾 */}
+          <div className="pms-composer-bar">
+            <div className="pms-composer">
+              <textarea data-testid="thought-input" rows={3} value={body} placeholder="把判断、场景、犹豫都写在这里。保存是追加，不是覆盖。" onChange={event => updateBody(event.target.value)} />
+              {assets.length > 0 && (
+                <div className="pms-picker-list">
+                  {assets.map(asset => (
+                    <label key={asset.assetId} className="pms-asset">
+                      <input type="checkbox" checked={linked.includes(asset.assetId)} onChange={() => setLinked(list => list.includes(asset.assetId) ? list.filter(id => id !== asset.assetId) : [...list, asset.assetId])} />
+                      <span>{asset.title}<small>{asset.sourcePath}</small></span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              {(error || pollError) && <div className="pms-error">{error || pollError}</div>}
+              <div className="pms-row">
+                <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={() => { void rpc<AssetHit[]>('searchAssets', { query: body || detail.card.title }).then(setAssets).catch(err => setError(err instanceof Error ? err.message : String(err))) }}>关联素材</button>
+                {linked.length > 0 && <span className="pms-meta">已关联 {linked.length} 条</span>}
+                <span className="pms-spacer" />
+                <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" disabled={busy || (body.trim().length === 0 && linked.length === 0)} onClick={() => void save(false)}>保存原话</button>
+                <button className="pms-btn pms-btn--sm pms-btn--outline-accent" data-testid="shelve" disabled={busy} onClick={() => void save(true)}>暂存，回看板</button>
+                <button className="pms-btn pms-btn--sm pms-btn--primary" data-testid="promote" disabled={busy || (!detail.interactions.length && !body.trim() && linked.length === 0)} title={detail.interactions.length || body.trim() || linked.length ? '把写下的内容一并收好，送去改稿' : '先写一句，或关联一条素材，再标为成熟'} onClick={() => setConfirmMature(true)}>标为成熟并送去改稿</button>
+              </div>
+            </div>
+          </div>
+        </section>
+        {analysisOpen && (
+        <aside className="pms-workarea__side pms-panel pms-analysis" data-testid="analysis-panel">
+          <div className="pms-drawer__head">
+            <h3>后台分析</h3>
+            <div className="pms-row">
+              {pending ? <span className="pms-badge pms-badge--warn" data-testid="analysis-pending">整理中</span> : null}
+              <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={() => setAnalysisOpen(false)}>收起</button>
+            </div>
+          </div>
+          {pending && <p>正在后台整理这张卡，你可以先去看别的。</p>}
         {!analysis && <p>搁置或保存之后，这里会出现核心判断、缺口、相反视角和追问。</p>}
         {analysis && (
           <>
@@ -725,7 +1181,433 @@ function CardWorkspace({ cardId, onShelved, onDeleted, onMature }: { cardId: str
             <p>成熟度建议：{maturityLabel(analysis.maturity)}。要不要进入生产，由你决定。</p>
           </>
         )}
+        </aside>
+        )}
+      </div>
+      {confirmMature && (
+        <FocusConfirm
+          title="标为成熟并送去改稿？"
+          description="写下的原话会一起收好，卡片进入生产改稿。之后仍可以在改稿页退回选题。"
+          confirmLabel="确认，送去改稿"
+          onCancel={() => setConfirmMature(false)}
+          onConfirm={() => { setConfirmMature(false); void mature() }}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * 标为成熟的确认弹窗。打开时把其余界面设为 inert，焦点锁在弹窗内，
+ * Esc 取消并把焦点还给触发按钮——避免「误点成熟 → 送去改稿」的不可逆感。
+ */
+function FocusConfirm({ title, description, confirmLabel, onCancel, onConfirm }: {
+  title: string,
+  description: string,
+  confirmLabel: string,
+  onCancel: () => void,
+  onConfirm: () => void,
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null
+    const root = dialogRef.current?.closest('.pms-focus, .pms-view')
+    const siblings = root ? Array.from(root.children).filter(node => node !== dialogRef.current?.parentElement) : []
+    siblings.forEach(node => node.setAttribute('inert', ''))
+    cancelRef.current?.focus()
+    return () => {
+      siblings.forEach(node => node.removeAttribute('inert'))
+      previous?.focus()
+    }
+  }, [])
+  return (
+    <div className="pms-confirm" data-testid="focus-confirm">
+      <div
+        ref={dialogRef}
+        className="pms-confirm__dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pms-confirm-title"
+        aria-describedby="pms-confirm-desc"
+        onKeyDown={event => {
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            onCancel()
+            return
+          }
+          if (event.key !== 'Tab') return
+          const focusables = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled])') ?? [])
+          if (focusables.length === 0) return
+          const first = focusables[0]
+          const last = focusables[focusables.length - 1]
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault()
+            last.focus()
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault()
+            first.focus()
+          }
+        }}
+      >
+        <h2 id="pms-confirm-title">{title}</h2>
+        <p id="pms-confirm-desc">{description}</p>
+        <div className="pms-confirm__actions">
+          <button ref={cancelRef} className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={onCancel}>取消</button>
+          <button className="pms-btn pms-btn--sm pms-btn--primary" type="button" onClick={onConfirm}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * 聚焦模式：一次只呈现一张稿纸。
+ * 推进只由「记下，换一张 / 标为成熟」触发；只保存、关联素材留在当前卡。
+ * 队列在进入时按看板顺序拍快照并旋转到起点，一轮内处理过的卡不再出现；走完自动进入下一轮。
+ */
+function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, onNotice }: {
+  cards: CardRow[],
+  startId: string,
+  onExit: () => void,
+  onBoard: () => void,
+  onPool: () => void,
+  onChanged: () => Promise<string[]>,
+  onNotice: (notice: Notice) => void,
+}) {
+  const [state, setState] = useState<FocusQueue>(() => createQueue(cards.map(card => card.id), startId))
+  const [finished, setFinished] = useState(false)
+  const currentId = finished ? null : state.queue[state.position] ?? null
+  const [detail, setDetail] = useState<CardDetail | null>(null)
+  const [body, setBody] = useState('')
+  const bodyRef = useRef('')
+  const [linked, setLinked] = useState<string[]>([])
+  const [assets, setAssets] = useState<AssetHit[]>([])
+  const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [confirmMature, setConfirmMature] = useState(false)
+  const [analysisOpen, setAnalysisOpen] = useState(false)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const focusAfterAdvance = useRef(false)
+  const opRef = useRef<{ key: string, id: string } | null>(null)
+  const detailStamp = useRef(0)
+
+  function updateBody(next: string) {
+    bodyRef.current = next
+    setBody(next)
+  }
+
+  function opIdFor(key: string) {
+    if (opRef.current?.key !== key) opRef.current = { key, id: clientOpId(key) }
+    return opRef.current.id
+  }
+
+  /** 刷新页面、退出聚焦、回到普通卡片视图，未提交的输入都还在。 */
+  useEffect(() => () => { if (currentId) writeDraft(currentId, bodyRef.current) }, [currentId])
+
+  useEffect(() => {
+    // 换卡不是清空输入，而是换成这张卡自己的草稿。
+    const next = currentId ? readDraft(currentId) : ''
+    bodyRef.current = next
+    setBody(next)
+    setLinked([])
+    setAssets([])
+    setError('')
+    if (focusAfterAdvance.current) {
+      focusAfterAdvance.current = false
+      window.requestAnimationFrame(() => inputRef.current?.focus())
+    }
+  }, [currentId])
+
+  useEffect(() => {
+    if (!currentId) { setDetail(null); return }
+    let alive = true
+    let timer = 0
+    let failures = 0
+    const load = async () => {
+      if (document.hidden) return
+      const stamp = ++detailStamp.current
+      try {
+        const value = await rpc<CardDetail>('getCard', { cardId: currentId })
+        if (!alive || stamp !== detailStamp.current) return
+        setDetail(value)
+        if (failures > 0) { setLoadError(''); failures = 0 }
+      } catch (err) {
+        if (!alive || stamp !== detailStamp.current) return
+        failures += 1
+        setLoadError(failures === 1
+          ? (err instanceof Error ? err.message : String(err))
+          : `后台整理暂时读不到，正在重试（第 ${failures} 次）。`)
+      } finally {
+        // 成功 1.2s 轮询，失败指数退避到 12s；页面隐藏时跳过请求但保留节奏。
+        if (alive) timer = window.setTimeout(() => { void load() }, failures === 0 ? 1200 : Math.min(1200 * 2 ** failures, 12000))
+      }
+    }
+    void load()
+    return () => { alive = false; window.clearTimeout(timer) }
+  }, [currentId])
+
+  async function refreshDetail(cardId: string) {
+    const stamp = ++detailStamp.current
+    const value = await rpc<CardDetail>('getCard', { cardId })
+    if (stamp === detailStamp.current) setDetail(value)
+  }
+
+  async function act(kind: 'append' | 'shelve' | 'mature') {
+    if (!currentId || busy) return
+    const done = currentId
+    const hasInput = body.trim().length > 0 || linked.length > 0
+    if (kind === 'append' && !hasInput) {
+      setError('先写一句再保存。')
+      inputRef.current?.focus()
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      if (kind === 'append') {
+        await rpc('appendThought', { cardId: done, body, attachmentAssetIds: linked })
+        writeDraft(done, '')
+        bodyRef.current = ''
+        setBody('')
+        setLinked([])
+        await refreshDetail(done)
+        onNotice({ title: '原话已追加' })
+      } else {
+        if (hasInput) {
+          // 原子推进：追加和状态变更同一个事务，clientOpId 让重试保持幂等。
+          await rpc('advanceCard', {
+            cardId: done,
+            body,
+            attachmentAssetIds: linked,
+            action: kind,
+            clientOpId: opIdFor(`${done}:${kind}`),
+          })
+        } else {
+          await rpc(kind === 'shelve' ? 'shelve' : 'markMature', { cardId: done })
+        }
+        writeDraft(done, '')
+        bodyRef.current = ''
+        setBody('')
+        setLinked([])
+        setAssets([])
+        opRef.current = null
+
+        const live = new Set(await onChanged())
+        const advanced = advanceQueue(state, live, done)
+        if (!advanced) {
+          setState(current => ({ ...current, processed: [...new Set([...current.processed, done])] }))
+          setFinished(true)
+          onNotice({
+            title: kind === 'mature' ? '已标为成熟，送去改稿' : '已记下，留在本阶段',
+            seal: kind === 'mature' ? '成熟' : undefined,
+          })
+          return
+        }
+        setState(advanced.state)
+        focusAfterAdvance.current = true
+        if (advanced.wrapped) {
+          onNotice({ title: `本轮已过完，进入第 ${advanced.state.round} 轮` })
+        } else if (kind === 'mature') {
+          onNotice({
+            title: '已标为成熟，送去改稿',
+            seal: '成熟',
+            undo: {
+              label: '退回选题',
+              run: () => { void rpc('returnToTopics', { cardId: done }).then(() => { void onChanged() }) },
+            },
+          })
+        } else {
+          onNotice({ title: '已记下，留在本阶段' })
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const progress = queueProgress(state)
+  const percent = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0
+  const analysis = detail?.analysis
+  const pending = detail?.job?.status === 'queued' || detail?.job?.status === 'running'
+
+  return (
+    <div
+      className={`pms-focus ${analysisOpen ? 'pms-focus--analysis' : ''}`}
+      data-testid="focus-mode"
+      onKeyDown={event => {
+        if (confirmMature) return
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          onExit()
+          return
+        }
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault()
+          void act('shelve')
+        }
+      }}
+    >
+      <div className="pms-sr-only" role="status" aria-live="polite">
+        {currentId
+          ? `第 ${progress.round} 轮，本轮已处理 ${progress.completed} 张，共 ${progress.total} 张。当前：${detail?.card.title ?? '正在打开'}。`
+          : '本轮已过完。'}
+      </div>
+      <div className="pms-focus__main" role="region" aria-label="聚焦处理">
+        <div className="pms-toolbar pms-toolbar--sub">
+          <span className="pms-toolbar__context">聚焦处理 · 一次一张。写完再决定记下，还是送去改稿。</span>
+          <button
+            className="pms-btn pms-btn--sm pms-btn--ghost pms-focus__analysis-toggle"
+            type="button"
+            data-testid="focus-analysis-toggle"
+            aria-expanded={analysisOpen}
+            onClick={() => setAnalysisOpen(open => !open)}
+          >后台整理{pending && <span className="pms-pending-dot" aria-label="正在整理" />}</button>
+          <div
+            className="pms-focus__progress"
+            role="progressbar"
+            aria-label="队列进度"
+            aria-valuemin={0}
+            aria-valuemax={progress.total}
+            aria-valuenow={progress.completed}
+            aria-valuetext={`本轮已处理 ${progress.completed} 张，共 ${progress.total} 张${progress.round > 1 ? `，第 ${progress.round} 轮` : ''}`}
+          >
+            <span className="pms-focus__count">
+              {progress.total > 0
+                ? `本轮 ${String(progress.completed).padStart(2, '0')} / ${String(progress.total).padStart(2, '0')}${progress.round > 1 ? ` · 第 ${progress.round} 轮` : ''}`
+                : '本轮已过完'}
+            </span>
+            <div className="pms-focus__track"><div className="pms-focus__fill" style={{ width: `${percent}%` }} /></div>
+          </div>
+          <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" data-testid="exit-focus" onClick={onExit}>退出聚焦</button>
+        </div>
+
+        <div className="pms-focus__stage">
+          {!currentId ? (
+            <div className="pms-focus__sheet">
+              <div className="pms-focus__empty">这一轮都过完了。回看板看看，或者从问答池再放一张上来。</div>
+              <div className="pms-focus__buttons">
+                <button className="pms-btn pms-btn--sm" type="button" onClick={onBoard}>回看板</button>
+                <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={onPool}>去问答池</button>
+              </div>
+            </div>
+          ) : (
+            <article key={currentId} className="pms-focus__sheet" data-testid="focus-card">
+              <header>
+                <div className="pms-focus__kicker">选题 · 聚焦处理</div>
+                <h1 className="pms-focus__title">{detail?.card.title ?? '正在打开这张卡…'}</h1>
+                <div className="pms-focus__tags">
+                  {detail && (
+                    <>
+                      <span className="pms-badge">我的原话 · {detail.interactions.length}</span>
+                      {Number(detail.askCount) > 0 && <span className="pms-badge">几人问过 · {detail.askCount}</span>}
+                    </>
+                  )}
+                </div>
+              </header>
+
+              <div className="pms-focus__body">
+                {detail?.inspiration && <Inspiration key={detail.card.id} data={detail.inspiration} variant="sheet" />}
+                {detail?.interactions.length ? (
+                  <div className="pms-focus__timeline" data-testid="focus-expressions">
+                    {detail.interactions.map(item => <p key={item.id} className="pms-focus__thought">{item.body}</p>)}
+                  </div>
+                ) : (
+                  <div className="pms-focus__empty">还没有写过这句。先把你真正想说的写下来，分析不会覆盖原文。</div>
+                )}
+                {assets.length > 0 && (
+                  <div className="pms-focus__timeline">
+                    {assets.map(asset => (
+                      <label key={asset.assetId} className="pms-asset">
+                        <input type="checkbox" checked={linked.includes(asset.assetId)} onChange={() => setLinked(list => list.includes(asset.assetId) ? list.filter(id => id !== asset.assetId) : [...list, asset.assetId])} />
+                        <span>{asset.title}<small>{asset.sourcePath}</small></span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <footer className="pms-focus__composer">
+                <textarea
+                  ref={inputRef}
+                  data-testid="focus-input"
+                  rows={3}
+                  value={body}
+                  placeholder="把判断、场景、犹豫都写下来。Ctrl + Enter 记下并换下一张。"
+                  onChange={event => updateBody(event.target.value)}
+                />
+                {(error || loadError) && <div className="pms-error">{error || loadError}</div>}
+                <div className="pms-focus__buttons">
+                  <button
+                    className="pms-btn pms-btn--sm pms-btn--ghost"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => { void rpc<AssetHit[]>('searchAssets', { query: body || detail?.card.title || '' }).then(setAssets).catch(err => setError(err instanceof Error ? err.message : String(err))) }}
+                  >＋ 素材</button>
+                  <button className="pms-quiet" type="button" data-testid="focus-append" disabled={busy || !body.trim()} onClick={() => void act('append')}>只保存</button>
+                  <span className="pms-spacer" />
+                  <button
+                    className="pms-btn pms-btn--sm pms-btn--outline-accent"
+                    type="button"
+                    data-testid="focus-shelve"
+                    disabled={busy}
+                    title="记下这句，换下一张。Ctrl + Enter"
+                    onClick={() => void act('shelve')}
+                  >{body.trim() || linked.length > 0 ? '记下，换一张' : '跳过，换一张'}</button>
+                  <button
+                    className="pms-btn pms-btn--sm pms-btn--primary"
+                    type="button"
+                    data-testid="focus-mature"
+                    disabled={busy || (!detail?.interactions.length && !body.trim() && linked.length === 0)}
+                    title={detail?.interactions.length || body.trim() || linked.length ? '把当前输入一并收好，送去改稿（可撤销）' : '先写一句，或关联一条素材，再标为成熟'}
+                    onClick={() => setConfirmMature(true)}
+                  >标为成熟，送去改稿</button>
+                </div>
+              </footer>
+            </article>
+          )}
+        </div>
+      </div>
+
+      {analysisOpen && (
+      <aside className="pms-focus__aside" data-testid="focus-analysis">
+        <div className="pms-focus__aside-head">
+          <h3>后台整理</h3>
+          <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={() => setAnalysisOpen(false)}>收起</button>
+        </div>
+        {pending && <p>这张卡正在后台整理，你可以先写。</p>}
+        {!analysis && <p>暂存或保存之后，这里会出现核心判断和继续追问。</p>}
+        {analysis && (
+          <>
+            <h3>核心判断</h3>
+            <p data-testid="focus-thesis">{analysis.thesis}</p>
+            <h3>继续问</h3>
+            <ul>
+              {detail?.suggestions.filter(item => item.kind === 'question').map(item => <li key={item.id}>{item.text}</li>)}
+            </ul>
+            {analysis.relatedAssets.length > 0 && (
+              <>
+                <h3>相关素材</h3>
+                <ul>{analysis.relatedAssets.map(asset => <li key={asset.assetId}>{asset.title}</li>)}</ul>
+              </>
+            )}
+          </>
+        )}
       </aside>
+      )}
+      {confirmMature && (
+        <FocusConfirm
+          title="标为成熟，送去改稿？"
+          description="这张卡会离开选题阶段。改稿时如果反悔，可以在改稿页退回选题。"
+          confirmLabel="标为成熟并送去改稿"
+          onCancel={() => setConfirmMature(false)}
+          onConfirm={() => { setConfirmMature(false); void act('mature') }}
+        />
+      )}
     </div>
   )
 }
@@ -794,7 +1676,7 @@ function Production({ cardId, onReview }: { cardId: string, onReview: () => void
           {suggestions.length === 0 && <p className="pms-note">分析追问会出现在这里，不会自动改你的句子。</p>}
           <ul>{suggestions.map(item => <li key={item.id}>{item.text}</li>)}</ul>
           <h3>真实本地素材</h3>
-          <p className="pms-sub">建议来自你的素材库，带源文件路径。接受、拒绝或换成另一张，都由你点。</p>
+          <p className="pms-note">建议来自你的素材库，带源文件路径。接受、拒绝或换成另一张，都由你点。</p>
           {project.relations.map(relation => (
             <div key={relation.id} className="pms-asset" data-testid="asset-relation">
               {/\.(png|jpe?g|webp|gif)$/i.test(relation.source_path) ? <img alt="" src={assetUrl(String(relation.asset_id))} /> : <div className="pms-ph" />}

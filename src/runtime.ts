@@ -295,11 +295,39 @@ export class StudioRuntime {
   getCard(cardId: string) {
     const card = this.requireCard(cardId, true)
     const topic = card.topic_id
-      ? this.db.db.prepare(`SELECT summary, ask_count FROM topics WHERE id = ?`).get(String(card.topic_id)) as { summary: string, ask_count: number } | undefined
+      ? this.db.db.prepare(`SELECT summary, ask_count, cluster_key FROM topics WHERE id = ?`).get(String(card.topic_id)) as { summary: string, ask_count: number, cluster_key: string } | undefined
       : undefined
     const sourceAsset = topic
-      ? this.db.db.prepare(`SELECT source_asset_id, source_file FROM qa_items WHERE cluster_key = (SELECT cluster_key FROM topics WHERE id = ?) AND source_asset_id IS NOT NULL LIMIT 1`).get(String(card.topic_id)) as { source_asset_id: string, source_file: string } | undefined
+      ? this.db.db.prepare(`SELECT source_asset_id, source_file FROM qa_items WHERE cluster_key = ? AND source_asset_id IS NOT NULL LIMIT 1`).get(topic.cluster_key) as { source_asset_id: string, source_file: string } | undefined
       : undefined
+    // 原始素材只做「照录」：提问与回答都取数据库里的原文，不在服务端改写或截断。
+    // 展示时由客户端决定折叠层级；这里只做去重与选一条最长回答。
+    const qaRows = topic?.cluster_key
+      ? this.db.db.prepare(`SELECT question, answer, source_asset_id, source_file, created_at_src FROM qa_items WHERE cluster_key = ? ORDER BY updated_at DESC LIMIT 8`).all(topic.cluster_key) as Array<{ question: string, answer: string, source_asset_id: string | null, source_file: string, created_at_src: string }>
+      : []
+    const questions: string[] = []
+    const seenQuestions = new Set<string>()
+    const images: Array<{ assetId: string, file: string }> = []
+    const seenImages = new Set<string>()
+    let answer = ''
+    let newest = ''
+    for (const row of qaRows) {
+      const question = row.question.trim()
+      if (question && !seenQuestions.has(question) && questions.length < 5) {
+        seenQuestions.add(question)
+        questions.push(question)
+      }
+      const text = row.answer.trim()
+      if (text.length > answer.length) answer = text
+      if (row.source_asset_id && !seenImages.has(row.source_asset_id)) {
+        seenImages.add(row.source_asset_id)
+        images.push({ assetId: row.source_asset_id, file: row.source_file })
+      }
+      if (row.created_at_src > newest) newest = row.created_at_src
+    }
+    const inspiration = questions.length > 0 || answer || images.length > 0
+      ? { questions, answer, images: images.slice(0, 6), askCount: topic?.ask_count ?? 0, newest }
+      : null
     const interactions = this.db.db.prepare(`SELECT * FROM interactions WHERE card_id = ? ORDER BY created_at ASC`).all(cardId)
     const analysis = this.db.db.prepare(`SELECT * FROM ai_analyses WHERE card_id = ? ORDER BY created_at DESC LIMIT 1`).get(cardId) as Record<string, unknown> | undefined
     const suggestions = this.db.db.prepare(`SELECT * FROM ai_suggestions WHERE card_id = ? ORDER BY created_at ASC`).all(cardId)
@@ -310,11 +338,56 @@ export class StudioRuntime {
       askCount: topic?.ask_count ?? 0,
       sourceAssetId: sourceAsset?.source_asset_id ?? null,
       sourceFile: sourceAsset?.source_file ?? '',
+      inspiration,
       interactions,
       analysis: analysis ? decodeAnalysis(analysis) : null,
       suggestions,
       job,
     }
+  }
+
+  /**
+   * 一次事务内完成「追加原话 + 推进」。clientOpId 做幂等键：同一操作重试只产生一条 interaction。
+   * 暂存不可撤销（用户决策），成熟的撤销走现成的 returnToTopics。
+   */
+  advanceCard(cardId: string, body: string, attachmentAssetIds: string[], action: 'shelve' | 'mature', clientOpId?: string) {
+    const card = this.requireCard(cardId)
+    const text = body.trim()
+    if (!text && attachmentAssetIds.length === 0) throw new StudioError('empty_thought', '写下一句再保存。')
+    if (clientOpId) {
+      const done = this.db.db.prepare(`SELECT id FROM interactions WHERE client_op_id = ?`).get(clientOpId)
+      if (done) return this.getCard(cardId)
+    }
+    const stamp = nowIso()
+    const nextVersion = Number(card.input_version) + 1
+    this.db.tx(() => {
+      const inserted = this.db.db.prepare(`INSERT INTO interactions(id, card_id, kind, body, attachments_json, client_op_id, created_at) VALUES (?, ?, 'thought', ?, ?, ?, ?)`)
+        .run(uid(), cardId, text, JSON.stringify(attachmentAssetIds), clientOpId ?? null, stamp)
+      if (Number(inserted.changes) === 0) return
+      this.db.db.prepare(`UPDATE cards SET input_version = ?, status = 'open', updated_at = ? WHERE id = ?`).run(nextVersion, stamp, cardId)
+      if (action === 'shelve') {
+        this.db.db.prepare(`UPDATE cards SET status = 'shelved', updated_at = ? WHERE id = ?`).run(stamp, cardId)
+      } else {
+        const project = this.latestProject(cardId)
+        let status = 'open'
+        if (project?.status === 'paused') status = 'in_production'
+        this.db.db.prepare(`UPDATE cards SET maturity = 'mature', status = ?, updated_at = ? WHERE id = ?`).run(status, stamp, cardId)
+        if (project?.status === 'paused') this.db.db.prepare(`UPDATE projects SET status = 'drafting', updated_at = ? WHERE id = ?`).run(stamp, project.id)
+      }
+      this.db.indexText('card', cardId, `${card.title}\n${this.rawText(cardId)}`)
+    })
+    this.enqueueAnalyze(cardId, nextVersion)
+    return this.getCard(cardId)
+  }
+
+  /** 聚焦推进只需要当前选题卡 id，不必跑 bootstrap 的全量统计与素材扫描。 */
+  listBoardIds(): string[] {
+    const rows = this.db.db.prepare(`
+      SELECT c.id, c.status, c.maturity,
+        (SELECT p.status FROM projects p WHERE p.card_id = c.id ORDER BY p.created_at DESC LIMIT 1) AS project_status
+      FROM cards c WHERE c.deleted_at IS NULL ORDER BY c.updated_at DESC
+    `).all() as Array<{ id: string, status: string, maturity: string, project_status: string | null }>
+    return rows.filter(row => stageOf({ status: row.status, maturity: row.maturity, projectStatus: row.project_status }) === 'topics').map(row => row.id)
   }
 
   appendThought(cardId: string, body: string, attachmentAssetIds: string[] = []) {
@@ -1001,6 +1074,14 @@ export class StudioRuntime {
       case 'createCard': return this.createCard(String(payload.title ?? ''))
       case 'getCard': return this.getCard(String(payload.cardId))
       case 'appendThought': return this.appendThought(String(payload.cardId), String(payload.body ?? ''), arrayOf(payload.attachmentAssetIds))
+      case 'advanceCard': return this.advanceCard(
+        String(payload.cardId),
+        String(payload.body ?? ''),
+        arrayOf(payload.attachmentAssetIds),
+        payload.action === 'mature' ? 'mature' : 'shelve',
+        payload.clientOpId ? String(payload.clientOpId) : undefined,
+      )
+      case 'listBoardIds': return this.listBoardIds()
       case 'shelve': return this.shelve(String(payload.cardId))
       case 'renameCard': return this.renameCard(String(payload.cardId), String(payload.title ?? ''))
       case 'deleteCard': return this.deleteCard(String(payload.cardId))

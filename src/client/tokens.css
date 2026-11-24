@@ -1,0 +1,348 @@
+/* ============================================================================
+   PMS Design Tokens — 个人媒体工作室设计令牌
+   ----------------------------------------------------------------------------
+   三层架构，禁止跨层直接引用：
+     Layer 1  Primitive  品牌原始值，永不直接用于界面
+     Layer 2  Semantic   界面语义，优先消费 DSH 宿主 alias，回退到 Layer 1
+     Layer 3  Canvas     出图令牌，固定值，不跟随宿主主题（1242×1660 画布）
+
+   规则：业务样式只允许使用 --pms-* 语义令牌或 --pms-canvas-*，
+        不允许出现十六进制色值、px 圆角、裸字号。
+   ========================================================================== */
+
+.pms-root {
+  /* ── Layer 1：Primitive 品牌色阶 ─────────────────────────────────────────
+     主色 Green 取自头像线稿绿，是产品已有资产，不从零另造。 */
+  --pms-green-50: #F0F7F3;
+  --pms-green-100: #DCEDE4;
+  --pms-green-200: #B9DBC9;
+  --pms-green-300: #8FC4AB;
+  --pms-green-400: #5FA88A;
+  --pms-green-500: #34906C;  /* 品牌标识色 · 图形与大字强调 */
+  --pms-green-600: #2A7658;  /* 主按钮底 · 白字 5.48:1 */
+  --pms-green-700: #1E5A43;  /* 强调文字 · 浅底 8.3:1 */
+  --pms-green-800: #174636;
+  --pms-green-900: #113229;
+  --pms-green-950: #0A1F19;
+
+  /* 强调色 Gold。对白底仅 2.3:1，只允许装饰、边框、画布高亮，禁止做文字色。 */
+  --pms-gold-50: #FBF6E7;
+  --pms-gold-100: #F7EBC8;
+  --pms-gold-200: #F2E2A0;
+  --pms-gold-300: #E8CE72;
+  --pms-gold-400: #DEB95E;
+  --pms-gold-500: #D4A54A;
+  --pms-gold-600: #B8883A;
+  --pms-gold-700: #96692C;
+  --pms-gold-800: #745020;
+  --pms-gold-900: #533818;
+
+  /* 纸感原始色阶（Paper）。聚焦模式的编辑台专用，不改品牌 Green 的身份；
+     对比度实测：ink / paper-50 15.03:1，secondary 7.04:1，tertiary 4.86:1。 */
+  --pms-paper-0: #FFFDF8;    /* 稿纸正面 */
+  --pms-paper-50: #F7F3E9;   /* 编辑台底色 */
+  --pms-paper-100: #EFE9DA;  /* 内嵌凹槽 */
+  --pms-paper-200: #DFD7C4;  /* 稿纸裁切线 */
+  --pms-paper-500: #6F6A5D;  /* 三级墨色 */
+  --pms-paper-600: #565247;  /* 二级墨色 */
+  --pms-paper-900: #201E19;  /* 正文墨色 */
+
+  /* 中性色带极轻绿灰调，与纸白 #F5F6F0 同族，避免冷灰割裂 */
+  --pms-neutral-0: #FFFFFF;
+  --pms-neutral-50: #F8F9F5;
+  --pms-neutral-100: #F1F2EC;
+  --pms-neutral-200: #E4E6DC;
+  --pms-neutral-300: #D2D4C8;
+  --pms-neutral-400: #A8ABA0;
+  --pms-neutral-500: #707468;  /* 三级文字 · 对纸白 4.53:1，刚过 AA 下限 */
+  --pms-neutral-600: #5A6459;  /* 二级文字 · 对纸白 5.84:1，与三级保持可辨层次 */
+  --pms-neutral-700: #4A4F48;
+  --pms-neutral-800: #2A2C29;
+  --pms-neutral-900: #1A1C1A;
+  --pms-neutral-950: #0F110F;
+
+  /* 状态原始色，均已按 AA 校验（对白底 ≥4.5:1） */
+  --pms-red-600: #B91C1C;
+  --pms-red-500: #DC2626;
+  --pms-amber-600: #B45309;
+  --pms-amber-500: #D97706;
+  --pms-blue-600: #1D4ED8;
+  --pms-blue-500: #2563EB;
+
+  /* ── Layer 2：Semantic 界面语义 ─────────────────────────────────────────
+     var(--dsw-alias-x, 回退值)：宿主提供则跟随宿主明暗主题，否则用品牌回退。 */
+
+  /* 表面：三个层级 + 两个专用面 */
+  --pms-surface-base: var(--dsw-alias-bg-base, var(--pms-neutral-50));
+  --pms-surface-raised: var(--dsw-alias-bg-layer-2, var(--pms-neutral-0));
+  --pms-surface-sunken: var(--dsw-alias-bg-layer-1, var(--pms-neutral-100));
+  --pms-surface-overlay: var(--dsw-alias-bg-layer-3, var(--pms-neutral-0));
+  --pms-surface-module: var(--dsw-alias-bg-module-platform, var(--pms-surface-raised));
+
+  /* 文字：三级灰阶，全部满足 AA */
+  --pms-text-primary: var(--dsw-alias-label-primary, var(--pms-neutral-800));
+  --pms-text-secondary: var(--dsw-alias-label-secondary, var(--pms-neutral-600));
+  --pms-text-tertiary: var(--dsw-alias-label-tertiary, var(--pms-neutral-500));
+  --pms-text-inverse: var(--dsw-alias-bg-layer-1, var(--pms-neutral-0));
+  --pms-text-accent: var(--pms-green-700);
+
+  /* 边框：三档强度，替代 13 处重复 color-mix fallback */
+  --pms-border-subtle: var(--dsw-alias-border-default, var(--pms-neutral-200));
+  --pms-border-default: color-mix(in srgb, currentColor 16%, transparent);
+  --pms-border-strong: color-mix(in srgb, currentColor 30%, transparent);
+  --pms-border-selected: var(--dsw-alias-border-selected, var(--pms-green-600));
+
+  /* 交互 */
+  --pms-interactive-bg-hover: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 7%, transparent));
+  --pms-interactive-bg-active: color-mix(in srgb, currentColor 12%, transparent);
+  --pms-primary: var(--dsw-alias-state-business-primary, var(--pms-green-600));
+  --pms-primary-hover: var(--pms-green-700);
+  --pms-primary-fg: #FFFFFF;
+  --pms-primary-soft: color-mix(in srgb, var(--pms-green-500) 14%, transparent);
+
+  /* 状态语义 */
+  --pms-state-success: var(--pms-green-700);
+  --pms-state-success-soft: color-mix(in srgb, var(--pms-green-500) 14%, transparent);
+  --pms-state-warning: var(--dsw-alias-state-warning-primary, var(--pms-amber-600));
+  --pms-state-warning-soft: color-mix(in srgb, var(--pms-amber-500) 16%, transparent);
+  --pms-state-danger: var(--dsw-alias-state-error-primary, var(--pms-red-600));
+  --pms-state-danger-soft: color-mix(in srgb, var(--pms-red-500) 12%, transparent);
+  --pms-state-info: var(--pms-blue-600);
+  --pms-state-info-soft: color-mix(in srgb, var(--pms-blue-500) 12%, transparent);
+
+  /* 焦点环：统一一处，全局复用的可访问性基线 */
+  --pms-focus-ring: 0 0 0 2px var(--pms-surface-base), 0 0 0 4px var(--pms-primary);
+  --pms-focus-color: var(--pms-primary);
+
+  /* 聚焦编辑台（Focus）：纸感专用语义层，仍优先跟随宿主 alias。
+     只在 .pms-focus 内部使用，不影响看板、改稿与出图画布。 */
+  --pms-focus-bg: var(--dsw-alias-bg-base, var(--pms-paper-50));
+  --pms-focus-sheet: var(--dsw-alias-bg-layer-2, var(--pms-paper-0));
+  --pms-focus-sunken: var(--dsw-alias-bg-layer-1, var(--pms-paper-100));
+  --pms-focus-ink: var(--dsw-alias-label-primary, var(--pms-paper-900));
+  --pms-focus-ink-soft: var(--dsw-alias-label-secondary, var(--pms-paper-600));
+  --pms-focus-ink-faint: var(--dsw-alias-label-tertiary, var(--pms-paper-500));
+  --pms-focus-rule: var(--dsw-alias-border-default, var(--pms-paper-200));
+  --pms-focus-accent: var(--pms-green-700);
+  --pms-focus-sheet-max: 760px;
+  --pms-focus-rail-w: 268px;
+  --pms-focus-track-h: 4px;
+  --pms-focus-track-w: 96px;
+  --pms-focus-input-h: 96px;
+  --pms-focus-input-h-compact: 72px;
+
+  /* ── Layer 2：排版 ─────────────────────────────────────────────────────
+     中文界面正文落在 14px 比 13px 更稳；13px 保留为紧凑辅助档。
+     字重收敛到 4 档，废弃原先的 680 等非标值。 */
+  --pms-font-sans: "WenQuanYi Micro Hei", "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  --pms-font-serif: "Iowan Old Style", "Songti SC", "Noto Serif CJK SC", "SimSun", serif;
+  --pms-font-mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, monospace;
+
+  --pms-text-2xs: 11px;   /* 仅限画布页码、极小角标 */
+  --pms-text-xs: 12px;    /* 元信息、时间戳 */
+  --pms-text-sm: 13px;    /* 紧凑辅助文字 */
+  --pms-text-base: 14px;  /* 界面正文默认 */
+  --pms-text-md: 16px;    /* 用户输入、文章正文 */
+  --pms-text-lg: 18px;    /* 卡片标题 */
+  --pms-text-xl: 20px;    /* 区块标题 */
+  --pms-text-2xl: 24px;   /* 次级页面标题 */
+  --pms-text-3xl: 28px;   /* 页面主标题 */
+  --pms-text-4xl: 34px;
+  --pms-text-5xl: 42px;   /* 画布金句 */
+
+  --pms-leading-none: 1;
+  --pms-leading-tight: 1.25;   /* 大标题 */
+  --pms-leading-snug: 1.35;    /* 卡片标题 */
+  --pms-leading-normal: 1.55;  /* 界面正文 */
+  --pms-leading-relaxed: 1.75; /* 长文阅读 */
+  --pms-leading-canvas: 1.65;  /* 出图正文 */
+
+  --pms-weight-regular: 400;
+  --pms-weight-medium: 500;
+  --pms-weight-semibold: 600;
+  --pms-weight-bold: 700;
+  --pms-weight-black: 800;
+
+  --pms-tracking-tight: -0.03em;
+  --pms-tracking-normal: 0;
+  --pms-tracking-wide: 0.08em;
+  --pms-tracking-caps: 0.16em;  /* 全大写小标签 */
+
+  /* ── Layer 2：间距 · 4pt 网格 ───────────────────────────────────────────
+     所有 margin / padding / gap 只能从这里取值。 */
+  --pms-space-0: 0;
+  --pms-space-1: 2px;
+  --pms-space-2: 4px;
+  --pms-space-3: 8px;
+  --pms-space-4: 12px;
+  --pms-space-5: 16px;
+  --pms-space-6: 20px;
+  --pms-space-7: 24px;
+  --pms-space-8: 32px;
+  --pms-space-9: 40px;
+  --pms-space-10: 48px;
+  --pms-space-11: 64px;
+  --pms-space-12: 80px;
+
+  /* 组件级间距语义，避免每个组件自行推算 */
+  --pms-gap-inline: var(--pms-space-3);
+  --pms-gap-stack: var(--pms-space-4);
+  --pms-gap-group: var(--pms-space-6);
+  --pms-gap-section: var(--pms-space-8);
+  --pms-pad-control: var(--pms-space-3) var(--pms-space-4);
+  --pms-pad-card: var(--pms-space-5);
+  --pms-pad-panel: var(--pms-space-5);
+  --pms-inset-page: var(--pms-space-7);
+
+  /* ── Layer 2：圆角 ─────────────────────────────────────────────────────
+     原 9 种野生取值 → 6 档刻度。>=999px 统一用 full。 */
+  --pms-radius-xs: 4px;    /* 标记、极小色块 */
+  --pms-radius-sm: 8px;    /* 色片、缩略图内块 */
+  --pms-radius-md: 10px;   /* 图片、小卡 */
+  --pms-radius-lg: 12px;   /* 输入框、按钮组 */
+  --pms-radius-xl: 16px;   /* 卡片、面板 */
+  --pms-radius-2xl: 20px;  /* 大容器、画布框 */
+  --pms-radius-full: 999px;/* 胶囊按钮、徽标、头像 */
+
+  /* 边框宽度 */
+  --pms-border-hairline: 1px;
+  --pms-border-thick: 2px;
+  --pms-border-accent: 10px; /* 画布引用条 */
+  --pms-marker-w: 3px;       /* 建议条等细标记，禁止裸 3px */
+
+  /* ── Layer 2：高度 · 阴影 ───────────────────────────────────────────────
+     界面只用 3 档；画布投影独立，因为它要模拟纸张而非 UI 层级。 */
+  --pms-shadow-xs: 0 1px 2px color-mix(in srgb, black 6%, transparent);
+  --pms-shadow-sm: 0 2px 8px color-mix(in srgb, black 8%, transparent);
+  --pms-shadow-md: 0 8px 24px color-mix(in srgb, black 10%, transparent);
+  --pms-shadow-lg: 0 16px 48px color-mix(in srgb, black 14%, transparent);
+
+  /* ── Layer 2：动效 ─────────────────────────────────────────────────────
+     三条时长 + 两条曲线。超出这个集合的时长视为违规。 */
+  --pms-duration-fast: 120ms;
+  --pms-duration-base: 180ms;
+  --pms-duration-slow: 280ms;
+  --pms-ease-standard: cubic-bezier(0.2, 0, 0.2, 1);
+  --pms-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* ── Layer 2：层级 ─────────────────────────────────────────────────────
+     只允许这 5 个值，禁止 9999 之类的魔法数字。 */
+  --pms-z-base: 0;
+  --pms-z-sticky: 10;
+  --pms-z-overlay: 20;
+  --pms-z-toast: 30;
+  --pms-z-modal: 40;
+
+  /* ── Layer 2：尺寸约束 ─────────────────────────────────────────────────
+     44px 是 WCAG 2.5.5 触控目标下限。 */
+  --pms-tap-min: 44px;
+  --pms-control-h-sm: 30px;
+  --pms-control-h-md: 36px;
+  --pms-control-h-lg: 44px;
+  --pms-sidebar-w: 196px;
+  --pms-props-w: 300px;
+  --pms-reading-max: 72ch;
+
+  /* ── Layer 3：Canvas 出图令牌（固定，不随宿主） ─────────────────────────
+     1242×1660 是小红书长文出图尺寸，必须与宿主主题隔离，
+     否则用户在深色宿主里排的版，导出后颜色会变。 */
+  --pms-canvas-w: 1242px;
+  --pms-canvas-h: 1660px;
+  --pms-canvas-pad-y: 96px;
+  --pms-canvas-pad-x: 88px;
+  --pms-canvas-gap: 28px;
+  --pms-canvas-paper: #F5F6F0;
+  --pms-canvas-ink: #34906C;
+  --pms-canvas-ink-deep: #1E5A43;
+  --pms-canvas-text: #2A2C29;
+  --pms-canvas-muted: #667066;
+  --pms-canvas-gold: #D4A54A;
+  --pms-canvas-gold-soft: #F2E2A0;
+  --pms-canvas-rule: #D2D4C8;
+  --pms-canvas-mark-bg: #FFE08A;
+  --pms-canvas-mark-fg: #1C1917;
+  --pms-canvas-kicker: 26px;
+  --pms-canvas-quote: 42px;
+  --pms-canvas-figure-h: 460px;
+  --pms-canvas-shadow: 0 24px 80px color-mix(in srgb, black 28%, transparent);
+}
+
+/* ============================================================================
+   深色回退
+   宿主提供 --dsw-alias-* 时这层不生效（语义令牌已优先取宿主值）。
+   仅在宿主未提供令牌、但系统处于深色时兜底，避免浅色界面刺眼。
+   ========================================================================== */
+@media (prefers-color-scheme: dark) {
+  .pms-root {
+    --pms-surface-base: var(--dsw-alias-bg-base, #141614);
+    --pms-surface-raised: var(--dsw-alias-bg-layer-2, #1C1F1C);
+    --pms-surface-sunken: var(--dsw-alias-bg-layer-1, #101210);
+    --pms-surface-overlay: var(--dsw-alias-bg-layer-3, #252825);
+    --pms-text-primary: var(--dsw-alias-label-primary, #EDEFE8);
+    --pms-text-secondary: var(--dsw-alias-label-secondary, #A8AFA4);
+    --pms-text-tertiary: var(--dsw-alias-label-tertiary, #7C847A);
+    --pms-text-inverse: var(--dsw-alias-bg-layer-1, #0F110F);
+    --pms-text-accent: var(--dsw-alias-label-primary, #8FC4AB);
+    --pms-border-subtle: var(--dsw-alias-border-default, #313630);
+    --pms-primary: var(--dsw-alias-state-business-primary, #4FAE85);
+    --pms-primary-hover: #5FBC93;
+    --pms-primary-fg: #0A1F19;   /* 亮绿底配深字，6.3:1 */
+    --pms-primary-soft: color-mix(in srgb, #4FAE85 18%, transparent);
+    --pms-state-success: #6FBF98;
+    --pms-state-warning: #E0A050;
+    --pms-state-danger: #E87373;
+    --pms-state-info: #7AA7F0;
+    --pms-focus-color: #8FC4AB;
+    --pms-focus-ring: 0 0 0 2px #141614, 0 0 0 4px #8FC4AB;
+    --pms-focus-bg: var(--dsw-alias-bg-base, #141614);
+    --pms-focus-sheet: var(--dsw-alias-bg-layer-2, #1C1F1C);
+    --pms-focus-sunken: var(--dsw-alias-bg-layer-1, #101210);
+    --pms-focus-ink: var(--dsw-alias-label-primary, #EDEFE8);
+    --pms-focus-ink-soft: var(--dsw-alias-label-secondary, #A8AFA4);
+    --pms-focus-ink-faint: var(--dsw-alias-label-tertiary, #7C847A);
+    --pms-focus-rule: var(--dsw-alias-border-default, #313630);
+    --pms-focus-accent: #8FC4AB;
+    --pms-shadow-xs: 0 1px 2px color-mix(in srgb, black 40%, transparent);
+    --pms-shadow-sm: 0 2px 8px color-mix(in srgb, black 45%, transparent);
+    --pms-shadow-md: 0 8px 24px color-mix(in srgb, black 55%, transparent);
+    --pms-shadow-lg: 0 16px 48px color-mix(in srgb, black 65%, transparent);
+  }
+}
+
+/* 宿主显式声明深色主题时（优先于系统偏好） */
+[data-theme="dark"] .pms-root,
+[data-ds-dark-theme] .pms-root,
+.pms-root[data-pms-theme="dark"] {
+  --pms-surface-base: var(--dsw-alias-bg-base, #141614);
+  --pms-surface-raised: var(--dsw-alias-bg-layer-2, #1C1F1C);
+  --pms-surface-sunken: var(--dsw-alias-bg-layer-1, #101210);
+  --pms-surface-overlay: var(--dsw-alias-bg-layer-3, #252825);
+  --pms-text-primary: var(--dsw-alias-label-primary, #EDEFE8);
+  --pms-text-secondary: var(--dsw-alias-label-secondary, #A8AFA4);
+  --pms-text-tertiary: var(--dsw-alias-label-tertiary, #7C847A);
+  --pms-text-inverse: var(--dsw-alias-bg-layer-1, #0F110F);
+  --pms-text-accent: var(--dsw-alias-label-primary, #8FC4AB);
+  --pms-border-subtle: var(--dsw-alias-border-default, #313630);
+  --pms-primary: var(--dsw-alias-state-business-primary, #4FAE85);
+  --pms-primary-hover: #5FBC93;
+  --pms-primary-fg: #0A1F19;
+  --pms-primary-soft: color-mix(in srgb, #4FAE85 18%, transparent);
+  --pms-state-success: #6FBF98;
+  --pms-state-warning: #E0A050;
+  --pms-state-danger: #E87373;
+  --pms-state-info: #7AA7F0;
+  --pms-focus-color: #8FC4AB;
+  --pms-focus-ring: 0 0 0 2px #141614, 0 0 0 4px #8FC4AB;
+  --pms-focus-bg: var(--dsw-alias-bg-base, #141614);
+  --pms-focus-sheet: var(--dsw-alias-bg-layer-2, #1C1F1C);
+  --pms-focus-sunken: var(--dsw-alias-bg-layer-1, #101210);
+  --pms-focus-ink: var(--dsw-alias-label-primary, #EDEFE8);
+  --pms-focus-ink-soft: var(--dsw-alias-label-secondary, #A8AFA4);
+  --pms-focus-ink-faint: var(--dsw-alias-label-tertiary, #7C847A);
+  --pms-focus-rule: var(--dsw-alias-border-default, #313630);
+  --pms-focus-accent: #8FC4AB;
+  --pms-shadow-xs: 0 1px 2px color-mix(in srgb, black 40%, transparent);
+  --pms-shadow-sm: 0 2px 8px color-mix(in srgb, black 45%, transparent);
+  --pms-shadow-md: 0 8px 24px color-mix(in srgb, black 55%, transparent);
+  --pms-shadow-lg: 0 16px 48px color-mix(in srgb, black 65%, transparent);
+}

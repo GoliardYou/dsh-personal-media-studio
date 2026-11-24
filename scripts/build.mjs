@@ -1,5 +1,9 @@
 import { build } from 'esbuild'
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+
+// 注入到界面 <style> 的构建戳：换包后在 DSH 里一眼能确认运行的是新产物。
+const stamp = createHash('sha1').update(`${new Date().toISOString()}|${process.version}`).digest('hex').slice(0, 8)
 
 await build({
   entryPoints: ['src/index.ts'],
@@ -22,6 +26,7 @@ const client = await build({
   jsx: 'automatic',
   external: ['react', 'react/jsx-runtime', 'react-dom'],
   loader: { '.css': 'text' },
+  define: { __PMS_BUILD_STAMP__: JSON.stringify(stamp) },
 })
 
 let code = client.outputFiles[0].text.replace(/^["']use strict["'];\s*/, '')

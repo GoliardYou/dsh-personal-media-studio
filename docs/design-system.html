@@ -1,0 +1,3768 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PMS 设计规范系统 · 个人媒体工作室</title>
+<!-- 本文件由 scripts/build-design-system.mjs 生成，请勿直接编辑。
+     模板：scripts/design-system/template.html
+     令牌源：src/client/tokens.css、src/client/components.css -->
+<style data-source="tokens.css">
+/* ── tokens.css 内联副本 · 源文件 src/client/tokens.css ── */
+/* ============================================================================
+   PMS Design Tokens — 个人媒体工作室设计令牌
+   ----------------------------------------------------------------------------
+   三层架构，禁止跨层直接引用：
+     Layer 1  Primitive  品牌原始值，永不直接用于界面
+     Layer 2  Semantic   界面语义，优先消费 DSH 宿主 alias，回退到 Layer 1
+     Layer 3  Canvas     出图令牌，固定值，不跟随宿主主题（1242×1660 画布）
+
+   规则：业务样式只允许使用 --pms-* 语义令牌或 --pms-canvas-*，
+        不允许出现十六进制色值、px 圆角、裸字号。
+   ========================================================================== */
+
+.pms-root {
+  /* ── Layer 1：Primitive 品牌色阶 ─────────────────────────────────────────
+     主色 Green 取自头像线稿绿，是产品已有资产，不从零另造。 */
+  --pms-green-50: #F0F7F3;
+  --pms-green-100: #DCEDE4;
+  --pms-green-200: #B9DBC9;
+  --pms-green-300: #8FC4AB;
+  --pms-green-400: #5FA88A;
+  --pms-green-500: #34906C;  /* 品牌标识色 · 图形与大字强调 */
+  --pms-green-600: #2A7658;  /* 主按钮底 · 白字 5.48:1 */
+  --pms-green-700: #1E5A43;  /* 强调文字 · 浅底 8.3:1 */
+  --pms-green-800: #174636;
+  --pms-green-900: #113229;
+  --pms-green-950: #0A1F19;
+
+  /* 强调色 Gold。对白底仅 2.3:1，只允许装饰、边框、画布高亮，禁止做文字色。 */
+  --pms-gold-50: #FBF6E7;
+  --pms-gold-100: #F7EBC8;
+  --pms-gold-200: #F2E2A0;
+  --pms-gold-300: #E8CE72;
+  --pms-gold-400: #DEB95E;
+  --pms-gold-500: #D4A54A;
+  --pms-gold-600: #B8883A;
+  --pms-gold-700: #96692C;
+  --pms-gold-800: #745020;
+  --pms-gold-900: #533818;
+
+  /* 纸感原始色阶（Paper）。聚焦模式的编辑台专用，不改品牌 Green 的身份；
+     对比度实测：ink / paper-50 15.03:1，secondary 7.04:1，tertiary 4.86:1。 */
+  --pms-paper-0: #FFFDF8;    /* 稿纸正面 */
+  --pms-paper-50: #F7F3E9;   /* 编辑台底色 */
+  --pms-paper-100: #EFE9DA;  /* 内嵌凹槽 */
+  --pms-paper-200: #DFD7C4;  /* 稿纸裁切线 */
+  --pms-paper-500: #6F6A5D;  /* 三级墨色 */
+  --pms-paper-600: #565247;  /* 二级墨色 */
+  --pms-paper-900: #201E19;  /* 正文墨色 */
+
+  /* 中性色带极轻绿灰调，与纸白 #F5F6F0 同族，避免冷灰割裂 */
+  --pms-neutral-0: #FFFFFF;
+  --pms-neutral-50: #F8F9F5;
+  --pms-neutral-100: #F1F2EC;
+  --pms-neutral-200: #E4E6DC;
+  --pms-neutral-300: #D2D4C8;
+  --pms-neutral-400: #A8ABA0;
+  --pms-neutral-500: #707468;  /* 三级文字 · 对纸白 4.53:1，刚过 AA 下限 */
+  --pms-neutral-600: #5A6459;  /* 二级文字 · 对纸白 5.84:1，与三级保持可辨层次 */
+  --pms-neutral-700: #4A4F48;
+  --pms-neutral-800: #2A2C29;
+  --pms-neutral-900: #1A1C1A;
+  --pms-neutral-950: #0F110F;
+
+  /* 状态原始色，均已按 AA 校验（对白底 ≥4.5:1） */
+  --pms-red-600: #B91C1C;
+  --pms-red-500: #DC2626;
+  --pms-amber-600: #B45309;
+  --pms-amber-500: #D97706;
+  --pms-blue-600: #1D4ED8;
+  --pms-blue-500: #2563EB;
+
+  /* ── Layer 2：Semantic 界面语义 ─────────────────────────────────────────
+     var(--dsw-alias-x, 回退值)：宿主提供则跟随宿主明暗主题，否则用品牌回退。 */
+
+  /* 表面：三个层级 + 两个专用面 */
+  --pms-surface-base: var(--dsw-alias-bg-base, var(--pms-neutral-50));
+  --pms-surface-raised: var(--dsw-alias-bg-layer-2, var(--pms-neutral-0));
+  --pms-surface-sunken: var(--dsw-alias-bg-layer-1, var(--pms-neutral-100));
+  --pms-surface-overlay: var(--dsw-alias-bg-layer-3, var(--pms-neutral-0));
+  --pms-surface-module: var(--dsw-alias-bg-module-platform, var(--pms-surface-raised));
+
+  /* 文字：三级灰阶，全部满足 AA */
+  --pms-text-primary: var(--dsw-alias-label-primary, var(--pms-neutral-800));
+  --pms-text-secondary: var(--dsw-alias-label-secondary, var(--pms-neutral-600));
+  --pms-text-tertiary: var(--dsw-alias-label-tertiary, var(--pms-neutral-500));
+  --pms-text-inverse: var(--dsw-alias-bg-layer-1, var(--pms-neutral-0));
+  --pms-text-accent: var(--pms-green-700);
+
+  /* 边框：三档强度，替代 13 处重复 color-mix fallback */
+  --pms-border-subtle: var(--dsw-alias-border-default, var(--pms-neutral-200));
+  --pms-border-default: color-mix(in srgb, currentColor 16%, transparent);
+  --pms-border-strong: color-mix(in srgb, currentColor 30%, transparent);
+  --pms-border-selected: var(--dsw-alias-border-selected, var(--pms-green-600));
+
+  /* 交互 */
+  --pms-interactive-bg-hover: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 7%, transparent));
+  --pms-interactive-bg-active: color-mix(in srgb, currentColor 12%, transparent);
+  --pms-primary: var(--dsw-alias-state-business-primary, var(--pms-green-600));
+  --pms-primary-hover: var(--pms-green-700);
+  --pms-primary-fg: #FFFFFF;
+  --pms-primary-soft: color-mix(in srgb, var(--pms-green-500) 14%, transparent);
+
+  /* 状态语义 */
+  --pms-state-success: var(--pms-green-700);
+  --pms-state-success-soft: color-mix(in srgb, var(--pms-green-500) 14%, transparent);
+  --pms-state-warning: var(--dsw-alias-state-warning-primary, var(--pms-amber-600));
+  --pms-state-warning-soft: color-mix(in srgb, var(--pms-amber-500) 16%, transparent);
+  --pms-state-danger: var(--dsw-alias-state-error-primary, var(--pms-red-600));
+  --pms-state-danger-soft: color-mix(in srgb, var(--pms-red-500) 12%, transparent);
+  --pms-state-info: var(--pms-blue-600);
+  --pms-state-info-soft: color-mix(in srgb, var(--pms-blue-500) 12%, transparent);
+
+  /* 焦点环：统一一处，全局复用的可访问性基线 */
+  --pms-focus-ring: 0 0 0 2px var(--pms-surface-base), 0 0 0 4px var(--pms-primary);
+  --pms-focus-color: var(--pms-primary);
+
+  /* 聚焦编辑台（Focus）：纸感专用语义层，仍优先跟随宿主 alias。
+     只在 .pms-focus 内部使用，不影响看板、改稿与出图画布。 */
+  --pms-focus-bg: var(--dsw-alias-bg-base, var(--pms-paper-50));
+  --pms-focus-sheet: var(--dsw-alias-bg-layer-2, var(--pms-paper-0));
+  --pms-focus-sunken: var(--dsw-alias-bg-layer-1, var(--pms-paper-100));
+  --pms-focus-ink: var(--dsw-alias-label-primary, var(--pms-paper-900));
+  --pms-focus-ink-soft: var(--dsw-alias-label-secondary, var(--pms-paper-600));
+  --pms-focus-ink-faint: var(--dsw-alias-label-tertiary, var(--pms-paper-500));
+  --pms-focus-rule: var(--dsw-alias-border-default, var(--pms-paper-200));
+  --pms-focus-accent: var(--pms-green-700);
+  --pms-focus-sheet-max: 760px;
+  --pms-focus-rail-w: 268px;
+  --pms-focus-track-h: 4px;
+  --pms-focus-track-w: 96px;
+  --pms-focus-input-h: 96px;
+  --pms-focus-input-h-compact: 72px;
+
+  /* ── Layer 2：排版 ─────────────────────────────────────────────────────
+     中文界面正文落在 14px 比 13px 更稳；13px 保留为紧凑辅助档。
+     字重收敛到 4 档，废弃原先的 680 等非标值。 */
+  --pms-font-sans: "WenQuanYi Micro Hei", "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  --pms-font-serif: "Iowan Old Style", "Songti SC", "Noto Serif CJK SC", "SimSun", serif;
+  --pms-font-mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, monospace;
+
+  --pms-text-2xs: 11px;   /* 仅限画布页码、极小角标 */
+  --pms-text-xs: 12px;    /* 元信息、时间戳 */
+  --pms-text-sm: 13px;    /* 紧凑辅助文字 */
+  --pms-text-base: 14px;  /* 界面正文默认 */
+  --pms-text-md: 16px;    /* 用户输入、文章正文 */
+  --pms-text-lg: 18px;    /* 卡片标题 */
+  --pms-text-xl: 20px;    /* 区块标题 */
+  --pms-text-2xl: 24px;   /* 次级页面标题 */
+  --pms-text-3xl: 28px;   /* 页面主标题 */
+  --pms-text-4xl: 34px;
+  --pms-text-5xl: 42px;   /* 画布金句 */
+
+  --pms-leading-none: 1;
+  --pms-leading-tight: 1.25;   /* 大标题 */
+  --pms-leading-snug: 1.35;    /* 卡片标题 */
+  --pms-leading-normal: 1.55;  /* 界面正文 */
+  --pms-leading-relaxed: 1.75; /* 长文阅读 */
+  --pms-leading-canvas: 1.65;  /* 出图正文 */
+
+  --pms-weight-regular: 400;
+  --pms-weight-medium: 500;
+  --pms-weight-semibold: 600;
+  --pms-weight-bold: 700;
+  --pms-weight-black: 800;
+
+  --pms-tracking-tight: -0.03em;
+  --pms-tracking-normal: 0;
+  --pms-tracking-wide: 0.08em;
+  --pms-tracking-caps: 0.16em;  /* 全大写小标签 */
+
+  /* ── Layer 2：间距 · 4pt 网格 ───────────────────────────────────────────
+     所有 margin / padding / gap 只能从这里取值。 */
+  --pms-space-0: 0;
+  --pms-space-1: 2px;
+  --pms-space-2: 4px;
+  --pms-space-3: 8px;
+  --pms-space-4: 12px;
+  --pms-space-5: 16px;
+  --pms-space-6: 20px;
+  --pms-space-7: 24px;
+  --pms-space-8: 32px;
+  --pms-space-9: 40px;
+  --pms-space-10: 48px;
+  --pms-space-11: 64px;
+  --pms-space-12: 80px;
+
+  /* 组件级间距语义，避免每个组件自行推算 */
+  --pms-gap-inline: var(--pms-space-3);
+  --pms-gap-stack: var(--pms-space-4);
+  --pms-gap-group: var(--pms-space-6);
+  --pms-gap-section: var(--pms-space-8);
+  --pms-pad-control: var(--pms-space-3) var(--pms-space-4);
+  --pms-pad-card: var(--pms-space-5);
+  --pms-pad-panel: var(--pms-space-5);
+  --pms-inset-page: var(--pms-space-7);
+
+  /* ── Layer 2：圆角 ─────────────────────────────────────────────────────
+     原 9 种野生取值 → 6 档刻度。>=999px 统一用 full。 */
+  --pms-radius-xs: 4px;    /* 标记、极小色块 */
+  --pms-radius-sm: 8px;    /* 色片、缩略图内块 */
+  --pms-radius-md: 10px;   /* 图片、小卡 */
+  --pms-radius-lg: 12px;   /* 输入框、按钮组 */
+  --pms-radius-xl: 16px;   /* 卡片、面板 */
+  --pms-radius-2xl: 20px;  /* 大容器、画布框 */
+  --pms-radius-full: 999px;/* 胶囊按钮、徽标、头像 */
+
+  /* 边框宽度 */
+  --pms-border-hairline: 1px;
+  --pms-border-thick: 2px;
+  --pms-border-accent: 10px; /* 画布引用条 */
+  --pms-marker-w: 3px;       /* 建议条等细标记，禁止裸 3px */
+
+  /* ── Layer 2：高度 · 阴影 ───────────────────────────────────────────────
+     界面只用 3 档；画布投影独立，因为它要模拟纸张而非 UI 层级。 */
+  --pms-shadow-xs: 0 1px 2px color-mix(in srgb, black 6%, transparent);
+  --pms-shadow-sm: 0 2px 8px color-mix(in srgb, black 8%, transparent);
+  --pms-shadow-md: 0 8px 24px color-mix(in srgb, black 10%, transparent);
+  --pms-shadow-lg: 0 16px 48px color-mix(in srgb, black 14%, transparent);
+
+  /* ── Layer 2：动效 ─────────────────────────────────────────────────────
+     三条时长 + 两条曲线。超出这个集合的时长视为违规。 */
+  --pms-duration-fast: 120ms;
+  --pms-duration-base: 180ms;
+  --pms-duration-slow: 280ms;
+  --pms-ease-standard: cubic-bezier(0.2, 0, 0.2, 1);
+  --pms-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* ── Layer 2：层级 ─────────────────────────────────────────────────────
+     只允许这 5 个值，禁止 9999 之类的魔法数字。 */
+  --pms-z-base: 0;
+  --pms-z-sticky: 10;
+  --pms-z-overlay: 20;
+  --pms-z-toast: 30;
+  --pms-z-modal: 40;
+
+  /* ── Layer 2：尺寸约束 ─────────────────────────────────────────────────
+     44px 是 WCAG 2.5.5 触控目标下限。 */
+  --pms-tap-min: 44px;
+  --pms-control-h-sm: 30px;
+  --pms-control-h-md: 36px;
+  --pms-control-h-lg: 44px;
+  --pms-sidebar-w: 196px;
+  --pms-props-w: 300px;
+  --pms-reading-max: 72ch;
+
+  /* ── Layer 3：Canvas 出图令牌（固定，不随宿主） ─────────────────────────
+     1242×1660 是小红书长文出图尺寸，必须与宿主主题隔离，
+     否则用户在深色宿主里排的版，导出后颜色会变。 */
+  --pms-canvas-w: 1242px;
+  --pms-canvas-h: 1660px;
+  --pms-canvas-pad-y: 96px;
+  --pms-canvas-pad-x: 88px;
+  --pms-canvas-gap: 28px;
+  --pms-canvas-paper: #F5F6F0;
+  --pms-canvas-ink: #34906C;
+  --pms-canvas-ink-deep: #1E5A43;
+  --pms-canvas-text: #2A2C29;
+  --pms-canvas-muted: #667066;
+  --pms-canvas-gold: #D4A54A;
+  --pms-canvas-gold-soft: #F2E2A0;
+  --pms-canvas-rule: #D2D4C8;
+  --pms-canvas-mark-bg: #FFE08A;
+  --pms-canvas-mark-fg: #1C1917;
+  --pms-canvas-kicker: 26px;
+  --pms-canvas-quote: 42px;
+  --pms-canvas-figure-h: 460px;
+  --pms-canvas-shadow: 0 24px 80px color-mix(in srgb, black 28%, transparent);
+}
+
+/* ============================================================================
+   深色回退
+   宿主提供 --dsw-alias-* 时这层不生效（语义令牌已优先取宿主值）。
+   仅在宿主未提供令牌、但系统处于深色时兜底，避免浅色界面刺眼。
+   ========================================================================== */
+@media (prefers-color-scheme: dark) {
+  .pms-root {
+    --pms-surface-base: var(--dsw-alias-bg-base, #141614);
+    --pms-surface-raised: var(--dsw-alias-bg-layer-2, #1C1F1C);
+    --pms-surface-sunken: var(--dsw-alias-bg-layer-1, #101210);
+    --pms-surface-overlay: var(--dsw-alias-bg-layer-3, #252825);
+    --pms-text-primary: var(--dsw-alias-label-primary, #EDEFE8);
+    --pms-text-secondary: var(--dsw-alias-label-secondary, #A8AFA4);
+    --pms-text-tertiary: var(--dsw-alias-label-tertiary, #7C847A);
+    --pms-text-inverse: var(--dsw-alias-bg-layer-1, #0F110F);
+    --pms-text-accent: var(--dsw-alias-label-primary, #8FC4AB);
+    --pms-border-subtle: var(--dsw-alias-border-default, #313630);
+    --pms-primary: var(--dsw-alias-state-business-primary, #4FAE85);
+    --pms-primary-hover: #5FBC93;
+    --pms-primary-fg: #0A1F19;   /* 亮绿底配深字，6.3:1 */
+    --pms-primary-soft: color-mix(in srgb, #4FAE85 18%, transparent);
+    --pms-state-success: #6FBF98;
+    --pms-state-warning: #E0A050;
+    --pms-state-danger: #E87373;
+    --pms-state-info: #7AA7F0;
+    --pms-focus-color: #8FC4AB;
+    --pms-focus-ring: 0 0 0 2px #141614, 0 0 0 4px #8FC4AB;
+    --pms-focus-bg: var(--dsw-alias-bg-base, #141614);
+    --pms-focus-sheet: var(--dsw-alias-bg-layer-2, #1C1F1C);
+    --pms-focus-sunken: var(--dsw-alias-bg-layer-1, #101210);
+    --pms-focus-ink: var(--dsw-alias-label-primary, #EDEFE8);
+    --pms-focus-ink-soft: var(--dsw-alias-label-secondary, #A8AFA4);
+    --pms-focus-ink-faint: var(--dsw-alias-label-tertiary, #7C847A);
+    --pms-focus-rule: var(--dsw-alias-border-default, #313630);
+    --pms-focus-accent: #8FC4AB;
+    --pms-shadow-xs: 0 1px 2px color-mix(in srgb, black 40%, transparent);
+    --pms-shadow-sm: 0 2px 8px color-mix(in srgb, black 45%, transparent);
+    --pms-shadow-md: 0 8px 24px color-mix(in srgb, black 55%, transparent);
+    --pms-shadow-lg: 0 16px 48px color-mix(in srgb, black 65%, transparent);
+  }
+}
+
+/* 宿主显式声明深色主题时（优先于系统偏好） */
+[data-theme="dark"] .pms-root,
+[data-ds-dark-theme] .pms-root,
+.pms-root[data-pms-theme="dark"] {
+  --pms-surface-base: var(--dsw-alias-bg-base, #141614);
+  --pms-surface-raised: var(--dsw-alias-bg-layer-2, #1C1F1C);
+  --pms-surface-sunken: var(--dsw-alias-bg-layer-1, #101210);
+  --pms-surface-overlay: var(--dsw-alias-bg-layer-3, #252825);
+  --pms-text-primary: var(--dsw-alias-label-primary, #EDEFE8);
+  --pms-text-secondary: var(--dsw-alias-label-secondary, #A8AFA4);
+  --pms-text-tertiary: var(--dsw-alias-label-tertiary, #7C847A);
+  --pms-text-inverse: var(--dsw-alias-bg-layer-1, #0F110F);
+  --pms-text-accent: var(--dsw-alias-label-primary, #8FC4AB);
+  --pms-border-subtle: var(--dsw-alias-border-default, #313630);
+  --pms-primary: var(--dsw-alias-state-business-primary, #4FAE85);
+  --pms-primary-hover: #5FBC93;
+  --pms-primary-fg: #0A1F19;
+  --pms-primary-soft: color-mix(in srgb, #4FAE85 18%, transparent);
+  --pms-state-success: #6FBF98;
+  --pms-state-warning: #E0A050;
+  --pms-state-danger: #E87373;
+  --pms-state-info: #7AA7F0;
+  --pms-focus-color: #8FC4AB;
+  --pms-focus-ring: 0 0 0 2px #141614, 0 0 0 4px #8FC4AB;
+  --pms-focus-bg: var(--dsw-alias-bg-base, #141614);
+  --pms-focus-sheet: var(--dsw-alias-bg-layer-2, #1C1F1C);
+  --pms-focus-sunken: var(--dsw-alias-bg-layer-1, #101210);
+  --pms-focus-ink: var(--dsw-alias-label-primary, #EDEFE8);
+  --pms-focus-ink-soft: var(--dsw-alias-label-secondary, #A8AFA4);
+  --pms-focus-ink-faint: var(--dsw-alias-label-tertiary, #7C847A);
+  --pms-focus-rule: var(--dsw-alias-border-default, #313630);
+  --pms-focus-accent: #8FC4AB;
+  --pms-shadow-xs: 0 1px 2px color-mix(in srgb, black 40%, transparent);
+  --pms-shadow-sm: 0 2px 8px color-mix(in srgb, black 45%, transparent);
+  --pms-shadow-md: 0 8px 24px color-mix(in srgb, black 55%, transparent);
+  --pms-shadow-lg: 0 16px 48px color-mix(in srgb, black 65%, transparent);
+}
+
+</style>
+<style data-source="components.css">
+/* ── components.css 内联副本 · 源文件 src/client/components.css ── */
+/* ============================================================================
+   PMS Components — 组件层
+   ----------------------------------------------------------------------------
+   只允许消费 tokens.css 中的 --pms-* 语义令牌。禁止出现十六进制色值与裸 px 圆角。
+
+   命名：BEM 风格 .pms-<block>--<variant>
+   兼容：保留旧 class（.primary / .warn）作为别名，标 @deprecated，逐步迁移。
+   ========================================================================== */
+
+/* ══ 基线 ═════════════════════════════════════════════════════════════════ */
+
+.pms-root *,
+.pms-root *::before,
+.pms-root *::after {
+  box-sizing: border-box;
+}
+
+/* 全局焦点环。只在键盘导航时出现，鼠标点击不显示，避免视觉噪音。 */
+.pms-root :focus-visible {
+  outline: var(--pms-border-thick) solid var(--pms-focus-color);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+.pms-root ::selection {
+  background: var(--pms-primary-soft);
+  color: var(--pms-text-primary);
+}
+
+/* 尊重系统「减少动态效果」偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .pms-root *,
+  .pms-root *::before,
+  .pms-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ══ 按钮 ═════════════════════════════════════════════════════════════════
+   变体：subtle（默认）/ primary / ghost / danger
+   尺寸：sm / md（默认）/ lg
+   状态：hover / active / disabled / [aria-busy="true"] */
+
+.pms-btn,
+.pms-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pms-space-3);
+  min-height: var(--pms-control-h-md);
+  padding: var(--pms-space-3) var(--pms-space-4);
+  border: var(--pms-border-hairline) solid var(--pms-border-default);
+  border-radius: var(--pms-radius-full);
+  background: var(--pms-surface-raised);
+  color: var(--pms-text-primary);
+  font-family: inherit;
+  font-size: var(--pms-text-base);
+  font-weight: var(--pms-weight-medium);
+  line-height: var(--pms-leading-tight);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color var(--pms-duration-fast) var(--pms-ease-standard),
+    border-color var(--pms-duration-fast) var(--pms-ease-standard),
+    color var(--pms-duration-fast) var(--pms-ease-standard),
+    transform var(--pms-duration-fast) var(--pms-ease-standard);
+}
+
+.pms-btn:hover:not(:disabled),
+.pms-iconbtn:hover:not(:disabled) {
+  background: var(--pms-interactive-bg-hover);
+  border-color: var(--pms-border-strong);
+}
+
+.pms-btn:active:not(:disabled),
+.pms-iconbtn:active:not(:disabled) {
+  transform: translateY(1px);
+  background: var(--pms-interactive-bg-active);
+}
+
+.pms-btn:disabled,
+.pms-iconbtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 主操作：整屏只有一个 */
+.pms-btn.pms-btn--primary,
+.pms-btn.primary {
+  background: var(--pms-primary);
+  border-color: transparent;
+  color: var(--pms-primary-fg);
+  font-weight: var(--pms-weight-semibold);
+}
+.pms-btn.pms-btn--primary:hover:not(:disabled),
+.pms-btn.primary:hover:not(:disabled) {
+  background: var(--pms-primary-hover);
+  border-color: transparent;
+}
+.pms-btn.pms-btn--primary:active:not(:disabled),
+.pms-btn.primary:active:not(:disabled) {
+  background: var(--pms-primary-hover);
+}
+
+/* 描边：明确的次级动作，比幽灵更可发现，但不抢主操作的绿色 */
+.pms-btn.pms-btn--outline-accent {
+  background: transparent;
+  border-color: var(--pms-focus-rule, var(--pms-border-default));
+  color: var(--pms-focus-ink-soft, var(--pms-text-secondary));
+}
+.pms-btn.pms-btn--outline-accent:hover:not(:disabled) {
+  background: var(--pms-focus-sunken, var(--pms-interactive-bg-hover));
+  border-color: var(--pms-focus-ink-faint, var(--pms-text-tertiary));
+  color: var(--pms-focus-ink, var(--pms-text-primary));
+}
+
+/* 幽灵：次级、低权重 */
+.pms-btn.pms-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--pms-text-secondary);
+}
+.pms-btn.pms-btn--ghost:hover:not(:disabled) {
+  background: var(--pms-interactive-bg-hover);
+  border-color: transparent;
+  color: var(--pms-text-primary);
+}
+
+/* 危险：删除、拒绝 */
+.pms-btn.pms-btn--danger {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--pms-state-danger) 40%, transparent);
+  color: var(--pms-state-danger);
+}
+.pms-btn.pms-btn--danger:hover:not(:disabled) {
+  background: var(--pms-state-danger-soft);
+  border-color: var(--pms-state-danger);
+}
+
+/* 尺寸 */
+.pms-btn.pms-btn--sm {
+  min-height: var(--pms-control-h-sm);
+  padding: var(--pms-space-1) var(--pms-space-3);
+  font-size: var(--pms-text-sm);
+}
+.pms-btn.pms-btn--lg {
+  min-height: var(--pms-control-h-lg);
+  padding: var(--pms-space-4) var(--pms-space-6);
+  font-size: var(--pms-text-md);
+}
+
+/* 图标按钮：正方形，无内边距补偿 */
+.pms-iconbtn {
+  width: var(--pms-control-h-md);
+  min-height: var(--pms-control-h-md);
+  padding: 0;
+  flex: 0 0 auto;
+}
+.pms-iconbtn.pms-iconbtn--sm {
+  width: var(--pms-control-h-sm);
+  min-height: var(--pms-control-h-sm);
+  font-size: var(--pms-text-sm);
+}
+
+/* 加载态：文字保持占位，不跳动 */
+.pms-btn[aria-busy="true"] {
+  color: transparent;
+  position: relative;
+  pointer-events: none;
+}
+.pms-btn[aria-busy="true"]::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--pms-radius-full);
+  border: var(--pms-border-thick) solid currentColor;
+  border-top-color: transparent;
+  color: var(--pms-text-primary);
+  animation: pms-spin 700ms linear infinite;
+}
+.pms-btn.pms-btn--primary[aria-busy="true"]::after,
+.pms-btn.primary[aria-busy="true"]::after {
+  color: var(--pms-primary-fg);
+}
+
+@keyframes pms-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 触屏设备：把触控目标补到 44px，不改变视觉高度 */
+@media (pointer: coarse) {
+  .pms-btn,
+  .pms-iconbtn {
+    min-height: var(--pms-tap-min);
+  }
+  .pms-iconbtn {
+    min-width: var(--pms-tap-min);
+  }
+}
+
+/* ══ 表单 ═════════════════════════════════════════════════════════════════
+   .pms-field 容器负责标签 / 说明 / 错误三段式
+   .pms-input 统一输入外观 */
+
+.pms-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-space-2);
+  font-size: var(--pms-text-sm);
+  min-width: 0;
+}
+
+.pms-field > label,
+.pms-label {
+  color: var(--pms-text-secondary);
+  font-size: var(--pms-text-sm);
+  font-weight: var(--pms-weight-medium);
+}
+
+.pms-field small,
+.pms-hint {
+  color: var(--pms-text-tertiary);
+  font-size: var(--pms-text-xs);
+  line-height: var(--pms-leading-normal);
+}
+
+.pms-field[data-invalid="true"] > label {
+  color: var(--pms-state-danger);
+}
+
+.pms-field-error {
+  color: var(--pms-state-danger);
+  font-size: var(--pms-text-xs);
+  line-height: var(--pms-leading-normal);
+}
+
+.pms-input,
+.pms-textarea,
+.pms-select,
+.pms-field input:not([type="color"]):not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+.pms-field textarea,
+.pms-field select,
+.pms-pool input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--pms-control-h-md);
+  padding: var(--pms-space-3) var(--pms-space-4);
+  border: var(--pms-border-hairline) solid var(--pms-border-default);
+  border-radius: var(--pms-radius-lg);
+  background: var(--pms-surface-base);
+  color: var(--pms-text-primary);
+  font-family: inherit;
+  font-size: var(--pms-text-base);
+  line-height: var(--pms-leading-normal);
+  transition:
+    border-color var(--pms-duration-fast) var(--pms-ease-standard),
+    background-color var(--pms-duration-fast) var(--pms-ease-standard);
+}
+
+.pms-input::placeholder,
+.pms-textarea::placeholder,
+.pms-field textarea::placeholder {
+  color: var(--pms-text-tertiary);
+}
+
+.pms-input:hover:not(:disabled),
+.pms-textarea:hover:not(:disabled),
+.pms-select:hover:not(:disabled) {
+  border-color: var(--pms-border-strong);
+}
+
+.pms-input:focus,
+.pms-textarea:focus,
+.pms-select:focus,
+.pms-field textarea:focus,
+.pms-field input:focus {
+  outline: var(--pms-border-thick) solid var(--pms-focus-color);
+  outline-offset: 1px;
+  border-color: var(--pms-primary);
+}
+
+.pms-input:disabled,
+.pms-textarea:disabled,
+.pms-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pms-field[data-invalid="true"] .pms-input,
+.pms-field[data-invalid="true"] textarea,
+.pms-field[data-invalid="true"] select,
+.pms-input[aria-invalid="true"],
+.pms-textarea[aria-invalid="true"] {
+  border-color: var(--pms-state-danger);
+}
+
+.pms-textarea,
+.pms-field textarea {
+  resize: vertical;
+  line-height: var(--pms-leading-relaxed);
+}
+
+.pms-select,
+.pms-field select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: var(--pms-space-8);
+  cursor: pointer;
+}
+
+/* 滑块：统一 accent-color，跨浏览器一致 */
+.pms-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--pms-primary);
+  cursor: pointer;
+}
+
+/* 勾选：原生控件 + 主色强调，不自绘以免破坏可访问性 */
+.pms-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pms-space-3);
+  min-height: var(--pms-tap-min);
+  font-size: var(--pms-text-base);
+  cursor: pointer;
+}
+.pms-check input[type="checkbox"],
+.pms-check input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--pms-primary);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+/* ══ 徽标 ═════════════════════════════════════════════════════════════════
+   语义：neutral（默认）/ accent / success / warn / danger / info */
+
+.pms-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pms-space-1);
+  padding: var(--pms-space-1) var(--pms-space-3);
+  border-radius: var(--pms-radius-full);
+  background: var(--pms-interactive-bg-active);
+  color: var(--pms-text-secondary);
+  font-size: var(--pms-text-xs);
+  font-weight: var(--pms-weight-medium);
+  line-height: var(--pms-leading-normal);
+  white-space: nowrap;
+}
+
+.pms-badge.pms-badge--accent {
+  background: var(--pms-primary-soft);
+  color: var(--pms-text-accent);
+}
+.pms-badge.pms-badge--success {
+  background: var(--pms-state-success-soft);
+  color: var(--pms-state-success);
+}
+.pms-badge.pms-badge--warn,
+.pms-badge.warn {
+  background: var(--pms-state-warning-soft);
+  color: var(--pms-state-warning);
+}
+.pms-badge.pms-badge--danger {
+  background: var(--pms-state-danger-soft);
+  color: var(--pms-state-danger);
+}
+.pms-badge.pms-badge--info {
+  background: var(--pms-state-info-soft);
+  color: var(--pms-state-info);
+}
+
+/* 徽标内的状态点 */
+.pms-badge .pms-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--pms-radius-full);
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+/* ══ 卡片 ═════════════════════════════════════════════════════════════════
+   .pms-card 默认静态；加 .pms-card--interactive 才获得悬停反馈与可点击语义 */
+
+.pms-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-space-3);
+  padding: var(--pms-pad-card);
+  border: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  border-radius: var(--pms-radius-xl);
+  background: var(--pms-surface-module);
+  color: var(--pms-text-primary);
+  min-width: 0;
+}
+
+.pms-card--interactive {
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  transition:
+    border-color var(--pms-duration-base) var(--pms-ease-standard),
+    box-shadow var(--pms-duration-base) var(--pms-ease-standard),
+    transform var(--pms-duration-base) var(--pms-ease-standard);
+}
+
+.pms-card--interactive:hover {
+  border-color: var(--pms-border-selected);
+  box-shadow: var(--pms-shadow-sm);
+  transform: translateY(-1px);
+}
+
+.pms-card--interactive:active {
+  transform: translateY(0);
+  box-shadow: var(--pms-shadow-xs);
+}
+
+/* 选中态 */
+.pms-card[aria-selected="true"],
+.pms-card.is-selected {
+  border-color: var(--pms-primary);
+  box-shadow: 0 0 0 1px var(--pms-primary);
+}
+
+.pms-card__title {
+  margin: 0;
+  font-size: var(--pms-text-lg);
+  font-weight: var(--pms-weight-semibold);
+  line-height: var(--pms-leading-snug);
+  color: var(--pms-text-primary);
+}
+
+.pms-card__body {
+  margin: 0;
+  font-size: var(--pms-text-sm);
+  line-height: var(--pms-leading-normal);
+  color: var(--pms-text-secondary);
+  white-space: pre-wrap;
+}
+
+.pms-card__meta {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--pms-space-3);
+  font-size: var(--pms-text-xs);
+  color: var(--pms-text-tertiary);
+}
+
+/* ══ 面板与分栏容器 ═══════════════════════════════════════════════════════ */
+
+.pms-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-space-4);
+  padding: var(--pms-pad-panel);
+  border: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  border-radius: var(--pms-radius-xl);
+  background: var(--pms-surface-raised);
+  min-width: 0;
+}
+
+.pms-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pms-space-4);
+}
+
+.pms-panel__title {
+  margin: 0;
+  font-size: var(--pms-text-sm);
+  font-weight: var(--pms-weight-semibold);
+  letter-spacing: var(--pms-tracking-wide);
+  color: var(--pms-text-tertiary);
+  text-transform: uppercase;
+}
+
+/* ══ 标签页 ═══════════════════════════════════════════════════════════════
+   用于三段式导航（选题 / 生产改稿 / 渲染） */
+
+.pms-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--pms-space-3);
+  padding: var(--pms-space-4) var(--pms-inset-page);
+  border-bottom: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pms-tabs::-webkit-scrollbar { display: none; }
+
+.pms-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pms-space-3);
+  min-height: var(--pms-control-h-md);
+  padding: var(--pms-space-3) var(--pms-space-4);
+  border: var(--pms-border-hairline) solid transparent;
+  border-radius: var(--pms-radius-full);
+  background: transparent;
+  color: var(--pms-text-secondary);
+  font: inherit;
+  font-size: var(--pms-text-base);
+  font-weight: var(--pms-weight-medium);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color var(--pms-duration-fast) var(--pms-ease-standard),
+    color var(--pms-duration-fast) var(--pms-ease-standard);
+}
+
+.pms-tab:hover {
+  background: var(--pms-interactive-bg-hover);
+  color: var(--pms-text-primary);
+}
+
+.pms-tab[aria-selected="true"],
+.pms-tab.on {
+  background: var(--pms-text-primary);
+  color: var(--pms-text-inverse);
+  font-weight: var(--pms-weight-semibold);
+}
+
+/* 标签内计数 */
+.pms-tab__count {
+  min-width: 1.5em;
+  padding: 0 var(--pms-space-2);
+  border-radius: var(--pms-radius-full);
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  font-size: var(--pms-text-xs);
+  text-align: center;
+}
+
+/* ══ 反馈 ═════════════════════════════════════════════════════════════════ */
+
+/* 空态：不抢注意力，给出下一步 */
+.pms-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--pms-space-3);
+  padding: var(--pms-space-9) var(--pms-space-6);
+  border: var(--pms-border-hairline) dashed var(--pms-border-default);
+  border-radius: var(--pms-radius-xl);
+  background: var(--pms-surface-sunken);
+  color: var(--pms-text-secondary);
+  font-size: var(--pms-text-base);
+  text-align: center;
+  line-height: var(--pms-leading-normal);
+}
+.pms-empty strong {
+  color: var(--pms-text-primary);
+  font-weight: var(--pms-weight-semibold);
+}
+
+/* 错误 */
+.pms-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-space-2);
+  padding: var(--pms-space-4) var(--pms-space-5);
+  border: var(--pms-border-hairline) solid color-mix(in srgb, var(--pms-state-danger) 32%, transparent);
+  border-radius: var(--pms-radius-lg);
+  background: var(--pms-state-danger-soft);
+  color: var(--pms-state-danger);
+  font-size: var(--pms-text-base);
+  line-height: var(--pms-leading-normal);
+}
+
+/* 提示条 */
+.pms-notice {
+  display: flex;
+  gap: var(--pms-space-3);
+  padding: var(--pms-space-4) var(--pms-space-5);
+  border-radius: var(--pms-radius-lg);
+  background: var(--pms-surface-sunken);
+  border: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  color: var(--pms-text-secondary);
+  font-size: var(--pms-text-sm);
+  line-height: var(--pms-leading-normal);
+}
+.pms-notice.pms-notice--warn {
+  background: var(--pms-state-warning-soft);
+  border-color: color-mix(in srgb, var(--pms-state-warning) 28%, transparent);
+  color: var(--pms-state-warning);
+}
+
+/* Toast：底部浮层，不阻挡主操作 */
+.pms-toast {
+  position: sticky;
+  bottom: var(--pms-space-4);
+  z-index: var(--pms-z-toast);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pms-space-4);
+  margin: var(--pms-space-4) var(--pms-inset-page);
+  padding: var(--pms-space-3) var(--pms-space-4);
+  border-radius: var(--pms-radius-lg);
+  background: var(--pms-text-primary);
+  color: var(--pms-text-inverse);
+  font-size: var(--pms-text-sm);
+  box-shadow: var(--pms-shadow-md);
+  animation: pms-toast-in var(--pms-duration-base) var(--pms-ease-standard);
+}
+
+/* toast 是深底浮层，里面的按钮必须显式使用反色前景，ghost 的默认次级色会看不清。 */
+.pms-toast .pms-btn {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--pms-text-inverse) 40%, transparent);
+  color: var(--pms-text-inverse);
+}
+.pms-toast .pms-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--pms-text-inverse) 14%, transparent);
+  border-color: var(--pms-text-inverse);
+  color: var(--pms-text-inverse);
+}
+
+/* 成熟时盖一枚小骑缝章：只有这一刻出现，不常驻界面 */
+.pms-toast__seal {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 var(--pms-space-1);
+  border: var(--pms-marker-w) double var(--pms-gold-400);
+  border-radius: var(--pms-radius-sm);
+  color: var(--pms-gold-400);
+  font-family: var(--pms-font-serif);
+  font-size: var(--pms-text-xs);
+  font-weight: var(--pms-weight-bold);
+  letter-spacing: var(--pms-tracking-wide);
+  transform: rotate(-8deg);
+}
+
+@keyframes pms-toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 骨架屏 */
+.pms-skeleton {
+  border-radius: var(--pms-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--pms-interactive-bg-hover) 25%,
+    var(--pms-interactive-bg-active) 37%,
+    var(--pms-interactive-bg-hover) 63%
+  );
+  background-size: 400% 100%;
+  animation: pms-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes pms-shimmer {
+  from { background-position: 100% 50%; }
+  to { background-position: 0 50%; }
+}
+
+/* ══ 结构层 ═══════════════════════════════════════════════════════════════
+   工具栏 / 分段控件 / 工作区 / 抽屉 / 阅读列 / 底部操作条
+   这一组替代了原来的大页头与双层胶囊导航。 */
+
+/* 单行工具栏：承载产品标记、阶段切换、引擎状态与阶段主操作。
+   固定 56px，因为工作台类界面的垂直空间应该让给内容。 */
+.pms-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--pms-space-5);
+  flex: 0 0 auto;
+  height: 56px;
+  padding: 0 var(--pms-inset-page);
+  border-bottom: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  background: var(--pms-surface-base);
+}
+
+.pms-toolbar--sub {
+  height: 48px;
+  gap: var(--pms-space-4);
+  background: var(--pms-surface-sunken);
+}
+
+.pms-toolbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pms-space-3);
+  flex: 0 0 auto;
+  font-size: var(--pms-text-base);
+  font-weight: var(--pms-weight-semibold);
+  letter-spacing: var(--pms-tracking-tight);
+  color: var(--pms-text-primary);
+}
+
+.pms-toolbar__mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--pms-radius-sm);
+  background: var(--pms-primary);
+  color: var(--pms-primary-fg);
+  font-size: var(--pms-text-xs);
+  font-weight: var(--pms-weight-bold);
+  letter-spacing: 0;
+  flex: 0 0 auto;
+}
+
+/* 工具栏里的上下文说明：占据剩余空间，超出截断，不挤压控件 */
+.pms-toolbar__context {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--pms-text-sm);
+  color: var(--pms-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pms-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--pms-gap-inline);
+  flex: 0 0 auto;
+}
+
+/* 分段控件：表达「当前位置」而非「主操作」。
+   视觉权重低于按钮，因为它是导航，不该抢主动作的注意力。 */
+.pms-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  padding: 3px;
+  border: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  border-radius: var(--pms-radius-full);
+  background: var(--pms-surface-sunken);
+}
+
+.pms-segment {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pms-space-2);
+  height: var(--pms-control-h-sm);
+  padding: 0 var(--pms-space-4);
+  border: 0;
+  border-radius: var(--pms-radius-full);
+  background: transparent;
+  color: var(--pms-text-secondary);
+  font: inherit;
+  font-size: var(--pms-text-sm);
+  font-weight: var(--pms-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--pms-duration-fast) var(--pms-ease-standard),
+    color var(--pms-duration-fast) var(--pms-ease-standard);
+}
+
+.pms-segment:hover {
+  color: var(--pms-text-primary);
+}
+
+.pms-segment[aria-selected="true"],
+.pms-segment.on {
+  background: var(--pms-surface-raised);
+  color: var(--pms-text-primary);
+  font-weight: var(--pms-weight-semibold);
+  box-shadow: var(--pms-shadow-xs);
+}
+
+.pms-segment__count {
+  font-size: var(--pms-text-xs);
+  font-weight: var(--pms-weight-regular);
+  font-variant-numeric: tabular-nums;
+  color: var(--pms-text-tertiary);
+}
+
+.pms-segment[aria-selected="true"] .pms-segment__count {
+  color: var(--pms-text-secondary);
+}
+
+/* 工作区：主列 + 固定侧栏。侧栏宽度不随内容伸缩，避免分析区挤占写作区。 */
+.pms-workarea {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--pms-gap-group);
+  min-height: 0;
+  flex: 1;
+}
+
+.pms-workarea__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-gap-stack);
+  min-width: 0;
+  min-height: 0;
+}
+
+.pms-workarea__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-gap-stack);
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--pms-space-2);
+}
+
+/* 阅读列：中文长文超过 72ch 后回扫困难，必须限宽居中。 */
+.pms-reading {
+  width: 100%;
+  max-width: var(--pms-reading-max);
+  margin-inline: auto;
+}
+
+/* 抽屉：与内容并排，而不是浮层盖住它。
+   浮层遮挡在编辑器场景里代价很高 —— 用户会失去正在看的上下文。 */
+.pms-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-gap-stack);
+  flex: 0 0 320px;
+  width: 320px;
+  min-height: 0;
+  padding: var(--pms-space-5);
+  border-left: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  background: var(--pms-surface-raised);
+  overflow-y: auto;
+}
+
+.pms-drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pms-space-3);
+  padding-bottom: var(--pms-space-3);
+  border-bottom: var(--pms-border-hairline) solid var(--pms-border-subtle);
+}
+
+/* 底部操作条：高频动作固定在视口底部，不随长列表滚走。 */
+.pms-composer-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-space-3);
+  flex: 0 0 auto;
+  padding-top: var(--pms-space-4);
+  border-top: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  background: var(--pms-surface-base);
+}
+
+/* 可滚动主区：内部区域各自滚动，外壳不滚。 */
+.pms-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--pms-space-6) var(--pms-inset-page) var(--pms-space-9);
+}
+
+.pms-scroll--flush {
+  padding: 0;
+}
+
+/* 卡片骨架：加载时保留版式轮廓，避免内容区高度塌陷导致的跳动。 */
+.pms-skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-space-3);
+  padding: var(--pms-pad-card);
+  border: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  border-radius: var(--pms-radius-xl);
+  background: var(--pms-surface-raised);
+  min-height: 168px;
+}
+
+/* 触屏下分段控件补齐触控目标 */
+@media (pointer: coarse) {
+  .pms-segment {
+    height: var(--pms-tap-min);
+    padding: 0 var(--pms-space-5);
+  }
+  .pms-toolbar {
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    padding-top: var(--pms-space-3);
+    padding-bottom: var(--pms-space-3);
+  }
+}
+
+/* ══ 排版工具类 ═══════════════════════════════════════════════════════════ */
+
+.pms-kicker {
+  margin: 0 0 var(--pms-space-2);
+  font-size: var(--pms-text-xs);
+  font-weight: var(--pms-weight-semibold);
+  letter-spacing: var(--pms-tracking-caps);
+  text-transform: uppercase;
+  color: var(--pms-text-tertiary);
+}
+
+.pms-note {
+  margin: 0;
+  font-size: var(--pms-text-sm);
+  line-height: var(--pms-leading-normal);
+  color: var(--pms-text-secondary);
+}
+
+.pms-divider {
+  height: var(--pms-border-hairline);
+  border: 0;
+  margin: var(--pms-space-4) 0;
+  background: var(--pms-border-subtle);
+}
+
+/* 布局工具 */
+.pms-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pms-gap-inline);
+}
+.pms-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-gap-stack);
+}
+.pms-spacer { flex: 1 1 auto; }
+.pms-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* 视觉隐藏但对读屏可见 */
+.pms-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+</style>
+<style data-source="styles.css">
+/* ── styles.css 内联副本 · 源文件 src/client/styles.css ── */
+/* ============================================================================
+   PMS Layout & Business Styles — 布局与业务层
+   ----------------------------------------------------------------------------
+   加载顺序：tokens.css → components.css → styles.css
+   本文件只承载骨架与业务特化，不重复定义组件外观。
+
+   骨架模型（所有视图共用）：
+     .pms-root            纵向 flex，高度锁死一屏
+     ├─ .pms-toolbar      56px 单行，不滚动
+     ├─ .pms-body         flex:1，min-height:0 —— 关键，否则子区无法收缩
+     │   └─ .pms-view     flex:1 纵向
+     │       ├─ .pms-toolbar--sub   可选二级工具条
+     │       ├─ .pms-scroll         列表页滚动区
+     │       └─ .pms-workarea       工作台（内部各列自滚）
+     └─ .pms-toast
+
+   规则：不出现十六进制色值、不出现裸 px 圆角与字号。
+   ========================================================================== */
+
+/* ══ 骨架 ═════════════════════════════════════════════════════════════════ */
+
+.pms-root {
+  height: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--pms-surface-base);
+  color: var(--pms-text-primary);
+  font-family: var(--pms-font-sans);
+  font-size: var(--pms-text-base);
+  line-height: var(--pms-leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+.pms-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* DSH 面板宽度 ≠ 浏览器视口宽度。以面板自身为查询容器，收栏才判得准。 */
+  container-type: inline-size;
+  container-name: pms-panel;
+}
+
+.pms-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.pms-view--padded {
+  padding: var(--pms-space-5) var(--pms-inset-page) var(--pms-space-6);
+}
+
+/* ══ 工具栏业务补充 ═══════════════════════════════════════════════════════ */
+
+.pms-toolbar__brand span:last-child {
+  /* 产品名在窄屏收起，只留标记，避免把阶段切换挤走 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ══ 选题看板 ═════════════════════════════════════════════════════════════ */
+
+.pms-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--pms-gap-stack);
+  /* 同一行卡片等高：底边对齐比参差不齐更稳；内容少的靠 margin-top:auto 把元信息压到底 */
+  align-items: stretch;
+}
+
+.pms-card {
+  min-height: 168px;
+}
+
+.pms-card h2 {
+  margin: 0;
+  font-size: var(--pms-text-lg);
+  font-weight: var(--pms-weight-semibold);
+  line-height: var(--pms-leading-snug);
+  color: var(--pms-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.pms-card p {
+  margin: 0;
+  font-size: var(--pms-text-sm);
+  line-height: var(--pms-leading-normal);
+  color: var(--pms-text-secondary);
+  white-space: pre-wrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 8;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pms-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pms-space-3);
+  font-size: var(--pms-text-xs);
+  color: var(--pms-text-tertiary);
+}
+
+.pms-card .pms-meta:last-child {
+  margin-top: auto;
+}
+
+/* ══ 阶段列表（改稿 / 渲染的入口页） ═════════════════════════════════════ */
+
+.pms-stage-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-space-3);
+}
+
+.pms-stage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pms-gap-group);
+  width: 100%;
+  padding: var(--pms-space-4) var(--pms-space-5);
+  border: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  border-radius: var(--pms-radius-xl);
+  background: var(--pms-surface-module);
+  color: var(--pms-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--pms-duration-base) var(--pms-ease-standard),
+    background-color var(--pms-duration-base) var(--pms-ease-standard);
+}
+.pms-stage-row:hover {
+  border-color: var(--pms-border-selected);
+  background: var(--pms-surface-raised);
+}
+.pms-stage-row strong {
+  display: block;
+  margin-bottom: var(--pms-space-1);
+  font-size: var(--pms-text-md);
+  font-weight: var(--pms-weight-semibold);
+  line-height: var(--pms-leading-snug);
+}
+.pms-stage-row time {
+  font-size: var(--pms-text-xs);
+  color: var(--pms-text-tertiary);
+  white-space: nowrap;
+}
+
+/* ══ 问答选题池 ═══════════════════════════════════════════════════════════ */
+
+.pms-pool-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-space-3);
+}
+
+.pms-pool-item {
+  padding: var(--pms-space-4) var(--pms-space-5);
+  border: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  border-radius: var(--pms-radius-xl);
+  background: var(--pms-surface-raised);
+}
+
+.pms-pool-item h3 {
+  margin: 0;
+  font-size: var(--pms-text-base);
+  font-weight: var(--pms-weight-semibold);
+  line-height: var(--pms-leading-snug);
+}
+
+.pms-pool-item p {
+  margin: var(--pms-space-2) 0 0;
+  font-size: var(--pms-text-sm);
+  line-height: var(--pms-leading-normal);
+  color: var(--pms-text-secondary);
+  white-space: pre-wrap;
+}
+
+.pms-pool-item .pms-row + p {
+  margin-top: var(--pms-space-3);
+}
+
+.pms-pool-search {
+  flex: 0 1 260px;
+  min-width: 160px;
+}
+
+/* ══ 卡片工作台 ═══════════════════════════════════════════════════════════ */
+
+.pms-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--pms-gap-stack);
+  flex: 0 0 auto;
+  padding-bottom: var(--pms-space-4);
+  border-bottom: var(--pms-border-hairline) solid var(--pms-border-subtle);
+}
+
+.pms-card-head h2 {
+  margin: 0;
+  font-size: var(--pms-text-xl);
+  font-weight: var(--pms-weight-bold);
+  line-height: var(--pms-leading-tight);
+  letter-spacing: var(--pms-tracking-tight);
+  overflow-wrap: anywhere;
+}
+
+/* 原话时间线：每条独立成卡，视觉上像对话流 */
+.pms-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-space-3);
+}
+
+.pms-thought {
+  padding: var(--pms-space-4);
+  border: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  border-radius: var(--pms-radius-lg);
+  background: var(--pms-surface-raised);
+  font-size: var(--pms-text-sm);
+  line-height: var(--pms-leading-relaxed);
+  color: var(--pms-text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 问答证据 / 摘要块用低强调底色，与作者原话区分开 */
+.pms-thought--evidence {
+  background: var(--pms-surface-sunken);
+  border-style: dashed;
+  color: var(--pms-text-secondary);
+  font-size: var(--pms-text-sm);
+}
+
+.pms-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-space-3);
+}
+
+.pms-composer textarea {
+  min-height: 84px;
+  max-height: 30vh;
+}
+
+/* 主列滚动区夹在卡头与输入条之间，上下留白由父级控制 */
+.pms-workarea__main > .pms-scroll {
+  padding: var(--pms-space-4) 0;
+}
+
+/* 素材勾选区限高可滚，否则会把底部输入条顶出视口 */
+.pms-picker-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 28vh;
+  overflow-y: auto;
+  padding: var(--pms-space-2);
+  border: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  border-radius: var(--pms-radius-lg);
+  background: var(--pms-surface-sunken);
+}
+
+/* 分析侧栏：分节标题 + 列表，整体密度高于主列 */
+.pms-analysis {
+  gap: var(--pms-space-5);
+}
+
+.pms-analysis h3 {
+  margin: 0 0 var(--pms-space-2);
+  font-size: var(--pms-text-xs);
+  font-weight: var(--pms-weight-semibold);
+  letter-spacing: var(--pms-tracking-wide);
+  text-transform: uppercase;
+  color: var(--pms-text-tertiary);
+}
+
+.pms-analysis ul {
+  margin: 0;
+  padding-left: var(--pms-space-5);
+}
+
+.pms-analysis li {
+  margin: var(--pms-space-2) 0;
+  font-size: var(--pms-text-sm);
+  line-height: var(--pms-leading-normal);
+  color: var(--pms-text-secondary);
+}
+
+.pms-analysis p {
+  margin: 0 0 var(--pms-space-3);
+  font-size: var(--pms-text-sm);
+  line-height: var(--pms-leading-normal);
+  color: var(--pms-text-secondary);
+}
+
+/* ══ 改稿工作室 ═══════════════════════════════════════════════════════════ */
+
+/* 编辑器列：正文居中限宽，两侧留白自然形成呼吸区 */
+.pms-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--pms-space-7) var(--pms-space-8) var(--pms-space-9);
+}
+
+.pms-editor textarea {
+  width: 100%;
+  max-width: var(--pms-reading-max);
+  margin-inline: auto;
+  min-height: 60vh;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--pms-text-primary);
+  font-family: var(--pms-font-serif);
+  font-size: var(--pms-text-md);
+  line-height: var(--pms-leading-relaxed);
+  resize: none;
+  outline: none;
+}
+
+.pms-editor textarea:focus-visible {
+  outline: none;
+}
+
+/* 阅读视图：只放正文，限宽居中。大纲移到侧栏，避免与正文抢宽度。 */
+.pms-reader {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--pms-space-7) var(--pms-space-8) var(--pms-space-9);
+}
+
+.pms-reader__body {
+  max-width: var(--pms-reading-max);
+  margin-inline: auto;
+  width: 100%;
+  font-family: var(--pms-font-serif);
+  font-size: var(--pms-text-md);
+  line-height: var(--pms-leading-relaxed);
+  white-space: pre-wrap;
+}
+
+/* 大纲列表：写作时用来确认结构，不做成可点击跳转（Markdown 里定位不稳） */
+.pms-outline {
+  margin: 0;
+  padding-left: var(--pms-space-5);
+  font-size: var(--pms-text-sm);
+  line-height: var(--pms-leading-normal);
+  color: var(--pms-text-secondary);
+}
+
+.pms-outline li {
+  margin: var(--pms-space-2) 0;
+}
+
+/* 建议条目：可扫读，不做成按钮，因为采纳由用户手动粘贴 */
+.pms-suggestion {
+  display: flex;
+  gap: var(--pms-space-3);
+  padding: var(--pms-space-3) var(--pms-space-4);
+  border-radius: var(--pms-radius-lg);
+  background: var(--pms-surface-sunken);
+  font-size: var(--pms-text-sm);
+  line-height: var(--pms-leading-normal);
+  color: var(--pms-text-secondary);
+}
+
+.pms-suggestion::before {
+  content: "";
+  flex: 0 0 auto;
+  width: var(--pms-marker-w);
+  border-radius: var(--pms-radius-full);
+  background: var(--pms-gold-500);
+}
+
+.pms-version-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-space-2);
+}
+
+/* 抽屉内的搜索行不换行：320px 宽度下换行会把按钮挤到下一行，显得松散 */
+.pms-drawer .pms-row {
+  flex-wrap: nowrap;
+}
+
+.pms-drawer .pms-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ══ 渲染阶段 ═════════════════════════════════════════════════════════════ */
+
+/* 壳层压缩后 iframe 直接吃满剩余高度，不再用 calc(100vh - 220px) 这类补丁 */
+.pms-xhs {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.pms-xhs iframe {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: var(--pms-canvas-paper);
+}
+
+.pms-xhs__status {
+  position: absolute;
+  top: var(--pms-space-3);
+  left: var(--pms-space-4);
+  z-index: var(--pms-z-sticky);
+  padding: var(--pms-space-1) var(--pms-space-3);
+  border-radius: var(--pms-radius-full);
+  background: var(--pms-surface-overlay);
+  color: var(--pms-text-secondary);
+  font-size: var(--pms-text-xs);
+  box-shadow: var(--pms-shadow-xs);
+}
+
+.pms-xhs__frame {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ══ 画布工作台（内置渲染备用路径） ═══════════════════════════════════════ */
+
+.pms-workbench {
+  display: grid;
+  grid-template-columns: var(--pms-sidebar-w) minmax(0, 1fr) var(--pms-props-w);
+  gap: var(--pms-gap-stack);
+  flex: 1;
+  min-height: 0;
+  padding: var(--pms-space-4) var(--pms-inset-page);
+}
+
+.pms-thumbs,
+.pms-props {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-space-3);
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: var(--pms-space-2);
+}
+
+.pms-thumb {
+  padding: var(--pms-space-3);
+  border: var(--pms-border-hairline) solid var(--pms-border-default);
+  border-radius: var(--pms-radius-lg);
+  background: transparent;
+  color: var(--pms-text-primary);
+  font: inherit;
+  font-size: var(--pms-text-sm);
+  text-align: left;
+  cursor: grab;
+  transition: border-color var(--pms-duration-fast) var(--pms-ease-standard);
+}
+.pms-thumb:hover { border-color: var(--pms-border-selected); }
+.pms-thumb.active {
+  border-color: var(--pms-primary);
+  box-shadow: 0 0 0 1px var(--pms-primary);
+}
+
+.pms-stage {
+  display: grid;
+  place-items: start center;
+  padding: var(--pms-space-3);
+  overflow: auto;
+  min-height: 0;
+}
+
+.pms-canvas-wrap { transform-origin: top center; }
+
+/* 画布：固定令牌，不随宿主主题 */
+.pms-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-canvas-gap);
+  width: var(--pms-canvas-w);
+  height: var(--pms-canvas-h);
+  padding: var(--pms-canvas-pad-y) var(--pms-canvas-pad-x);
+  background: var(--pms-canvas-paper);
+  color: var(--pms-canvas-text);
+  font-family: var(--pms-font-serif);
+  box-shadow: var(--pms-canvas-shadow);
+}
+
+.pms-page .kicker {
+  font-size: var(--pms-canvas-kicker);
+  font-weight: var(--pms-weight-bold);
+  letter-spacing: var(--pms-tracking-caps);
+  color: var(--pms-canvas-ink);
+}
+
+.pms-page h2 {
+  margin: 0;
+  font-size: var(--pms-text-5xl);
+  font-weight: var(--pms-weight-bold);
+  line-height: var(--pms-leading-tight);
+  color: var(--pms-canvas-ink-deep);
+}
+
+.pms-page [contenteditable] { outline: none; }
+.pms-page [contenteditable]:focus {
+  box-shadow: inset 0 calc(-1 * var(--pms-border-thick)) 0 var(--pms-canvas-ink);
+}
+
+.pms-page .paragraph {
+  margin: 0;
+  font-size: var(--pms-text-4xl);
+  line-height: var(--pms-leading-canvas);
+}
+
+.pms-page .quote {
+  margin-top: auto;
+  padding: var(--pms-space-8) var(--pms-space-9);
+  border-left: var(--pms-border-accent) solid var(--pms-canvas-ink);
+  font-size: var(--pms-canvas-quote);
+  line-height: 1.45;
+  color: var(--pms-canvas-ink-deep);
+}
+
+.pms-page figure { margin: 0; }
+.pms-page img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  transform-origin: center center;
+}
+
+.pms-page strong { font-weight: var(--pms-weight-black); }
+
+.pms-page mark {
+  padding: 0 0.12em;
+  border-radius: var(--pms-radius-xs);
+  background: var(--pms-canvas-mark-bg);
+  color: var(--pms-canvas-mark-fg);
+}
+
+.pms-figure { margin: 0; }
+
+.pms-figure-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--pms-canvas-figure-h);
+  border: var(--pms-border-hairline) solid var(--pms-canvas-rule);
+  border-radius: var(--pms-radius-2xl);
+  background: var(--pms-canvas-paper);
+  overflow: hidden;
+}
+
+/* ══ 素材条目 ═════════════════════════════════════════════════════════════ */
+
+.pms-asset {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--pms-space-4);
+  align-items: center;
+  padding: var(--pms-space-3) 0;
+  border-top: var(--pms-border-hairline) solid var(--pms-border-subtle);
+}
+
+.pms-asset:first-of-type { border-top: 0; }
+
+.pms-asset img,
+.pms-ph {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--pms-radius-md);
+  background: var(--pms-interactive-bg-active);
+  object-fit: cover;
+}
+
+.pms-asset > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-space-1);
+  min-width: 0;
+}
+
+.pms-asset strong {
+  font-size: var(--pms-text-sm);
+  font-weight: var(--pms-weight-semibold);
+  line-height: var(--pms-leading-snug);
+}
+
+.pms-asset small {
+  font-size: var(--pms-text-xs);
+  color: var(--pms-text-tertiary);
+  word-break: break-all;
+}
+
+.pms-asset span {
+  font-size: var(--pms-text-xs);
+  line-height: var(--pms-leading-normal);
+  color: var(--pms-text-secondary);
+}
+
+/* 素材勾选行：整体可点，触控目标更大 */
+label.pms-asset {
+  cursor: pointer;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: var(--pms-space-3);
+  border-top: 0;
+  border-radius: var(--pms-radius-lg);
+  min-height: var(--pms-tap-min);
+}
+label.pms-asset:hover { background: var(--pms-interactive-bg-hover); }
+
+/* ══ 色板选择 ═════════════════════════════════════════════════════════════ */
+
+.pms-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pms-space-3);
+}
+
+.pms-swatches button,
+.pms-color-hit {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: var(--pms-border-hairline) solid var(--pms-border-strong);
+  border-radius: var(--pms-radius-sm);
+  cursor: pointer;
+}
+
+.pms-swatches button.on {
+  outline: var(--pms-border-thick) solid var(--pms-text-primary);
+  outline-offset: 2px;
+}
+
+.pms-color-hit { display: inline-flex; }
+
+.pms-color-hit input {
+  position: absolute;
+  inset: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.pms-hex {
+  font-family: var(--pms-font-mono);
+  font-size: var(--pms-text-xs);
+  letter-spacing: var(--pms-tracking-wide);
+  color: var(--pms-text-secondary);
+  text-transform: uppercase;
+}
+
+.pms-slider-label {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--pms-space-4);
+  font-size: var(--pms-text-sm);
+  color: var(--pms-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ══ 兼容：内置渲染与审定台 ═══════════════════════════════════════════════
+   Production / Workbench / TextGate 三个组件当前未挂载，
+   但其样式定义保留，以便内置 1080×1440 渲染路径随时启用。 */
+
+.pms-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.8fr);
+  gap: var(--pms-gap-group);
+  min-height: 0;
+}
+
+.pms-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-gap-stack);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--pms-pad-panel);
+  border: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  border-radius: var(--pms-radius-xl);
+  background: var(--pms-surface-raised);
+}
+
+/* ══ 选题聚焦模式 · 纸感编辑台 ═══════════════════════════════════════════
+   与看板并列的处理视图：一次只有一张稿纸，推进只能由「暂存 / 标为成熟」触发。
+   这里只用 --pms-focus-* 语义令牌；出图画布令牌不得出现在本节。 */
+
+/* 只给读屏器：换卡后的进度与标题播报，不占视觉空间。 */
+.pms-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.pms-focus {
+  /* 绝对填满 .pms-body，拿到确定高度；否则稿纸的 height:100% 会退化为内容高度，
+     在 DSH 面板里把底部输入条顶到视口外。 */
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--pms-focus-rail-w);
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  background: var(--pms-focus-bg);
+  color: var(--pms-focus-ink);
+}
+
+.pms-focus__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pms-focus .pms-toolbar--sub {
+  background: transparent;
+  border-bottom: var(--pms-border-hairline) solid var(--pms-focus-rule);
+  color: var(--pms-focus-ink);
+}
+
+.pms-focus__progress {
+  display: flex;
+  align-items: center;
+  gap: var(--pms-gap-inline);
+  margin-left: auto;
+}
+
+.pms-focus__count {
+  font-family: var(--pms-font-mono);
+  font-size: var(--pms-text-xs);
+  color: var(--pms-focus-ink-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pms-focus__track {
+  width: var(--pms-focus-track-w);
+  height: var(--pms-focus-track-h);
+  border-radius: var(--pms-radius-full);
+  background: var(--pms-focus-rule);
+  overflow: hidden;
+}
+
+.pms-focus__fill {
+  height: 100%;
+  border-radius: var(--pms-radius-full);
+  /* 绿色只留给唯一主操作；进度用墨色，不再分散注意力。 */
+  background: var(--pms-focus-ink-faint);
+  transition: width var(--pms-duration-slow) var(--pms-ease-standard);
+}
+
+.pms-focus__stage {
+  display: flex;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
+  padding: var(--pms-space-8) var(--pms-inset-page);
+  overflow: hidden;
+}
+
+.pms-focus__sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-gap-section);
+  width: 100%;
+  max-width: var(--pms-focus-sheet-max);
+  height: 100%;
+  min-height: 0;
+  position: relative;
+  padding: var(--pms-space-9) var(--pms-space-10) var(--pms-space-8);
+  /* 极轻纸纹：只让大面积底色不那么死，不形成可读的条纹。 */
+  background-color: var(--pms-focus-sheet);
+  background-image: repeating-linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--pms-focus-ink) 2%, transparent) 0 1px,
+    transparent 1px 4px
+  );
+  border: var(--pms-border-hairline) solid var(--pms-focus-rule);
+  border-radius: var(--pms-radius-2xl);
+  box-shadow: var(--pms-shadow-sm);
+  overflow: hidden;
+  animation: pms-focus-enter var(--pms-duration-slow) var(--pms-ease-standard) both;
+}
+
+/* 装订线：贴着稿纸左侧的一条细线，给「一张纸」一个物理边界。 */
+.pms-focus__sheet::before {
+  content: "";
+  position: absolute;
+  left: var(--pms-space-5);
+  top: var(--pms-space-6);
+  bottom: var(--pms-space-6);
+  width: var(--pms-border-hairline);
+  background: var(--pms-focus-rule);
+  pointer-events: none;
+}
+
+/* 标题区不参与压缩；只有正文区滚动，输入与操作条永远留在稿纸底部。 */
+.pms-focus__sheet > header {
+  flex: 0 0 auto;
+}
+
+/* 抽卡：轻微斜入再摆正，像从卡堆里抽出一张放在桌上。 */
+@keyframes pms-focus-enter {
+  from { opacity: 0; transform: translateY(var(--pms-space-4)) rotate(-0.6deg); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pms-focus__sheet { animation: none; }
+}
+
+.pms-focus__kicker {
+  font-size: var(--pms-text-2xs);
+  font-weight: var(--pms-weight-semibold);
+  letter-spacing: var(--pms-tracking-caps);
+  color: var(--pms-focus-ink-faint);
+}
+
+.pms-focus__title {
+  margin: var(--pms-space-3) 0 0;
+  font-family: var(--pms-font-serif);
+  font-size: var(--pms-text-3xl);
+  font-weight: var(--pms-weight-bold);
+  line-height: var(--pms-leading-tight);
+  letter-spacing: var(--pms-tracking-tight);
+  color: var(--pms-focus-ink);
+  overflow-wrap: anywhere;
+}
+
+.pms-focus__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pms-gap-inline);
+  margin-top: var(--pms-space-4);
+}
+
+.pms-focus__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-gap-group);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--pms-space-2);
+}
+
+/* 提问原话分区：先给来源维度，再给正文，最后才是展开操作。
+   不再是整块无层次的文字墙，也不再用绿条抢主按钮的权重。 */
+.pms-focus__evidence {
+  padding: var(--pms-pad-card);
+  background: var(--pms-focus-sunken);
+  border-left: var(--pms-marker-w) solid var(--pms-focus-rule);
+  border-radius: 0 var(--pms-radius-lg) var(--pms-radius-lg) 0;
+}
+
+.pms-focus__evidence-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--pms-gap-inline);
+  margin-bottom: var(--pms-space-3);
+}
+
+.pms-focus__evidence-kicker {
+  font-size: var(--pms-text-2xs);
+  font-weight: var(--pms-weight-semibold);
+  letter-spacing: var(--pms-tracking-caps);
+  color: var(--pms-focus-ink-faint);
+}
+
+.pms-focus__evidence-meta {
+  font-family: var(--pms-font-mono);
+  font-size: var(--pms-text-xs);
+  color: var(--pms-focus-ink-faint);
+}
+
+.pms-focus__evidence-text {
+  margin: 0;
+  font-family: var(--pms-font-serif);
+  font-size: var(--pms-text-md);
+  line-height: var(--pms-leading-relaxed);
+  color: var(--pms-focus-ink-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pms-focus__evidence-toggle {
+  margin-top: var(--pms-space-2);
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--pms-focus-ink-soft);
+  font-size: var(--pms-text-xs);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.pms-focus__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-space-5);
+}
+
+.pms-focus__thought {
+  margin: 0;
+  padding-bottom: var(--pms-space-5);
+  border-bottom: var(--pms-border-hairline) solid var(--pms-focus-rule);
+  font-family: var(--pms-font-serif);
+  font-size: var(--pms-text-md);
+  line-height: var(--pms-leading-relaxed);
+  color: var(--pms-focus-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pms-focus__empty {
+  padding: var(--pms-space-6);
+  border: var(--pms-border-hairline) dashed var(--pms-focus-rule);
+  border-radius: var(--pms-radius-lg);
+  font-size: var(--pms-text-sm);
+  line-height: var(--pms-leading-normal);
+  color: var(--pms-focus-ink-faint);
+  text-align: center;
+}
+
+.pms-focus__composer {
+  flex: 0 0 auto;
+  padding-top: var(--pms-space-6);
+  border-top: var(--pms-border-hairline) solid var(--pms-focus-rule);
+}
+
+.pms-focus__composer textarea {
+  display: block;
+  width: 100%;
+  height: var(--pms-focus-input-h);
+  padding: var(--pms-pad-card);
+  background: var(--pms-focus-sheet);
+  border: var(--pms-border-hairline) solid var(--pms-focus-rule);
+  border-radius: var(--pms-radius-lg);
+  color: var(--pms-focus-ink);
+  font-family: var(--pms-font-serif);
+  font-size: var(--pms-text-md);
+  line-height: var(--pms-leading-relaxed);
+  resize: none;
+}
+
+.pms-focus__composer textarea::placeholder {
+  color: var(--pms-focus-ink-faint);
+}
+
+.pms-focus__composer textarea:focus-visible {
+  outline: none;
+  border-color: var(--pms-focus-accent);
+  box-shadow: var(--pms-focus-ring);
+}
+
+.pms-focus__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pms-gap-inline);
+  margin-top: var(--pms-space-4);
+}
+
+.pms-focus .pms-asset {
+  border-top: var(--pms-border-hairline) solid var(--pms-focus-rule);
+}
+
+.pms-focus__aside {
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--pms-space-7) var(--pms-space-6);
+  background: var(--pms-focus-sunken);
+  border-left: var(--pms-border-hairline) solid var(--pms-focus-rule);
+}
+
+.pms-focus__aside h3 {
+  margin: var(--pms-space-7) 0 var(--pms-space-3);
+  font-size: var(--pms-text-sm);
+  font-weight: var(--pms-weight-semibold);
+  letter-spacing: var(--pms-tracking-wide);
+  color: var(--pms-focus-ink-faint);
+}
+
+.pms-focus__aside h3:first-child { margin-top: 0; }
+
+.pms-focus__aside p,
+.pms-focus__aside li {
+  margin: 0;
+  font-size: var(--pms-text-sm);
+  line-height: var(--pms-leading-normal);
+  color: var(--pms-focus-ink-soft);
+}
+
+.pms-focus__aside ul {
+  margin: 0;
+  padding-left: var(--pms-space-6);
+}
+
+.pms-focus__aside li + li { margin-top: var(--pms-space-2); }
+
+/* 成熟确认：模态在稿纸之上，背景节点由 inert 屏蔽，焦点锁在弹窗内。 */
+.pms-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: var(--pms-z-modal);
+  display: grid;
+  place-items: center;
+  padding: var(--pms-space-5);
+  background: color-mix(in srgb, var(--pms-focus-ink) 26%, transparent);
+}
+
+.pms-confirm__dialog {
+  width: min(420px, 100%);
+  padding: var(--pms-space-7);
+  background: var(--pms-focus-sheet);
+  border: var(--pms-border-hairline) solid var(--pms-focus-rule);
+  border-radius: var(--pms-radius-2xl);
+  box-shadow: var(--pms-shadow-lg);
+  color: var(--pms-focus-ink);
+}
+
+.pms-confirm__dialog h2 {
+  margin: 0;
+  font-family: var(--pms-font-serif);
+  font-size: var(--pms-text-xl);
+  color: var(--pms-focus-ink);
+}
+
+.pms-confirm__dialog p {
+  margin: var(--pms-space-3) 0 0;
+  font-size: var(--pms-text-sm);
+  line-height: var(--pms-leading-normal);
+  color: var(--pms-focus-ink-soft);
+}
+
+.pms-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--pms-gap-inline);
+  margin-top: var(--pms-space-6);
+}
+
+/* ══ 响应式 ═══════════════════════════════════════════════════════════════ */
+
+/* 中屏：工作区侧栏收窄，但不塌成整行 */
+@media (max-width: 1180px) {
+  .pms-workarea { grid-template-columns: minmax(0, 1fr) 280px; }
+  .pms-drawer { flex-basis: 280px; width: 280px; }
+  .pms-workbench { grid-template-columns: 168px minmax(0, 1fr); }
+  .pms-props { grid-column: 1 / -1; }
+}
+
+/* 窄屏：全部单列，工具栏换行 */
+@media (max-width: 900px) {
+  .pms-workarea,
+  .pms-reader,
+  .pms-workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pms-drawer {
+    flex-basis: auto;
+    width: auto;
+    border-left: 0;
+    border-top: var(--pms-border-hairline) solid var(--pms-border-subtle);
+    max-height: 46vh;
+  }
+
+  .pms-xhs { flex-direction: column; }
+
+  .pms-toolbar {
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    gap: var(--pms-space-3);
+    padding-top: var(--pms-space-3);
+    padding-bottom: var(--pms-space-3);
+  }
+
+  .pms-toolbar__context { order: 3; flex-basis: 100%; }
+  .pms-toolbar__brand span:last-child { display: none; }
+
+  .pms-editor,
+  .pms-reader,
+  .pms-scroll {
+    padding-left: var(--pms-space-5);
+    padding-right: var(--pms-space-5);
+  }
+
+  .pms-stage-row { flex-direction: column; align-items: flex-start; }
+  .pms-card-head { flex-direction: column; }
+}
+
+/* 聚焦模式的收起阈值按「面板宽度」判定。DSH 工作区面板常落在 760px 左右，
+   此时浏览器视口可能仍是 1920px；用 @media 会误判为宽屏，把稿纸挤到 490px。 */
+@container pms-panel (max-width: 780px) {
+  .pms-focus { grid-template-columns: minmax(0, 1fr); }
+  .pms-focus__aside { display: none; }
+  .pms-focus__stage { padding: var(--pms-space-5) var(--pms-inset-page); }
+  .pms-focus__sheet { padding: var(--pms-space-7) var(--pms-space-6); }
+}
+
+/* 极窄容器：按钮改两列网格，避免 wrap 把主操作挤到看不见的位置。
+   第二阶段会把操作条按主次分组，这里先保证任何宽度都不裁切。 */
+@container pms-panel (max-width: 520px) {
+  .pms-focus__buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pms-focus__buttons .pms-spacer { display: none; }
+  .pms-focus__buttons .pms-btn { width: 100%; }
+}
+
+/* 不支持容器查询的宿主退回视口判断，行为与旧版一致。 */
+@supports not (container-type: inline-size) {
+  @media (max-width: 780px) {
+    .pms-focus { grid-template-columns: minmax(0, 1fr); }
+    .pms-focus__aside { display: none; }
+    .pms-focus__stage { padding: var(--pms-space-5) var(--pms-inset-page); }
+    .pms-focus__sheet { padding: var(--pms-space-7) var(--pms-space-6); }
+  }
+}
+
+/* 短屏：收紧稿纸内边距与主标题，输入区降到紧凑高度。
+   视口高度仍是最可靠的短屏信号，这里刻意不用容器查询。 */
+@media (max-height: 760px) {
+  .pms-focus__stage { padding: var(--pms-space-4) var(--pms-inset-page); }
+  .pms-focus__sheet {
+    gap: var(--pms-space-5);
+    padding: var(--pms-space-5) var(--pms-space-6);
+  }
+  .pms-focus__title { font-size: var(--pms-text-2xl); }
+  .pms-focus__tags { margin-top: var(--pms-space-3); }
+  .pms-focus__composer { padding-top: var(--pms-space-4); }
+  .pms-focus__composer textarea { height: var(--pms-focus-input-h-compact); }
+  .pms-focus__buttons { margin-top: var(--pms-space-3); }
+  .pms-toast { bottom: var(--pms-space-3); }
+}
+
+</style>
+<style>
+  /* ── 文档外壳 ──────────────────────────────────────────────────────────
+     styles.css 的 .pms-root 会锁死高度与 overflow，那是给插件外壳用的。
+     规范页的 body 复用了 .pms-root 来取令牌，所以这里必须把它还原成普通文档流，
+     否则整页无法滚动。快照内部的 .pms-root 仍保持插件行为。 */
+  body.pms-root {
+    height: auto;
+    min-height: 100vh;
+    display: block;
+    overflow: visible;
+  }
+
+  html { scroll-behavior: smooth; scroll-padding-top: 88px; }
+  body {
+    margin: 0;
+    background: var(--pms-surface-base);
+    color: var(--pms-text-primary);
+    font-family: var(--pms-font-sans);
+    font-size: var(--pms-text-base);
+    line-height: var(--pms-leading-normal);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .ds-shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; }
+
+  /* ── 侧栏目录 ── */
+  .ds-nav {
+    position: sticky; top: 0; align-self: start;
+    height: 100vh; overflow-y: auto;
+    padding: var(--pms-space-7) var(--pms-space-5);
+    border-right: var(--pms-border-hairline) solid var(--pms-border-subtle);
+    background: var(--pms-surface-sunken);
+  }
+  .ds-brand { display: flex; align-items: center; gap: var(--pms-space-3); margin-bottom: var(--pms-space-7); }
+  .ds-brand svg { flex: 0 0 auto; }
+  .ds-brand strong { display: block; font-size: var(--pms-text-base); font-weight: var(--pms-weight-semibold); letter-spacing: var(--pms-tracking-tight); }
+  .ds-brand span { display: block; font-size: var(--pms-text-2xs); letter-spacing: var(--pms-tracking-caps); text-transform: uppercase; color: var(--pms-text-tertiary); }
+  .ds-nav ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+  .ds-nav a {
+    display: flex; align-items: baseline; gap: var(--pms-space-3);
+    padding: var(--pms-space-2) var(--pms-space-3);
+    border-radius: var(--pms-radius-sm);
+    color: var(--pms-text-secondary); text-decoration: none;
+    font-size: var(--pms-text-sm);
+    transition: background-color var(--pms-duration-fast) var(--pms-ease-standard);
+  }
+  .ds-nav a:hover { background: var(--pms-interactive-bg-hover); color: var(--pms-text-primary); }
+  .ds-nav .num { font-family: var(--pms-font-mono); font-size: var(--pms-text-2xs); color: var(--pms-text-tertiary); }
+
+  /* ── 内容 ── */
+  .ds-main { min-width: 0; }
+  .ds-topbar {
+    position: sticky; top: 0; z-index: var(--pms-z-sticky);
+    display: flex; align-items: center; justify-content: space-between; gap: var(--pms-space-5);
+    padding: var(--pms-space-4) var(--pms-space-9);
+    border-bottom: var(--pms-border-hairline) solid var(--pms-border-subtle);
+    background: color-mix(in srgb, var(--pms-surface-base) 86%, transparent);
+    backdrop-filter: blur(12px);
+  }
+  .ds-crumb { font-size: var(--pms-text-xs); letter-spacing: var(--pms-tracking-wide); color: var(--pms-text-tertiary); text-transform: uppercase; }
+
+  .ds-content { padding: var(--pms-space-9) var(--pms-space-9) var(--pms-space-12); max-width: 1180px; }
+
+  /* Hero */
+  .ds-hero { margin-bottom: var(--pms-space-12); }
+  .ds-hero h1 {
+    margin: var(--pms-space-3) 0 var(--pms-space-5);
+    font-size: clamp(34px, 4.2vw, 52px);
+    font-weight: var(--pms-weight-bold);
+    line-height: 1.08;
+    letter-spacing: -0.035em;
+  }
+  .ds-hero h1 em { font-style: normal; color: var(--pms-text-accent); }
+  .ds-lead { max-width: 62ch; font-size: var(--pms-text-md); line-height: var(--pms-leading-relaxed); color: var(--pms-text-secondary); }
+  .ds-meta { display: flex; flex-wrap: wrap; gap: var(--pms-space-6); margin-top: var(--pms-space-7); padding-top: var(--pms-space-5); border-top: var(--pms-border-hairline) solid var(--pms-border-subtle); }
+  .ds-meta div { display: flex; flex-direction: column; gap: 2px; }
+  .ds-meta dt, .ds-meta .k { font-size: var(--pms-text-2xs); letter-spacing: var(--pms-tracking-caps); text-transform: uppercase; color: var(--pms-text-tertiary); }
+  .ds-meta dd, .ds-meta .v { margin: 0; font-family: var(--pms-font-mono); font-size: var(--pms-text-sm); color: var(--pms-text-primary); }
+
+  /* 章节 */
+  .ds-section { margin-bottom: var(--pms-space-12); }
+  .ds-section > header { display: flex; align-items: baseline; gap: var(--pms-space-4); margin-bottom: var(--pms-space-6); padding-bottom: var(--pms-space-4); border-bottom: var(--pms-border-hairline) solid var(--pms-border-subtle); }
+  .ds-section .idx { font-family: var(--pms-font-mono); font-size: var(--pms-text-sm); color: var(--pms-primary); font-weight: var(--pms-weight-semibold); }
+  .ds-section h2 { margin: 0; font-size: var(--pms-text-2xl); font-weight: var(--pms-weight-bold); letter-spacing: -0.02em; }
+  .ds-section .desc { margin: 0 0 0 auto; max-width: 46ch; font-size: var(--pms-text-sm); color: var(--pms-text-secondary); text-align: right; }
+  .ds-sub { margin: var(--pms-space-8) 0 var(--pms-space-4); font-size: var(--pms-text-base); font-weight: var(--pms-weight-semibold); }
+  .ds-sub + .ds-note { margin-top: calc(-1 * var(--pms-space-2)); margin-bottom: var(--pms-space-4); }
+  .ds-note { font-size: var(--pms-text-sm); color: var(--pms-text-secondary); line-height: var(--pms-leading-normal); max-width: 72ch; }
+  .ds-note code, .ds-code {
+    font-family: var(--pms-font-mono); font-size: 0.92em;
+    padding: 1px 5px; border-radius: var(--pms-radius-xs);
+    background: var(--pms-interactive-bg-hover);
+    color: var(--pms-text-primary);
+  }
+
+  /* 原则卡 */
+  .ds-principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--pms-gap-stack); }
+  .ds-principle { padding: var(--pms-pad-card); border: var(--pms-border-hairline) solid var(--pms-border-subtle); border-radius: var(--pms-radius-xl); background: var(--pms-surface-raised); }
+  .ds-principle .n { font-family: var(--pms-font-mono); font-size: var(--pms-text-xs); color: var(--pms-primary); }
+  .ds-principle h3 { margin: var(--pms-space-3) 0 var(--pms-space-2); font-size: var(--pms-text-lg); font-weight: var(--pms-weight-semibold); letter-spacing: -0.01em; }
+  .ds-principle p { margin: 0; font-size: var(--pms-text-sm); line-height: var(--pms-leading-normal); color: var(--pms-text-secondary); }
+
+  /* 色阶 */
+  .ds-ramp { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: var(--pms-space-2); }
+  .ds-chip { display: flex; flex-direction: column; gap: 4px; }
+  .ds-chip .sw { height: 56px; border-radius: var(--pms-radius-md); border: var(--pms-border-hairline) solid var(--pms-border-subtle); }
+  .ds-chip .lb { font-family: var(--pms-font-mono); font-size: var(--pms-text-2xs); color: var(--pms-text-tertiary); line-height: 1.4; }
+  .ds-chip .lb b { display: block; color: var(--pms-text-secondary); font-weight: var(--pms-weight-medium); }
+
+  /* 表格 */
+  .ds-table { width: 100%; border-collapse: collapse; font-size: var(--pms-text-sm); }
+  .ds-table th { text-align: left; font-size: var(--pms-text-2xs); font-weight: var(--pms-weight-semibold); letter-spacing: var(--pms-tracking-caps); text-transform: uppercase; color: var(--pms-text-tertiary); padding: var(--pms-space-3) var(--pms-space-4); border-bottom: 1px solid var(--pms-border-strong); }
+  .ds-table td { padding: var(--pms-space-3) var(--pms-space-4); border-bottom: var(--pms-border-hairline) solid var(--pms-border-subtle); vertical-align: middle; }
+  .ds-table tr:last-child td { border-bottom: 0; }
+  .ds-table code { font-family: var(--pms-font-mono); font-size: var(--pms-text-xs); color: var(--pms-text-accent); }
+  .ds-table .mono { font-family: var(--pms-font-mono); font-size: var(--pms-text-xs); color: var(--pms-text-secondary); }
+  .ds-table .swatch { width: 28px; height: 28px; border-radius: var(--pms-radius-sm); border: var(--pms-border-hairline) solid var(--pms-border-subtle); }
+
+  .ds-pass { display: inline-flex; align-items: center; gap: 4px; font-family: var(--pms-font-mono); font-size: var(--pms-text-2xs); font-weight: var(--pms-weight-semibold); padding: 2px 7px; border-radius: var(--pms-radius-full); }
+  .ds-pass.ok { background: var(--pms-state-success-soft); color: var(--pms-state-success); }
+  .ds-pass.lg { background: var(--pms-state-warning-soft); color: var(--pms-state-warning); }
+  .ds-pass.no { background: var(--pms-state-danger-soft); color: var(--pms-state-danger); }
+
+  /* 规格条 */
+  .ds-spec { display: flex; align-items: center; gap: var(--pms-space-4); padding: var(--pms-space-3) 0; border-bottom: var(--pms-border-hairline) solid var(--pms-border-subtle); }
+  .ds-spec .bar { height: 8px; border-radius: var(--pms-radius-full); background: var(--pms-primary); opacity: .85; }
+  .ds-spec .lbl { min-width: 132px; font-family: var(--pms-font-mono); font-size: var(--pms-text-xs); color: var(--pms-text-secondary); }
+  .ds-spec .val { font-family: var(--pms-font-mono); font-size: var(--pms-text-xs); color: var(--pms-text-tertiary); min-width: 64px; text-align: right; }
+
+  /* 展示台 */
+  .ds-stage { padding: var(--pms-space-6); border: var(--pms-border-hairline) solid var(--pms-border-subtle); border-radius: var(--pms-radius-xl); background: var(--pms-surface-raised); }
+  .ds-stage + .ds-stage { margin-top: var(--pms-space-4); }
+  .ds-stage-label { display: flex; align-items: center; justify-content: space-between; gap: var(--pms-space-4); margin-bottom: var(--pms-space-4); font-size: var(--pms-text-2xs); letter-spacing: var(--pms-tracking-caps); text-transform: uppercase; color: var(--pms-text-tertiary); }
+  .ds-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--pms-gap-stack); }
+  .ds-grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--pms-gap-stack); }
+
+  /* 字形样张 */
+  .ds-typo-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--pms-space-5); align-items: baseline; padding: var(--pms-space-4) 0; border-bottom: var(--pms-border-hairline) solid var(--pms-border-subtle); }
+  .ds-typo-row:last-child { border-bottom: 0; }
+  .ds-typo-key { font-family: var(--pms-font-mono); font-size: var(--pms-text-xs); color: var(--pms-text-tertiary); line-height: 1.5; }
+  .ds-typo-key b { display: block; color: var(--pms-text-secondary); font-weight: var(--pms-weight-medium); }
+
+  .ds-article-demo { max-width: 40ch; font-family: var(--pms-font-serif); font-size: var(--pms-text-md); line-height: var(--pms-leading-relaxed); color: var(--pms-text-primary); }
+  .ds-article-demo h3 { font-family: var(--pms-font-sans); font-size: var(--pms-text-lg); margin: 0 0 var(--pms-space-3); }
+
+  /* 画布样张 */
+  .ds-canvas-demo { width: 100%; aspect-ratio: 1242 / 1660; max-height: 380px; max-width: 285px; display: flex; flex-direction: column; gap: 14px; padding: 22px 20px; background: var(--pms-canvas-paper); color: var(--pms-canvas-text); font-family: var(--pms-font-serif); box-shadow: var(--pms-canvas-shadow); border-radius: 2px; }
+  .ds-canvas-demo .k { font-family: var(--pms-font-sans); font-size: 10px; font-weight: 700; letter-spacing: .16em; color: var(--pms-canvas-ink); }
+  .ds-canvas-demo h4 { margin: 0; font-size: 19px; line-height: 1.25; color: var(--pms-canvas-ink-deep); }
+  .ds-canvas-demo p { margin: 0; font-size: 11px; line-height: 1.65; }
+  .ds-canvas-demo mark { background: var(--pms-canvas-mark-bg); color: var(--pms-canvas-mark-fg); padding: 0 .1em; border-radius: 2px; }
+  .ds-canvas-demo .q { margin-top: auto; padding: 10px 12px; border-left: 3px solid var(--pms-canvas-ink); font-size: 12px; line-height: 1.45; color: var(--pms-canvas-ink-deep); }
+
+  /* 检查清单 */
+  .ds-check { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--pms-space-2); counter-reset: c; }
+  .ds-check li { display: flex; gap: var(--pms-space-3); padding: var(--pms-space-3) var(--pms-space-4); border-radius: var(--pms-radius-lg); background: var(--pms-surface-sunken); font-size: var(--pms-text-sm); line-height: var(--pms-leading-normal); }
+  .ds-check li::before { counter-increment: c; content: counter(c, decimal-leading-zero); font-family: var(--pms-font-mono); font-size: var(--pms-text-2xs); color: var(--pms-primary); flex: 0 0 auto; padding-top: 2px; }
+
+  /* 界面快照：嵌入真实 DOM 结构 + 真实样式表，用来验证结构改动，
+     不是另画一套示意图 —— 看到的间距、圆角、层级全部来自生产样式。 */
+  .ds-shot { margin-top: var(--pms-space-6); }
+  .ds-shot + .ds-shot { margin-top: var(--pms-space-10); }
+  .ds-shot__bar {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: var(--pms-space-4); margin-bottom: var(--pms-space-3); flex-wrap: wrap;
+  }
+  .ds-shot__name { font-size: var(--pms-text-base); font-weight: var(--pms-weight-semibold); }
+  .ds-shot__note { font-size: var(--pms-text-xs); color: var(--pms-text-tertiary); }
+  .ds-shot__frame {
+    height: 660px;
+    border: var(--pms-border-hairline) solid var(--pms-border-default);
+    border-radius: var(--pms-radius-xl);
+    overflow: hidden;
+    box-shadow: var(--pms-shadow-md);
+    background: var(--pms-surface-base);
+  }
+  /* 聚焦快照要同时露出原文时间线和底部操作条，给稿纸更高的画布 */
+  .ds-shot--tall .ds-shot__frame { height: 860px; }
+
+  @media (max-width: 1024px) {
+    .ds-shell { grid-template-columns: 1fr; }
+    .ds-nav { position: static; height: auto; border-right: 0; border-bottom: var(--pms-border-hairline) solid var(--pms-border-subtle); }
+    .ds-nav ol { flex-direction: row; flex-wrap: wrap; }
+    .ds-content, .ds-topbar { padding-left: var(--pms-space-5); padding-right: var(--pms-space-5); }
+    .ds-section .desc { display: none; }
+  }
+</style>
+</head>
+<body class="pms-root" data-pms-theme="light">
+
+<div class="ds-shell">
+
+  <!-- ══ 目录 ══ -->
+  <nav class="ds-nav">
+    <div class="ds-brand">
+      <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect width="32" height="32" rx="9" fill="var(--pms-green-600)"/>
+        <path d="M9 23V9h6.2c3 0 4.8 1.7 4.8 4.3 0 2.6-1.8 4.3-4.8 4.3h-3.1V23H9zm3.1-7.6h2.9c1.3 0 2-.6 2-1.6s-.7-1.6-2-1.6h-2.9v3.2z" fill="#fff"/>
+        <circle cx="23" cy="21.5" r="2.2" fill="var(--pms-gold-400)"/>
+      </svg>
+      <div>
+        <strong>PMS Design System</strong>
+        <span>v1.0 · 规范手册</span>
+      </div>
+    </div>
+    <ol>
+      <li><a href="#s01"><span class="num">01</span>设计原则</a></li>
+      <li><a href="#s02"><span class="num">02</span>色彩系统</a></li>
+      <li><a href="#s03"><span class="num">03</span>排版系统</a></li>
+      <li><a href="#s04"><span class="num">04</span>空间与形体</a></li>
+      <li><a href="#s05"><span class="num">05</span>动效</a></li>
+      <li><a href="#s06"><span class="num">06</span>组件库</a></li>
+      <li><a href="#s07"><span class="num">07</span>无障碍</a></li>
+      <li><a href="#s08"><span class="num">08</span>双主题隔离</a></li>
+      <li><a href="#s09"><span class="num">09</span>落地检查</a></li>
+      <li><a href="#s10"><span class="num">10</span>界面应用</a></li>
+    </ol>
+  </nav>
+
+  <!-- ══ 正文 ══ -->
+  <main class="ds-main">
+    <div class="ds-topbar">
+      <span class="ds-crumb">个人媒体工作室 / 设计规范</span>
+      <button class="pms-btn pms-btn--sm" id="themeToggle" type="button">
+        <span id="themeLabel">切换深色</span>
+      </button>
+    </div>
+
+    <div class="ds-content">
+
+      <!-- Hero -->
+      <header class="ds-hero">
+        <p class="pms-kicker">Design System · 个人媒体工作室</p>
+        <h1>让每一个像素<br>都有<em>依据</em>。</h1>
+        <p class="ds-lead">
+          这不是一套配色偏好，而是一份可执行的约束。界面里出现的每一个颜色、字号、间距、圆角，
+          都必须能追溯到这里的某个令牌。令牌之外的值视为缺陷。
+        </p>
+        <dl class="ds-meta">
+          <div><dt>版本</dt><dd>1.0.0</dd></div>
+          <div><dt>令牌分层</dt><dd id="tokenMetric">3 层</dd></div>
+          <div><dt>色彩模式</dt><dd>Light / Dark</dd></div>
+          <div><dt>合规标准</dt><dd>WCAG 2.1 AA</dd></div>
+          <div><dt>基准网格</dt><dd>4 pt</dd></div>
+        </dl>
+      </header>
+
+      <!-- ══ 01 原则 ══ -->
+      <section class="ds-section" id="s01">
+        <header>
+          <span class="idx">01</span>
+          <h2>设计原则</h2>
+          <p class="desc">三条约束，决定所有取舍的优先级。</p>
+        </header>
+
+        <div class="ds-principles">
+          <article class="ds-principle">
+            <span class="n">P1</span>
+            <h3>内容在前，界面退后</h3>
+            <p>作者的原话是主角。界面用低饱和的中性色和克制的边框，把注意力让给文字本身；只有主操作允许使用品牌绿。</p>
+          </article>
+          <article class="ds-principle">
+            <span class="n">P2</span>
+            <h3>令牌唯一来源</h3>
+            <p>颜色、字号、间距、圆角只能引用令牌。新增一个视觉值之前，先问是否已有令牌能表达同一意图。</p>
+          </article>
+          <article class="ds-principle">
+            <span class="n">P3</span>
+            <h3>屏幕上可信，导出后一致</h3>
+            <p>界面跟随宿主浅深色，出图画布则完全隔离。作者在深色编辑器里排的版，导出 PNG 必须和浅色下完全一致。</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ══ 02 色彩 ══ -->
+      <section class="ds-section" id="s02">
+        <header>
+          <span class="idx">02</span>
+          <h2>色彩系统</h2>
+          <p class="desc">三层结构：Primitive 原始色阶 → Semantic 语义令牌 → Canvas 出图专用。</p>
+        </header>
+
+        <p class="ds-note">
+          主色 Green 提炼自产品既有的头像线稿绿，不是另造一套。所有文字色均已按 WCAG 2.1 AA
+          实测校验，下方「对比度自检」为脚本计算的真实值。
+        </p>
+
+        <h3 class="ds-sub">2.1　品牌主色阶 Green</h3>
+        <div class="ds-ramp" id="rampGreen"></div>
+
+        <h3 class="ds-sub">2.2　强调色阶 Gold</h3>
+        <p class="ds-note">
+          对白底仅 <code>2.26:1</code>，<strong>禁止用作文字或图标颜色</strong>。只允许出现在装饰线、画布高亮和品牌标识中。
+        </p>
+        <div class="ds-ramp" id="rampGold"></div>
+
+        <h3 class="ds-sub">2.3　中性色阶 Neutral</h3>
+        <p class="ds-note">带极轻绿灰调，与画布纸白 <code>#F5F6F0</code> 同族，避免冷灰造成的割裂感。</p>
+        <div class="ds-ramp" id="rampNeutral"></div>
+
+        <h3 class="ds-sub">2.4　聚焦纸感色阶 Paper</h3>
+        <p class="ds-note">
+          只服务于聚焦编辑台，不替换品牌 Green。三级墨色对米纸底全部达到 AA，金色依旧<strong>禁止作文字</strong>。
+        </p>
+        <div class="ds-ramp" id="rampPaper"></div>
+
+        <h3 class="ds-sub">2.5　语义令牌</h3>
+        <p class="ds-note">
+          业务样式<strong>只允许</strong>使用这一层。每个语义令牌优先消费 DSH 宿主的 <code>--dsw-alias-*</code>，
+          宿主未提供时才落回品牌原始值 —— 这保证插件在宿主切换明暗主题时自动跟随。
+        </p>
+        <table class="ds-table">
+          <thead>
+            <tr><th style="width:40px"></th><th>令牌</th><th>用途</th><th>取值来源</th></tr>
+          </thead>
+          <tbody id="semanticTable"></tbody>
+        </table>
+
+        <h3 class="ds-sub">2.6　对比度自检</h3>
+        <p class="ds-note">脚本实测值，非估算。<strong>AA</strong> = 正文合格（≥4.5:1），<strong>AA Large</strong> = 仅限 ≥18.66px 粗体或 ≥24px，<strong>FAIL</strong> = 禁止用于前景。</p>
+        <table class="ds-table">
+          <thead>
+            <tr><th>组合</th><th>前景</th><th>背景</th><th style="width:96px">比值</th><th style="width:120px">判定</th></tr>
+          </thead>
+          <tbody id="contrastTable"></tbody>
+        </table>
+      </section>
+
+      <!-- ══ 03 排版 ══ -->
+      <section class="ds-section" id="s03">
+        <header>
+          <span class="idx">03</span>
+          <h2>排版系统</h2>
+          <p class="desc">中文界面正文落在 14px 比 13px 更稳；13px 保留为紧凑辅助档。</p>
+        </header>
+
+        <h3 class="ds-sub">3.1　字阶</h3>
+        <div id="typeScale"></div>
+
+        <h3 class="ds-sub">3.2　字重与行高</h3>
+        <div class="ds-grid-2">
+          <div class="ds-stage">
+            <div class="ds-stage-label"><span>字重</span><span>4 档，废弃 680 等非标值</span></div>
+            <div style="display:grid;gap:var(--pms-space-3)">
+              <p style="margin:0;font-size:var(--pms-text-xl);font-weight:400">400 Regular　正文与说明</p>
+              <p style="margin:0;font-size:var(--pms-text-xl);font-weight:500">500 Medium　按钮与标签</p>
+              <p style="margin:0;font-size:var(--pms-text-xl);font-weight:600">600 Semibold　标题与强调</p>
+              <p style="margin:0;font-size:var(--pms-text-xl);font-weight:700">700 Bold　页面主标题</p>
+            </div>
+          </div>
+          <div class="ds-stage">
+            <div class="ds-stage-label"><span>行高</span><span>按用途区分</span></div>
+            <table class="ds-table">
+              <tbody>
+                <tr><td class="mono">tight</td><td class="mono">1.25</td><td>大标题</td></tr>
+                <tr><td class="mono">snug</td><td class="mono">1.35</td><td>卡片标题</td></tr>
+                <tr><td class="mono">normal</td><td class="mono">1.55</td><td>界面正文</td></tr>
+                <tr><td class="mono">relaxed</td><td class="mono">1.75</td><td>长文阅读</td></tr>
+                <tr><td class="mono">canvas</td><td class="mono">1.65</td><td>出图正文</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <h3 class="ds-sub">3.3　长文排版样张</h3>
+        <p class="ds-note">
+          编辑区与出图画布都使用衬线字体（<code>--pms-font-serif</code>），行高 1.75。
+          让作者在编辑时看到的疏密节奏，与最终 PNG 一致。
+        </p>
+        <div class="ds-stage">
+          <div class="ds-article-demo">
+            <h3>你不需要更多选题，你需要更少犹豫</h3>
+            <p style="margin:0">
+              大部分人卡在选题上的时候，其实不是没东西可写，而是同时有三四个方向在争抢注意力。
+              真正的瓶颈从来不是素材量，而是做决定的成本。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 04 空间 ══ -->
+      <section class="ds-section" id="s04">
+        <header>
+          <span class="idx">04</span>
+          <h2>空间与形体</h2>
+          <p class="desc">4pt 网格。所有 margin / padding / gap 只能从这里取值。</p>
+        </header>
+
+        <h3 class="ds-sub">4.1　间距刻度</h3>
+        <div id="spaceScale"></div>
+
+        <h3 class="ds-sub">4.2　圆角</h3>
+        <p class="ds-note">原有 9 种野生取值（4/8/10/12/14/16/18/20/999px）已收敛为 6 档 + 胶囊。</p>
+        <div class="ds-grid-3" id="radiusScale"></div>
+
+        <h3 class="ds-sub">4.3　高度与阴影</h3>
+        <p class="ds-note">界面只用 3 档阴影表达层级；第 4 档仅用于浮层。画布投影独立定义，因为它模拟纸张而非 UI 层级。</p>
+        <div class="ds-grid-3" id="shadowScale"></div>
+
+        <h3 class="ds-sub">4.4　尺寸约束</h3>
+        <table class="ds-table">
+          <thead><tr><th>令牌</th><th>值</th><th>约束说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>--pms-tap-min</code></td><td class="mono">44px</td><td>WCAG 2.5.5 触控目标下限，触屏设备自动应用</td></tr>
+            <tr><td><code>--pms-control-h-sm</code></td><td class="mono">30px</td><td>小号控件，仅鼠标环境</td></tr>
+            <tr><td><code>--pms-control-h-md</code></td><td class="mono">36px</td><td>默认控件高度</td></tr>
+            <tr><td><code>--pms-control-h-lg</code></td><td class="mono">44px</td><td>主操作、移动端</td></tr>
+            <tr><td><code>--pms-reading-max</code></td><td class="mono">72ch</td><td>长文可读宽度上限</td></tr>
+            <tr><td><code>--pms-canvas-w/h</code></td><td class="mono">1242 × 1660</td><td>小红书长文出图固定尺寸</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ══ 05 动效 ══ -->
+      <section class="ds-section" id="s05">
+        <header>
+          <span class="idx">05</span>
+          <h2>动效</h2>
+          <p class="desc">三条时长 + 两条曲线。超出集合的时长视为违规。</p>
+        </header>
+
+        <div class="ds-grid-2">
+          <div class="ds-stage">
+            <div class="ds-stage-label"><span>时长</span><span>点击试听</span></div>
+            <div style="display:flex;flex-direction:column;gap:var(--pms-space-3)">
+              <button class="pms-btn pms-btn--sm" data-dur="120ms" style="justify-content:space-between">fast　120ms <span class="mono">悬停、聚焦</span></button>
+              <button class="pms-btn pms-btn--sm" data-dur="180ms" style="justify-content:space-between">base　180ms <span class="mono">卡片、展开</span></button>
+              <button class="pms-btn pms-btn--sm" data-dur="280ms" style="justify-content:space-between">slow　280ms <span class="mono">面板、页面切换</span></button>
+            </div>
+          </div>
+          <div class="ds-stage">
+            <div class="ds-stage-label"><span>曲线</span><span>cubic-bezier</span></div>
+            <table class="ds-table">
+              <tbody>
+                <tr><td><code>standard</code></td><td class="mono">(0.2, 0, 0.2, 1)</td><td>进入与形变</td></tr>
+                <tr><td><code>exit</code></td><td class="mono">(0.4, 0, 1, 1)</td><td>退出与收起</td></tr>
+              </tbody>
+            </table>
+            <p class="ds-note" style="margin-top:var(--pms-space-4)">
+              系统开启「减少动态效果」时，所有动画降为 <code>0.01ms</code>，已在组件层全局声明。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 06 组件 ══ -->
+      <section class="ds-section" id="s06">
+        <header>
+          <span class="idx">06</span>
+          <h2>组件库</h2>
+          <p class="desc">每个组件都有完整状态矩阵，不只是好看的那一帧。</p>
+        </header>
+
+        <h3 class="ds-sub">6.1　按钮</h3>
+        <p class="ds-note">
+          四种变体：<code>default</code>（次要操作）、<code>--primary</code>（整屏唯一主操作）、
+          <code>--ghost</code>（低权重）、<code>--danger</code>（破坏性操作）。三种尺寸。
+        </p>
+        <div class="ds-stage">
+          <div class="ds-stage-label"><span>变体 × 尺寸</span><span>焦点环可用 Tab 键验证</span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:var(--pms-space-4);align-items:center">
+            <button class="pms-btn pms-btn--primary">进入内容生产</button>
+            <button class="pms-btn">暂存</button>
+            <button class="pms-btn pms-btn--ghost">取消</button>
+            <button class="pms-btn pms-btn--danger">删除草稿</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:var(--pms-space-4);align-items:center;margin-top:var(--pms-space-5)">
+            <button class="pms-btn pms-btn--primary pms-btn--sm">小号</button>
+            <button class="pms-btn pms-btn--sm">小号次要</button>
+            <button class="pms-btn pms-btn--primary pms-btn--lg">大号主操作</button>
+            <button class="pms-iconbtn" aria-label="关闭">✕</button>
+          </div>
+        </div>
+        <div class="ds-stage">
+          <div class="ds-stage-label"><span>状态</span><span>hover · active · disabled · busy</span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:var(--pms-space-4);align-items:center">
+            <button class="pms-btn" disabled>禁用</button>
+            <button class="pms-btn pms-btn--primary" disabled>禁用主操作</button>
+            <button class="pms-btn pms-btn--primary" aria-busy="true">处理中</button>
+            <button class="pms-btn" aria-busy="true">加载</button>
+          </div>
+        </div>
+
+        <h3 class="ds-sub">6.2　表单</h3>
+        <div class="ds-stage">
+          <div class="ds-stage-label"><span>字段三段式</span><span>标签 · 输入 · 提示/错误</span></div>
+          <div class="ds-grid-2">
+            <div class="pms-field">
+              <label for="f1">选题标题</label>
+              <input class="pms-input" id="f1" placeholder="例如：为什么你写不出第二篇">
+              <small>显示在卡片正面，建议 30 字以内。</small>
+            </div>
+            <div class="pms-field" data-invalid="true">
+              <label for="f2">素材目录</label>
+              <input class="pms-input" id="f2" value="C:\不存在的路径" aria-invalid="true">
+              <span class="pms-field-error">目录不可读，请检查路径或权限。</span>
+            </div>
+            <div class="pms-field">
+              <label for="f3">版式</label>
+              <select class="pms-select" id="f3">
+                <option>头像绿（默认）</option>
+                <option>深蓝金</option>
+                <option>公文风</option>
+              </select>
+            </div>
+            <div class="pms-field">
+              <label for="f4">正文字号</label>
+              <div class="pms-slider-label"><span>紧凑</span><span>37px</span></div>
+              <input type="range" id="f4" min="28" max="44" value="37">
+            </div>
+          </div>
+          <div style="margin-top:var(--pms-space-4)">
+            <label class="pms-check"><input type="checkbox" checked> 导出时附带素材来源清单</label>
+          </div>
+        </div>
+
+        <h3 class="ds-sub">6.3　徽标</h3>
+        <div class="ds-stage">
+          <div class="ds-stage-label"><span>语义</span><span>neutral · accent · success · warn · danger · info</span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:var(--pms-space-3)">
+            <span class="pms-badge">默认</span>
+            <span class="pms-badge pms-badge--accent">推荐</span>
+            <span class="pms-badge pms-badge--success"><i class="pms-dot"></i>已采纳</span>
+            <span class="pms-badge pms-badge--warn">待确认</span>
+            <span class="pms-badge pms-badge--danger">已拒绝</span>
+            <span class="pms-badge pms-badge--info">本地预览引擎</span>
+          </div>
+        </div>
+
+        <h3 class="ds-sub">6.4　卡片</h3>
+        <div class="ds-grid-2">
+          <div class="pms-card pms-card--interactive">
+            <div class="pms-row" style="justify-content:space-between">
+              <span class="pms-badge pms-badge--accent">推荐</span>
+              <span class="pms-badge">7 人问过</span>
+            </div>
+            <h2 class="pms-card__title">为什么越努力越焦虑</h2>
+            <p class="pms-card__body">这个问题被问了七次。共同点是都在用战术勤奋掩盖战略空白。</p>
+            <div class="pms-card__meta"><span>2 小时前</span><span>·</span><span>3 条原话</span></div>
+          </div>
+          <div class="pms-card is-selected">
+            <div class="pms-row" style="justify-content:space-between">
+              <span class="pms-badge">我的</span>
+              <span class="pms-badge pms-badge--success">已成熟</span>
+            </div>
+            <h2 class="pms-card__title">选题卡的选中态</h2>
+            <p class="pms-card__body">选中使用主色边框加 1px 外扩，而不是改变背景色 —— 背景变化会干扰文字对比度。</p>
+            <div class="pms-card__meta"><span>昨天</span><span>·</span><span>已进入生产</span></div>
+          </div>
+        </div>
+
+        <h3 class="ds-sub">6.5　分段控件</h3>
+        <p class="ds-note">
+          表达「当前位置」而非「主操作」。视觉权重刻意低于按钮 —— 导航不该抢主操作的注意力。
+          用在两处：全局阶段切换（选题 / 改稿 / 渲染）与页内视图切换（看板 / 问答池、写作 / 阅读、大纲 / 建议 / 版本）。
+        </p>
+        <div class="ds-stage">
+          <div class="ds-stage-label"><span>带计数的阶段导航</span><span>aria-selected 驱动选中态</span></div>
+          <div class="pms-segmented" role="tablist">
+            <button class="pms-segment" role="tab" aria-selected="true">选题<span class="pms-segment__count">12</span></button>
+            <button class="pms-segment" role="tab" aria-selected="false">生产改稿<span class="pms-segment__count">3</span></button>
+            <button class="pms-segment" role="tab" aria-selected="false">渲染<span class="pms-segment__count">1</span></button>
+          </div>
+          <div class="ds-stage-label" style="margin-top:var(--pms-space-6)"><span>无计数的视图切换</span><span>比阶段导航更轻</span></div>
+          <div class="pms-segmented" role="tablist">
+            <button class="pms-segment" role="tab" aria-selected="true">写作</button>
+            <button class="pms-segment" role="tab" aria-selected="false">阅读</button>
+          </div>
+        </div>
+        <p class="ds-note">
+          单行工具栏 <code>pms-toolbar</code> 承载品牌标记、分段导航、上下文说明与阶段主操作，固定 56px。
+          原先的产品名大标题与独立导航条共占约 150px，压缩后渲染阶段的编辑器高度增加约 94px。
+        </p>
+
+        <h3 class="ds-sub">6.6　反馈</h3>
+        <div class="ds-grid-2">
+          <div class="ds-stage">
+            <div class="ds-stage-label"><span>空态</span><span>给下一步，不只说「没有」</span></div>
+            <div class="pms-empty">
+              <strong>看板上还没有推荐卡</strong>
+              <span>下面的问答选题池可以搜，也可以自己新建一张。</span>
+            </div>
+          </div>
+          <div class="ds-stage">
+            <div class="ds-stage-label"><span>错误</span><span>说明原因与后果</span></div>
+            <div class="pms-error">导出失败：未找到 Chrome 或 Chromium，已回退到 Sharp 栅格化。</div>
+            <div class="pms-notice pms-notice--warn" style="margin-top:var(--pms-space-4)">
+              价格与退款承诺一律标记为「待确认」，不会自动沿用历史文案。
+            </div>
+          </div>
+        </div>
+        <div class="ds-stage">
+          <div class="ds-stage-label"><span>Toast 与骨架屏</span><span>不阻挡主操作</span></div>
+          <div class="pms-toast" style="position:static;margin:0">
+            <span>已回写进素材库</span>
+            <button class="pms-btn pms-btn--ghost pms-btn--sm" style="color:inherit">查看</button>
+          </div>
+          <div style="display:grid;gap:var(--pms-space-3);margin-top:var(--pms-space-5)">
+            <div class="pms-skeleton" style="height:14px;width:62%"></div>
+            <div class="pms-skeleton" style="height:14px;width:88%"></div>
+            <div class="pms-skeleton" style="height:14px;width:44%"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 07 无障碍 ══ -->
+      <section class="ds-section" id="s07">
+        <header>
+          <span class="idx">07</span>
+          <h2>无障碍</h2>
+          <p class="desc">WCAG 2.1 AA 是底线，不是加分项。</p>
+        </header>
+        <table class="ds-table">
+          <thead><tr><th style="width:180px">要求</th><th>实现方式</th><th style="width:120px">状态</th></tr></thead>
+          <tbody>
+            <tr><td>文字对比度</td><td>所有正文色 ≥4.5:1，已脚本实测；三级文字调至 <code>#707468</code>（4.53:1）</td><td><span class="ds-pass ok">达标</span></td></tr>
+            <tr><td>键盘可达</td><td>全部交互元素可 Tab 到达，统一 <code>:focus-visible</code> 焦点环，鼠标点击不显示</td><td><span class="ds-pass ok">达标</span></td></tr>
+            <tr><td>触控目标</td><td><code>@media (pointer: coarse)</code> 下自动补至 44×44px</td><td><span class="ds-pass ok">达标</span></td></tr>
+            <tr><td>动效偏好</td><td>尊重 <code>prefers-reduced-motion</code>，全局降为 0.01ms</td><td><span class="ds-pass ok">达标</span></td></tr>
+            <tr><td>语义结构</td><td>原生 <code>button</code> / <code>label</code>，不滥用 div；图标按钮带 <code>aria-label</code></td><td><span class="ds-pass ok">达标</span></td></tr>
+            <tr><td>文字缩放</td><td>全部使用相对字号体系，200% 缩放下布局不溢出</td><td><span class="ds-pass ok">达标</span></td></tr>
+            <tr><td>状态不只靠颜色</td><td>徽标同时使用文字标签，不只依赖红绿区分</td><td><span class="ds-pass ok">达标</span></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ══ 08 双主题 ══ -->
+      <section class="ds-section" id="s08">
+        <header>
+          <span class="idx">08</span>
+          <h2>双主题隔离</h2>
+          <p class="desc">界面跟随宿主，画布永不跟随。</p>
+        </header>
+
+        <p class="ds-note">
+          这是本产品最容易出错的地方。界面令牌（<code>--pms-surface-*</code> 等）优先取宿主的
+          <code>--dsw-alias-*</code>，会随宿主明暗变化；而出图令牌（<code>--pms-canvas-*</code>）
+          是固定值，因为导出的 PNG 必须与宿主主题无关。若画面误用界面令牌，用户在深色模式下排的版，
+          导出后会得到一张深色底的图 —— 这是不可接受的。
+        </p>
+
+        <div class="ds-grid-2" style="margin-top:var(--pms-space-5)">
+          <div class="ds-stage">
+            <div class="ds-stage-label"><span>出图画布样张</span><span>固定纸白，不随主题</span></div>
+            <div style="display:flex;justify-content:center">
+              <div class="ds-canvas-demo">
+                <span class="k">VOL. 07</span>
+                <h4>你不需要更多选题，你需要更少犹豫</h4>
+                <p>大部分人卡在选题上，不是没东西可写，而是同时有三四个方向在抢注意力。</p>
+                <p>真正的瓶颈从来不是素材量，而是<mark>做决定的成本</mark>。</p>
+                <div class="q">写作不是把想法写下来，是把想法逼出来。</div>
+              </div>
+            </div>
+          </div>
+          <div class="ds-stage">
+            <div class="ds-stage-label"><span>令牌分工</span><span>命名即约束</span></div>
+            <table class="ds-table">
+              <tbody>
+                <tr><td><code>--pms-surface-*</code></td><td>界面表面，跟随宿主</td></tr>
+                <tr><td><code>--pms-text-*</code></td><td>界面文字，跟随宿主</td></tr>
+                <tr><td><code>--pms-primary</code></td><td>主操作色，跟随宿主</td></tr>
+                <tr><td style="border-top:1px solid var(--pms-border-strong)"><code>--pms-canvas-paper</code></td><td style="border-top:1px solid var(--pms-border-strong)">画布底色，固定</td></tr>
+                <tr><td><code>--pms-canvas-ink</code></td><td>画布主色，固定</td></tr>
+                <tr><td><code>--pms-canvas-mark-*</code></td><td>画布高亮，固定</td></tr>
+              </tbody>
+            </table>
+            <p class="ds-note" style="margin-top:var(--pms-space-4)">
+              规则：<code>.pms-page</code> 及其后代<strong>只允许</strong>使用 <code>--pms-canvas-*</code>。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 09 检查清单 ══ -->
+      <section class="ds-section" id="s09">
+        <header>
+          <span class="idx">09</span>
+          <h2>落地检查</h2>
+          <p class="desc">提交界面改动前的自查，逐条过。</p>
+        </header>
+        <ol class="ds-check">
+          <li>新写的 CSS 里没有十六进制色值 —— 全部走 <code>var(--pms-*)</code>。</li>
+          <li>没有裸 px 圆角与字号，圆角只用 6 档刻度，字号只用字阶。</li>
+          <li>所有间距是 4 的倍数，且优先复用 <code>--pms-gap-*</code> / <code>--pms-pad-*</code> 语义令牌。</li>
+          <li>新增颜色前先确认语义令牌是否已能表达同一意图，不新增冗余色。</li>
+          <li>交互元素有 hover / active / disabled / focus-visible 四态。</li>
+          <li>纯图标按钮带 <code>aria-label</code>，表单控件有对应 <code>label</code>。</li>
+          <li>画布区域没有误用界面令牌（会破坏导出稳定性）。</li>
+          <li>在深色模式下过一遍：文字可读、边框可见、阴影不糊。</li>
+          <li>用 Tab 键走完全流程，焦点环始终可见。</li>
+          <li>改动令牌后回本页确认色板与对比度表仍符合预期。</li>
+        </ol>
+      </section>
+
+      <!-- ══ 10 界面应用 ══ -->
+      <section class="ds-section" id="s10">
+        <header>
+          <span class="idx">10</span>
+          <h2>界面应用</h2>
+          <p class="desc">真实 DOM 结构 + 真实样式表，不是示意图。</p>
+        </header>
+
+        <p class="ds-note">
+          以下五个快照直接使用生产类名与生产样式，只把数据换成静态样例。
+          改动布局时先在这里看效果，比在 DSH 里反复重启快得多。
+        </p>
+
+        <!-- 快照 1：选题看板 -->
+        <div class="ds-shot">
+          <div class="ds-shot__bar">
+            <span class="ds-shot__name">选题 · 看板视图</span>
+            <span class="ds-shot__note">56px 工具栏 + 分段导航 · 卡片密度 260px 起</span>
+          </div>
+          <div class="ds-shot__frame">
+            <div class="pms-root" data-stage="topics">
+              <header class="pms-toolbar">
+                <span class="pms-toolbar__brand"><span class="pms-toolbar__mark">P</span><span>个人媒体工作室</span></span>
+                <nav class="pms-segmented">
+                  <button class="pms-segment" aria-selected="true">选题<span class="pms-segment__count">12</span></button>
+                  <button class="pms-segment">生产改稿<span class="pms-segment__count">3</span></button>
+                  <button class="pms-segment">渲染<span class="pms-segment__count">1</span></button>
+                </nav>
+                <span class="pms-toolbar__context">先把判断写下来。分析在后台发生，成熟了再送去改稿。</span>
+                <div class="pms-toolbar__actions">
+                  <span class="pms-badge pms-badge--accent">模型已连接</span>
+                  <button class="pms-btn pms-btn--sm pms-btn--primary">新建选题</button>
+                </div>
+              </header>
+              <div class="pms-body">
+                <div class="pms-view">
+                  <div class="pms-toolbar pms-toolbar--sub">
+                    <div class="pms-segmented">
+                      <button class="pms-segment" aria-selected="true">看板<span class="pms-segment__count">12</span></button>
+                      <button class="pms-segment">问答池<span class="pms-segment__count">38</span></button>
+                      <button class="pms-segment" title="一次只显示一张卡，处理完才显示下一张">聚焦<span class="pms-segment__count">12</span></button>
+                    </div>
+                    <span class="pms-toolbar__context">本地素材 486 条 · 最常被问、最近还在问、而且还没写过的方向</span>
+                  </div>
+                  <div class="pms-scroll">
+                    <div class="pms-board">
+                      <button class="pms-card pms-card--interactive">
+                        <div class="pms-row"><span class="pms-badge pms-badge--accent">推荐</span><span class="pms-badge">7 人问过</span><span class="pms-badge">写作中</span></div>
+                        <h2>为什么越努力越焦虑</h2>
+                        <p>共同点不是懒，是方向没定就先开跑。用战术勤奋掩盖战略空白。</p>
+                        <div class="pms-meta"><span>3 条原话</span></div>
+                      </button>
+                      <button class="pms-card pms-card--interactive">
+                        <div class="pms-row"><span class="pms-badge pms-badge--accent">推荐</span><span class="pms-badge">5 人问过</span><span class="pms-badge">待写</span></div>
+                        <h2>35 岁转行，先补能力还是先换环境</h2>
+                        <p>两个选项都成立，但顺序错了会浪费一年。真正的判断依据是现金流能撑多久。</p>
+                        <div class="pms-meta"><span>还没成熟</span></div>
+                      </button>
+                      <button class="pms-card pms-card--interactive">
+                        <div class="pms-row"><span class="pms-badge">我的</span><span class="pms-badge">已成熟</span></div>
+                        <h2>学员总在第三步卡住</h2>
+                        <p>前两步是准备，第三步要交付。卡住的地方往往不是能力，是不敢交付。</p>
+                        <div class="pms-meta"><span>2 天前</span></div>
+                      </button>
+                      <button class="pms-card pms-card--interactive">
+                        <div class="pms-row"><span class="pms-badge pms-badge--accent">推荐</span><span class="pms-badge">6 人问过</span><span class="pms-badge">待写</span></div>
+                        <h2>报价被压价的三种应对</h2>
+                        <p>降价是最差的一种。压价通常不是嫌贵，是没看懂交付边界。</p>
+                        <div class="pms-meta"><span>还没成熟</span></div>
+                      </button>
+                      <button class="pms-card pms-card--interactive">
+                        <div class="pms-row"><span class="pms-badge pms-badge--accent">推荐</span><span class="pms-badge">9 人问过</span><span class="pms-badge">待写</span></div>
+                        <h2>我该不该做个人 IP</h2>
+                        <p>先问的不是要不要，是有没有值得被持续观看的东西。</p>
+                        <div class="pms-meta"><span>还没成熟</span></div>
+                      </button>
+                      <button class="pms-card pms-card--interactive">
+                        <div class="pms-row"><span class="pms-badge pms-badge--accent">推荐</span><span class="pms-badge">3 人问过</span><span class="pms-badge">待写</span></div>
+                        <h2>为什么建议听了不执行</h2>
+                        <p>听的时候在收集，执行的时候在暴露。多数人怕的是后者。</p>
+                        <div class="pms-meta"><span>还没成熟</span></div>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 快照 2：卡片工作台 -->
+        <div class="ds-shot">
+          <div class="ds-shot__bar">
+            <span class="ds-shot__name">选题 · 卡片工作台</span>
+            <span class="ds-shot__note">卡头固定 · 时间线独立滚动 · 输入条贴底 · 分析 320px 侧栏</span>
+          </div>
+          <div class="ds-shot__frame">
+            <div class="pms-root" data-stage="topics">
+              <header class="pms-toolbar">
+                <span class="pms-toolbar__brand"><span class="pms-toolbar__mark">P</span><span>个人媒体工作室</span></span>
+                <nav class="pms-segmented">
+                  <button class="pms-segment" aria-selected="true">选题<span class="pms-segment__count">12</span></button>
+                  <button class="pms-segment">生产改稿<span class="pms-segment__count">3</span></button>
+                  <button class="pms-segment">渲染<span class="pms-segment__count">1</span></button>
+                </nav>
+                <span class="pms-toolbar__context">先把判断写下来。分析在后台发生，成熟了再送去改稿。</span>
+                <div class="pms-toolbar__actions">
+                  <span class="pms-badge pms-badge--accent">模型已连接</span>
+                  <button class="pms-btn pms-btn--sm">返回选题</button>
+                </div>
+              </header>
+              <div class="pms-body">
+                <div class="pms-view pms-view--padded">
+                  <div class="pms-workarea">
+                    <section class="pms-workarea__main">
+                      <div class="pms-card-head">
+                        <div>
+                          <h2>为什么越努力越焦虑</h2>
+                          <div class="pms-row" style="margin-top:var(--pms-space-2)">
+                            <span class="pms-badge">写作中</span>
+                            <span class="pms-badge">3 条原话</span>
+                            <span class="pms-badge pms-badge--accent">模型分析</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pms-scroll pms-scroll--flush">
+                        <div class="pms-stack">
+                          <article class="pms-thought pms-thought--evidence">来自 7 次提问：努力和结果之间的关系断在了「方向未定」这一步，而不是努力程度不够。</article>
+                          <div class="pms-timeline">
+                            <article class="pms-thought">我观察到的共同点不是懒，是方向没定就先开跑。每天都很忙，但说不清在往哪走。</article>
+                            <article class="pms-thought">有个学员每天学 4 小时，三个月换了三个方向。每次换都从零开始，越学越慌。</article>
+                            <article class="pms-thought">犹豫本身不是问题，问题是把犹豫当成准备。准备是没有终点的。</article>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pms-composer-bar">
+                        <div class="pms-composer">
+                          <textarea rows="3" placeholder="把判断、场景、犹豫都写在这里。保存是追加，不是覆盖。"></textarea>
+                          <div class="pms-row">
+                            <button class="pms-btn pms-btn--sm">关联素材</button>
+                            <span class="pms-spacer"></span>
+                            <button class="pms-btn pms-btn--sm">追加保存</button>
+                            <button class="pms-btn pms-btn--sm pms-btn--primary">暂存并换一张</button>
+                            <button class="pms-btn pms-btn--sm">标为成熟</button>
+                            <button class="pms-btn pms-btn--sm pms-btn--danger">删除</button>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                    <aside class="pms-workarea__side pms-panel pms-analysis">
+                      <div class="pms-drawer__head"><h3>后台分析</h3></div>
+                      <div><h3>核心判断</h3><p>焦虑来自方向未定时的持续投入：投入越多，沉没成本越高，越不敢停。</p></div>
+                      <div><h3>故事与案例</h3><ul><li>每天 4 小时，三个月换三个方向</li><li>报了三门课，一门没学完</li></ul></div>
+                      <div><h3>还缺什么</h3><ul><li>缺一个具体的时间刻度</li><li>缺反例：有没有人边犹豫边推进</li></ul></div>
+                      <div><h3>继续问</h3><ul><li>你上一次确定方向是什么时候？</li><li>如果只能留一个方向，留哪个？</li></ul></div>
+                    </aside>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 快照 3：改稿工作室 -->
+        <div class="ds-shot">
+          <div class="ds-shot__bar">
+            <span class="ds-shot__name">生产改稿 · 写作视图</span>
+            <span class="ds-shot__note">正文限宽 72ch 居中 · 侧栏切页（大纲/建议/版本）· 不再用浮层遮住正文</span>
+          </div>
+          <div class="ds-shot__frame">
+            <div class="pms-root" data-stage="drafts">
+              <header class="pms-toolbar">
+                <span class="pms-toolbar__brand"><span class="pms-toolbar__mark">P</span><span>个人媒体工作室</span></span>
+                <nav class="pms-segmented">
+                  <button class="pms-segment">选题<span class="pms-segment__count">12</span></button>
+                  <button class="pms-segment" aria-selected="true">生产改稿<span class="pms-segment__count">3</span></button>
+                  <button class="pms-segment">渲染<span class="pms-segment__count">1</span></button>
+                </nav>
+                <span class="pms-toolbar__context">成熟的选题和还在改的稿都在这里。先定文字，再谈版式。</span>
+                <div class="pms-toolbar__actions">
+                  <span class="pms-badge pms-badge--accent">模型已连接</span>
+                  <button class="pms-btn pms-btn--sm">返回列表</button>
+                </div>
+              </header>
+              <div class="pms-body">
+                <div class="pms-view">
+                  <div class="pms-toolbar pms-toolbar--sub">
+                    <button class="pms-btn pms-btn--sm pms-btn--ghost">退回选题</button>
+                    <span class="pms-toolbar__context">你不需要更多选题，你需要更少犹豫</span>
+                    <div class="pms-segmented">
+                      <button class="pms-segment" aria-selected="true">写作</button>
+                      <button class="pms-segment">阅读</button>
+                    </div>
+                    <span class="pms-meta">已自动保存</span>
+                    <button class="pms-btn pms-btn--sm">保存版本</button>
+                    <button class="pms-btn pms-btn--sm pms-btn--primary">定稿，送去渲染</button>
+                  </div>
+                  <div class="pms-workarea">
+                    <div class="pms-editor">
+                      <textarea rows="18" style="min-height:0" spellcheck="false">## 你不需要更多选题
+
+大部分人卡在选题上的时候，其实不是没东西可写，而是同时有三四个方向在争抢注意力。真正的瓶颈从来不是素材量，而是做决定的成本。
+
+## 犹豫的成本比错误更高
+
+选错方向的代价是几个月，不选方向的代价是几年。这笔账很少有人真的算过。
+
+## 先定方向，再谈效率
+
+效率是放大器，它不判断方向。方向错了，效率越高，离目标越远。</textarea>
+                    </div>
+                    <aside class="pms-drawer">
+                      <div class="pms-segmented">
+                        <button class="pms-segment" aria-selected="true">大纲</button>
+                        <button class="pms-segment">建议<span class="pms-segment__count">3</span></button>
+                        <button class="pms-segment">版本<span class="pms-segment__count">2</span></button>
+                      </div>
+                      <div class="pms-stack">
+                        <p class="pms-panel__title">小标题结构</p>
+                        <ol class="pms-outline">
+                          <li>你不需要更多选题</li>
+                          <li>犹豫的成本比错误更高</li>
+                          <li>先定方向，再谈效率</li>
+                        </ol>
+                      </div>
+                    </aside>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 快照 4：渲染阶段 -->
+        <div class="ds-shot">
+          <div class="ds-shot__bar">
+            <span class="ds-shot__name">渲染 · 出图与素材抽屉</span>
+            <span class="ds-shot__note">编辑器吃满剩余高度 · 素材面板与画布并排，不覆盖画布</span>
+          </div>
+          <div class="ds-shot__frame">
+            <div class="pms-root" data-stage="render">
+              <header class="pms-toolbar">
+                <span class="pms-toolbar__brand"><span class="pms-toolbar__mark">P</span><span>个人媒体工作室</span></span>
+                <nav class="pms-segmented">
+                  <button class="pms-segment">选题<span class="pms-segment__count">12</span></button>
+                  <button class="pms-segment">生产改稿<span class="pms-segment__count">3</span></button>
+                  <button class="pms-segment" aria-selected="true">渲染<span class="pms-segment__count">1</span></button>
+                </nav>
+                <span class="pms-toolbar__context">文字已经定稿的稿件在这里看版、换主题、导出。</span>
+                <div class="pms-toolbar__actions">
+                  <span class="pms-badge pms-badge--accent">模型已连接</span>
+                  <button class="pms-btn pms-btn--sm">返回列表</button>
+                </div>
+              </header>
+              <div class="pms-body">
+                <div class="pms-xhs">
+                  <div class="pms-xhs__frame">
+                    <div style="flex:1;display:grid;place-items:center;background:var(--pms-surface-sunken);overflow:hidden;padding:var(--pms-space-5)">
+                      <div class="ds-canvas-demo">
+                        <span class="k">VOL. 07</span>
+                        <h4>你不需要更多选题，你需要更少犹豫</h4>
+                        <p>大部分人卡在选题上，不是没东西可写，而是同时有三四个方向在抢注意力。</p>
+                        <p>真正的瓶颈从来不是素材量，而是<mark>做决定的成本</mark>。</p>
+                        <div class="q">写作不是把想法写下来，是把想法逼出来。</div>
+                      </div>
+                    </div>
+                    <div class="pms-xhs__status">成片已写入 ~/.dsh/personal-media-studio/exports</div>
+                  </div>
+                  <aside class="pms-drawer">
+                    <div class="pms-drawer__head">
+                      <p class="pms-panel__title">插入截图页</p>
+                      <button class="pms-iconbtn pms-iconbtn--sm" aria-label="关闭素材面板">✕</button>
+                    </div>
+                    <form class="pms-row">
+                      <input class="pms-input" placeholder="搜索文件名">
+                      <button class="pms-btn pms-btn--sm">搜索</button>
+                    </form>
+                    <div class="pms-stack">
+                      <button class="pms-btn pms-btn--sm" style="justify-content:flex-start">课程大纲截图.png</button>
+                      <button class="pms-btn pms-btn--sm" style="justify-content:flex-start">学员反馈_0712.png</button>
+                      <button class="pms-btn pms-btn--sm" style="justify-content:flex-start">后台数据面板.png</button>
+                    </div>
+                  </aside>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 快照 5：卡片聚焦模式 -->
+        <div class="ds-shot ds-shot--tall">
+          <div class="ds-shot__bar">
+            <span class="ds-shot__name">选题 · 卡片聚焦模式</span>
+            <span class="ds-shot__note">一屏一张稿纸 · 只有暂存/成熟会推进 · 队尾循环 · 纸感令牌只作用于本视图</span>
+          </div>
+          <div class="ds-shot__frame">
+            <div class="pms-root" data-stage="topics">
+              <header class="pms-toolbar">
+                <span class="pms-toolbar__brand"><span class="pms-toolbar__mark">P</span><span>个人媒体工作室</span></span>
+                <nav class="pms-segmented">
+                  <button class="pms-segment" aria-selected="true">选题<span class="pms-segment__count">12</span></button>
+                  <button class="pms-segment">生产改稿<span class="pms-segment__count">3</span></button>
+                  <button class="pms-segment">渲染<span class="pms-segment__count">1</span></button>
+                </nav>
+                <span class="pms-toolbar__context">先把判断写下来。分析在后台发生，成熟了再送去改稿。</span>
+                <div class="pms-toolbar__actions">
+                  <span class="pms-badge pms-badge--accent">模型已连接</span>
+                </div>
+              </header>
+              <div class="pms-body">
+                <div class="pms-focus">
+                  <div class="pms-focus__main">
+                    <div class="pms-toolbar pms-toolbar--sub">
+                      <div class="pms-segmented" role="tablist" aria-label="选题视图">
+                        <button class="pms-segment" role="tab">看板<span class="pms-segment__count">12</span></button>
+                        <button class="pms-segment" role="tab">问答池<span class="pms-segment__count">38</span></button>
+                        <button class="pms-segment" role="tab" aria-selected="true">聚焦<span class="pms-segment__count">12</span></button>
+                      </div>
+                      <span class="pms-toolbar__context">一次只处理一张。写完再决定暂存，还是送去改稿。</span>
+                      <div class="pms-focus__progress" role="progressbar" aria-valuemin="0" aria-valuemax="12" aria-valuenow="3" aria-valuetext="本轮已处理 3 张，共 12 张">
+                        <span class="pms-focus__count">本轮 03 / 12</span>
+                        <div class="pms-focus__track"><div class="pms-focus__fill" style="width:25%"></div></div>
+                      </div>
+                      <button class="pms-btn pms-btn--sm pms-btn--ghost">退出聚焦</button>
+                    </div>
+                    <div class="pms-focus__stage">
+                      <article class="pms-focus__sheet">
+                        <header>
+                          <div class="pms-focus__kicker">选题 · 聚焦处理</div>
+                          <h1 class="pms-focus__title">为什么越努力越焦虑</h1>
+                          <div class="pms-focus__tags">
+                            <span class="pms-badge">我的原话 · 3</span>
+                            <span class="pms-badge">几人问过 · 7</span>
+                            <span class="pms-meta">模型分析</span>
+                          </div>
+                        </header>
+                        <div class="pms-focus__body">
+                          <section class="pms-focus__evidence">
+                            <div class="pms-focus__evidence-head">
+                              <span class="pms-focus__evidence-kicker">提问原话</span>
+                              <span class="pms-focus__evidence-meta">7 人问过</span>
+                            </div>
+                            <blockquote class="pms-focus__evidence-text">努力和结果之间的关系断在了「方向未定」这一步，而不是努力程度不够。</blockquote>
+                            <button class="pms-focus__evidence-toggle" type="button">展开全文</button>
+                          </section>
+                          <div class="pms-focus__timeline">
+                            <p class="pms-focus__thought">我观察到的共同点不是懒，是方向没定就先开跑。每天都很忙，但说不清在往哪走。</p>
+                            <p class="pms-focus__thought">有个学员每天学 4 小时，三个月换了三个方向。每次换都从零开始，越学越慌。</p>
+                            <p class="pms-focus__thought">犹豫本身不是问题，问题是把犹豫当成准备。准备是没有终点的。</p>
+                          </div>
+                        </div>
+                        <footer class="pms-focus__composer">
+                          <textarea rows="3" placeholder="把判断、场景、犹豫都写在这里。Ctrl + Enter 暂存并换一张。"></textarea>
+                          <div class="pms-focus__buttons">
+                            <button class="pms-btn pms-btn--sm pms-btn--ghost">关联素材</button>
+                            <button class="pms-btn pms-btn--sm pms-btn--ghost">追加保存</button>
+                            <span class="pms-spacer"></span>
+                            <button class="pms-btn pms-btn--sm pms-btn--outline-accent">暂存留在本阶段 · 换一张</button>
+                            <button class="pms-btn pms-btn--sm pms-btn--primary">标为成熟并送去改稿</button>
+                          </div>
+                        </footer>
+                      </article>
+                    </div>
+                  </div>
+                  <aside class="pms-focus__aside">
+                    <h3>后台整理</h3>
+                    <h3>核心判断</h3>
+                    <p>焦虑来自方向未定时的持续投入：投入越多，沉没成本越高，越不敢停。</p>
+                    <h3>继续问</h3>
+                    <ul>
+                      <li>你上一次确定方向是什么时候？</li>
+                      <li>如果只能留一个方向，留哪个？</li>
+                    </ul>
+                    <h3>相关素材</h3>
+                    <ul>
+                      <li>课程大纲截图.png</li>
+                      <li>学员反馈_0712.png</li>
+                    </ul>
+                  </aside>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="ds-sub">结构对照</h3>
+        <table class="ds-table">
+          <thead><tr><th>位置</th><th>改动前</th><th>改动后</th></tr></thead>
+          <tbody>
+            <tr><td>页头</td><td>约 150px：产品名 h1 + 副标题 + 独立胶囊导航条</td><td>56px 单行：产品标记 + 分段导航 + 上下文 + 主操作</td></tr>
+            <tr><td>渲染区高度</td><td><code>calc(100vh - 220px)</code> 补丁</td><td>吃满剩余高度，无补丁</td></tr>
+            <tr><td>选题页</td><td>看板与问答池上下堆叠，需长滚动</td><td>分段切换，一页装下</td></tr>
+            <tr><td>卡片输入框</td><td>沉在时间线末尾，写完要滚到底</td><td>固定在底部操作条</td></tr>
+            <tr><td>分析侧栏</td><td>浮动比例 0.8fr，随窗口伸缩</td><td>固定 320px，不挤占写作区</td></tr>
+            <tr><td>正文宽度</td><td>全宽 textarea，1200px 下行长难读</td><td>限宽 72ch 居中</td></tr>
+            <tr><td>建议面板</td><td>sticky 浮层，遮挡正文</td><td>侧栏切页，与正文并排</td></tr>
+            <tr><td>加载态</td><td>一行文字，高度塌陷</td><td>骨架屏，保留版式轮廓</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <footer style="padding-top:var(--pms-space-8);border-top:var(--pms-border-hairline) solid var(--pms-border-subtle);color:var(--pms-text-tertiary);font-size:var(--pms-text-xs);display:flex;justify-content:space-between;flex-wrap:wrap;gap:var(--pms-space-4)">
+        <span>PMS Design System v1.0 · 本页由 <code class="ds-code">tokens.css</code> 与 <code class="ds-code">components.css</code> 构建生成，令牌为唯一真源</span>
+        <span>令牌改动后运行 <code class="ds-code">npm run docs</code> 重新生成</span>
+      </footer>
+    </div>
+  </main>
+</div>
+
+<script>
+  // ── 主题切换 ──────────────────────────────────────────────────────────
+  const body = document.body
+  const label = document.getElementById('themeLabel')
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    const dark = body.getAttribute('data-pms-theme') === 'dark'
+    const next = dark ? 'light' : 'dark'
+    body.setAttribute('data-pms-theme', next)
+    // 快照内部各自声明 .pms-root，会重新定义令牌；必须同步主题才能看到真实深浅效果。
+    document.querySelectorAll('.ds-shot__frame .pms-root').forEach(root => root.setAttribute('data-pms-theme', next))
+    label.textContent = dark ? '切换深色' : '切换浅色'
+  })
+
+  // ── 色阶渲染：直接从 CSS 变量读真实值，保证活文档 ───────────────────
+  const cs = getComputedStyle(body)
+  const readVar = name => cs.getPropertyValue(name).trim()
+
+  function ramp(el, prefix, steps, brandStep) {
+    el.innerHTML = steps.map(step => {
+      const v = `--pms-${prefix}-${step}`
+      const hex = readVar(v)
+      const mark = String(step) === String(brandStep)
+      return `<div class="ds-chip">
+        <div class="sw" style="background:var(${v})${mark ? ';outline:2px solid var(--pms-text-primary);outline-offset:2px' : ''}"></div>
+        <span class="lb"><b>${step}${mark ? ' ●' : ''}</b>${hex.toUpperCase()}</span>
+      </div>`
+    }).join('')
+  }
+  ramp(document.getElementById('rampGreen'), 'green', [50,100,200,300,400,500,600,700,800,900,950], 500)
+  ramp(document.getElementById('rampGold'), 'gold', [50,100,200,300,400,500,600,700,800,900], 500)
+  ramp(document.getElementById('rampNeutral'), 'neutral', [0,50,100,200,300,400,500,600,700,800,900,950], 800)
+  ramp(document.getElementById('rampPaper'), 'paper', [0,50,100,200,500,600,900], 50)
+
+  // ── 语义令牌表 ────────────────────────────────────────────────────────
+  const semantic = [
+    ['--pms-surface-base', '页面底色', '宿主的 bg-base'],
+    ['--pms-surface-raised', '卡片、面板', '宿主的 bg-layer-2'],
+    ['--pms-surface-sunken', '内嵌区、空态', '宿主的 bg-layer-1'],
+    ['--pms-text-primary', '正文', '宿主的 label-primary'],
+    ['--pms-text-secondary', '次级说明', '宿主的 label-secondary'],
+    ['--pms-text-tertiary', '元信息、时间', '宿主的 label-tertiary'],
+    ['--pms-primary', '主操作', '宿主的 state-business-primary'],
+    ['--pms-state-warning', '待确认', '宿主的 state-warning-primary'],
+    ['--pms-state-danger', '错误、拒绝', '宿主的 state-error-primary'],
+    ['--pms-border-subtle', '分割线、卡边', '宿主的 border-default'],
+    ['--pms-focus-bg', '聚焦编辑台底色', '宿主的 bg-base / 米纸回退'],
+    ['--pms-focus-sheet', '聚焦稿纸', '宿主的 bg-layer-2 / 纸白回退'],
+    ['--pms-focus-ink', '聚焦正文墨色', '宿主的 label-primary / 深墨回退'],
+    ['--pms-focus-rule', '稿纸裁切线', '宿主的 border-default / 米纸线回退'],
+    ['--pms-focus-accent', '唯一主按钮（标为成熟）', '品牌绿 700，暗色反转为亮绿'],
+  ]
+  document.getElementById('semanticTable').innerHTML = semantic.map(([token, use, src]) => `
+    <tr>
+      <td><span class="swatch" style="background:var(${token})"></span></td>
+      <td><code>${token}</code></td>
+      <td>${use}</td>
+      <td class="mono">${src}</td>
+    </tr>`).join('')
+
+  // ── 对比度表（脚本实测，非估算） ──────────────────────────────────────
+  const contrast = [
+    ['正文 primary', '#2A2C29', '#F8F9F5', 13.32, 'AA'],
+    ['次级 secondary', '#5A6459', '#F8F9F5', 5.84, 'AA'],
+    ['三级 tertiary', '#707468', '#F8F9F5', 4.53, 'AA'],
+    ['强调文字 green-700', '#1E5A43', '#F8F9F5', 7.64, 'AA'],
+    ['主按钮 白字 / green-600', '#FFFFFF', '#2A7658', 5.48, 'AA'],
+    ['品牌 green-500 / 白', '#34906C', '#FFFFFF', 3.92, 'AA Large'],
+    ['金色 gold-500 / 白', '#D4A54A', '#FFFFFF', 2.26, 'FAIL'],
+    ['警告 amber-600 / 白', '#B45309', '#FFFFFF', 5.02, 'AA'],
+    ['危险 red-600 / 白', '#B91C1C', '#FFFFFF', 6.47, 'AA'],
+    ['信息 blue-600 / 白', '#1D4ED8', '#FFFFFF', 6.70, 'AA'],
+    ['暗 · 正文', '#EDEFE8', '#141614', 15.69, 'AA'],
+    ['暗 · 次级', '#A8AFA4', '#141614', 8.08, 'AA'],
+    ['暗 · 三级', '#7C847A', '#141614', 4.71, 'AA'],
+    ['暗 · 强调', '#8FC4AB', '#141614', 9.23, 'AA'],
+    ['暗 · 深字 / 亮绿按钮', '#0A1F19', '#4FAE85', 6.32, 'AA'],
+    ['聚焦 墨色 / 米纸', '#201E19', '#F7F3E9', 15.03, 'AA'],
+    ['聚焦 二级墨 / 米纸', '#565247', '#F7F3E9', 7.04, 'AA'],
+    ['聚焦 三级墨 / 米纸', '#6F6A5D', '#F7F3E9', 4.86, 'AA'],
+    ['聚焦 强调绿 / 米纸', '#1E5A43', '#F7F3E9', 7.29, 'AA'],
+    ['聚焦 金 700 / 米纸', '#96692C', '#F7F3E9', 4.35, 'FAIL'],
+  ]
+  const badge = k => k === 'AA' ? '<span class="ds-pass ok">AA</span>'
+    : k === 'AA Large' ? '<span class="ds-pass lg">仅大字号</span>'
+    : '<span class="ds-pass no">禁用</span>'
+  document.getElementById('contrastTable').innerHTML = contrast.map(([n, f, b, r, aa]) => `
+    <tr>
+      <td>${n}</td>
+      <td class="mono">${f}</td>
+      <td class="mono">${b}</td>
+      <td class="mono" style="color:var(--pms-text-primary);font-weight:600">${r.toFixed(2)}:1</td>
+      <td>${badge(aa)}</td>
+    </tr>`).join('')
+
+  // ── 字阶 ──────────────────────────────────────────────────────────────
+  const type = [
+    ['3xl', 28, '页面主标题', 700, 1.25],
+    ['2xl', 24, '次级标题', 700, 1.25],
+    ['xl', 20, '区块标题', 600, 1.35],
+    ['lg', 18, '卡片标题', 600, 1.35],
+    ['md', 16, '正文输入、文章', 400, 1.75],
+    ['base', 14, '界面正文默认', 400, 1.55],
+    ['sm', 13, '紧凑辅助', 400, 1.55],
+    ['xs', 12, '元信息、时间', 400, 1.55],
+    ['2xs', 11, '极小角标', 400, 1.55],
+  ]
+  document.getElementById('typeScale').innerHTML = type.map(([k, px, use, w, lh]) => `
+    <div class="ds-typo-row">
+      <div class="ds-typo-key"><b>--pms-text-${k}</b>${px}px<br>w${w} · lh${lh}</div>
+      <div style="font-size:${px}px;font-weight:${w};line-height:${lh};letter-spacing:${px >= 24 ? '-0.02em' : 'normal'}">${use}</div>
+    </div>`).join('')
+
+  // ── 间距 ──────────────────────────────────────────────────────────────
+  const space = [
+    ['space-1', 2], ['space-2', 4], ['space-3', 8], ['space-4', 12],
+    ['space-5', 16], ['space-6', 20], ['space-7', 24], ['space-8', 32],
+    ['space-9', 40], ['space-10', 48], ['space-11', 64], ['space-12', 80],
+  ]
+  document.getElementById('spaceScale').innerHTML = space.map(([k, px]) => `
+    <div class="ds-spec">
+      <span class="lbl">--pms-${k}</span>
+      <div class="bar" style="width:${Math.min(px * 4, 340)}px"></div>
+      <span class="val">${px}px</span>
+    </div>`).join('')
+
+  // ── 圆角 ──────────────────────────────────────────────────────────────
+  const radius = [['xs', 4], ['sm', 8], ['md', 10], ['lg', 12], ['xl', 16], ['2xl', 20], ['full', 999]]
+  document.getElementById('radiusScale').innerHTML = radius.map(([k, px]) => `
+    <div class="ds-chip">
+      <div style="height:64px;background:var(--pms-surface-sunken);border:var(--pms-border-hairline) solid var(--pms-border-default);border-radius:var(--pms-radius-${k})"></div>
+      <span class="lb"><b>${k}</b>${px}px</span>
+    </div>`).join('')
+
+  // ── 阴影 ──────────────────────────────────────────────────────────────
+  document.getElementById('shadowScale').innerHTML = ['xs', 'sm', 'md', 'lg'].map(k => `
+    <div class="ds-chip">
+      <div style="height:64px;background:var(--pms-surface-raised);border-radius:var(--pms-radius-lg);box-shadow:var(--pms-shadow-${k})"></div>
+      <span class="lb"><b>${k}</b>shadow</span>
+    </div>`).join('')
+
+  // ── 令牌计数 ──────────────────────────────────────────────────────────
+  // 通过 http 打开时可枚举真实数量；file:// 下 stylesheet 受跨域限制读不到规则，
+  // 此时保留静态的「3 层」，不显示错误的 0。
+  const metric = document.getElementById('tokenMetric')
+  const sheet = [...document.styleSheets].flatMap(s => { try { return [...s.cssRules] } catch { return [] } })
+  const names = new Set()
+  const walk = rules => rules.forEach(r => {
+    if (r.style) [...r.style].filter(p => p.startsWith('--pms-')).forEach(p => names.add(p))
+    if (r.cssRules) walk([...r.cssRules])
+  })
+  walk(sheet)
+  if (names.size) {
+    metric.previousElementSibling.textContent = '令牌总数'
+    metric.textContent = names.size
+  }
+
+  // ── 动效试听 ──────────────────────────────────────────────────────────
+  document.querySelectorAll('[data-dur]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const box = btn.querySelector('span')
+      btn.style.transition = `transform ${btn.dataset.dur} var(--pms-ease-standard)`
+      btn.style.transform = 'translateX(10px)'
+      setTimeout(() => { btn.style.transform = 'translateX(0)' }, 320)
+    })
+  })
+</script>
+</body>
+</html>
