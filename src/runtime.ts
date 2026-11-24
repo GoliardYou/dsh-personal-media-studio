@@ -12,6 +12,7 @@ import { toXhsMarkdown } from './brand/markdown.ts'
 import { pageInner, themeCss, shotCss, normalizeTheme, type BrandSize } from './brand/html.ts'
 import { mergeExcludes } from './library/profile.ts'
 import { rebuildQaBoard } from './qa/seed.ts'
+import { stageOf } from './stages.ts'
 import { spawn } from 'node:child_process'
 import { StudioError, fingerprint, nowIso, parseJson, uid } from './util.ts'
 
@@ -110,7 +111,101 @@ export class StudioRuntime {
       templates: this.db.db.prepare(`SELECT id, name, template, tokens_json, builtin FROM style_profiles ORDER BY builtin DESC, name`).all(),
       cards: this.listCards(),
       pool: this.searchPool(''),
+      stages: this.listStages(),
     }
+  }
+
+  listStages() {
+    const cards = this.db.db.prepare(`
+      SELECT id, title, status, maturity, source, updated_at
+      FROM cards WHERE deleted_at IS NULL
+      ORDER BY updated_at DESC
+    `).all() as Array<{ id: string, title: string, status: string, maturity: string, source: string, updated_at: string }>
+    const projects = this.db.db.prepare(`SELECT id, card_id, status, template, page_size, updated_at, created_at FROM projects ORDER BY created_at DESC`).all() as Array<{ id: string, card_id: string, status: string, template: string, page_size: string, updated_at: string, created_at: string }>
+    const drafts = this.db.db.prepare(`SELECT id, project_id, title, updated_at, created_at FROM drafts ORDER BY created_at DESC`).all() as Array<{ id: string, project_id: string, title: string, updated_at: string, created_at: string }>
+    const projectByCard = new Map<string, (typeof projects)[number]>()
+    for (const project of projects) if (!projectByCard.has(project.card_id)) projectByCard.set(project.card_id, project)
+    const draftByProject = new Map<string, (typeof drafts)[number]>()
+    for (const draft of drafts) if (!draftByProject.has(draft.project_id)) draftByProject.set(draft.project_id, draft)
+    const rows = cards.map(card => {
+      const project = projectByCard.get(card.id)
+      const draft = project ? draftByProject.get(project.id) : undefined
+      const stage = stageOf({ status: card.status, maturity: card.maturity, projectStatus: project?.status })
+      const updatedAt = [card.updated_at, project?.updated_at, draft?.updated_at].filter(Boolean).sort().at(-1) ?? card.updated_at
+      return {
+        id: card.id,
+        title: draft?.title || card.title,
+        status: card.status,
+        maturity: card.maturity,
+        source: card.source,
+        stage,
+        updatedAt,
+        projectStatus: project?.status ?? '',
+        template: project?.template ?? '',
+        pageSize: project?.page_size ?? 'standard',
+      }
+    })
+    const topics = rows.filter(row => row.stage === 'topics')
+    const draftRows = rows.filter(row => row.stage === 'drafts')
+    const render = rows.filter(row => row.stage === 'render')
+    return {
+      counts: { topics: topics.length, drafts: draftRows.length, render: render.length },
+      topics,
+      drafts: draftRows,
+      render,
+    }
+  }
+
+  markMature(cardId: string) {
+    const card = this.requireCard(cardId)
+    const stamp = nowIso()
+    const project = this.latestProject(cardId)
+    let status = String(card.status)
+    if (status === 'open' || status === 'shelved') status = 'ready_for_production'
+    if (project?.status === 'paused') status = 'in_production'
+    this.db.tx(() => {
+      this.db.db.prepare(`UPDATE cards SET maturity = 'mature', status = ?, updated_at = ? WHERE id = ?`).run(status, stamp, cardId)
+      if (project?.status === 'paused') this.db.db.prepare(`UPDATE projects SET status = 'drafting', updated_at = ? WHERE id = ?`).run(stamp, project.id)
+    })
+    return this.getCard(cardId)
+  }
+
+  returnToTopics(cardId: string) {
+    this.requireCard(cardId)
+    const stamp = nowIso()
+    const project = this.latestProject(cardId)
+    this.db.tx(() => {
+      this.db.db.prepare(`UPDATE cards SET maturity = 'forming', status = 'open', updated_at = ? WHERE id = ?`).run(stamp, cardId)
+      if (project && project.status !== 'exported') this.db.db.prepare(`UPDATE projects SET status = 'paused', updated_at = ? WHERE id = ?`).run(stamp, project.id)
+    })
+    return this.getCard(cardId)
+  }
+
+  confirmForRender(cardId: string) {
+    const project = this.latestProject(cardId)
+    if (!project) throw new StudioError('missing_project', '先确认文字并生成结构，再送去渲染。')
+    const draft = this.db.db.prepare(`SELECT id FROM drafts WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`).get(project.id) as { id: string } | undefined
+    if (draft) this.snapshot(draft.id, '送去渲染')
+    const stamp = nowIso()
+    this.db.db.prepare(`UPDATE cards SET status = 'reviewing', updated_at = ? WHERE id = ?`).run(stamp, cardId)
+    this.db.db.prepare(`UPDATE projects SET status = 'reviewing', updated_at = ? WHERE id = ?`).run(stamp, project.id)
+    return this.getProject(cardId)
+  }
+
+  returnToDrafts(cardId: string) {
+    const project = this.latestProject(cardId)
+    if (!project) throw new StudioError('missing_project', '还没有稿件可以退回。')
+    const before = this.db.db.prepare(`SELECT COUNT(*) AS n FROM versions WHERE draft_id IN (SELECT id FROM drafts WHERE project_id = ?)`).get(project.id) as { n: number }
+    const stamp = nowIso()
+    this.db.db.prepare(`UPDATE cards SET status = 'in_production', maturity = 'mature', updated_at = ? WHERE id = ?`).run(stamp, cardId)
+    this.db.db.prepare(`UPDATE projects SET status = 'drafting', updated_at = ? WHERE id = ?`).run(stamp, project.id)
+    const after = this.db.db.prepare(`SELECT COUNT(*) AS n FROM versions WHERE draft_id IN (SELECT id FROM drafts WHERE project_id = ?)`).get(project.id) as { n: number }
+    if (after.n !== before.n) throw new StudioError('internal', '退回时不应该改动版本。')
+    return this.getProject(cardId)
+  }
+
+  private latestProject(cardId: string) {
+    return this.db.db.prepare(`SELECT id, status FROM projects WHERE card_id = ? ORDER BY created_at DESC LIMIT 1`).get(cardId) as { id: string, status: string } | undefined
   }
 
   seedTopics() {
@@ -379,17 +474,18 @@ export class StudioRuntime {
     return { relationId }
   }
 
-  saveDraft(draftId: string, patch: { title?: string, template?: TemplateId, pages?: PageModel[] }) {
+  saveDraft(draftId: string, patch: { title?: string, template?: TemplateId, pages?: PageModel[], pageSize?: string }) {
     const draft = this.requireDraft(draftId)
     const stamp = nowIso()
+    const pageSize = patch.pageSize === 'small' || patch.pageSize === 'large' || patch.pageSize === 'standard' ? patch.pageSize : ''
     this.db.tx(() => {
-      if (patch.template) {
-        this.db.db.prepare(`UPDATE projects SET template = ?, updated_at = ? WHERE id = ?`).run(patch.template, stamp, draft.project_id)
+      if (patch.template || pageSize) {
+        this.db.db.prepare(`UPDATE projects SET template = COALESCE(?, template), page_size = COALESCE(?, page_size), updated_at = ? WHERE id = ?`).run(patch.template ?? null, pageSize || null, stamp, draft.project_id)
       }
       if (patch.title) this.db.db.prepare(`UPDATE drafts SET title = ? WHERE id = ?`).run(patch.title, draftId)
       if (patch.pages) this.writePages(draftId, patch.pages)
       this.db.db.prepare(`UPDATE drafts SET version = version + 1, updated_at = ? WHERE id = ?`).run(stamp, draftId)
-      this.db.db.prepare(`UPDATE cards SET status = 'reviewing', updated_at = ? WHERE id = (SELECT card_id FROM projects WHERE id = ?)`).run(stamp, draft.project_id)
+      this.db.db.prepare(`UPDATE projects SET updated_at = ? WHERE id = ?`).run(stamp, draft.project_id)
     })
     return this.projectByDraft(draftId)
   }
@@ -445,7 +541,8 @@ export class StudioRuntime {
     const version = this.snapshot(draftId, '导出')
     const pages = this.readPages(draftId)
     const template = normalizeTheme(String(loaded.project.template || 'avatar-green'))
-    const size = this.config.render.size
+    const storedSize = String((loaded.project as { page_size?: string }).page_size || '')
+    const size = storedSize === 'small' || storedSize === 'large' || storedSize === 'standard' ? storedSize : this.config.render.size
     const assetRows = (this.db.db.prepare(`SELECT id, abs_path, title FROM assets WHERE deleted_at IS NULL`).all() as Array<{ id: string, abs_path: string, title: string }>).map(row => ({ id: row.id, absPath: row.abs_path, title: row.title })) satisfies RenderAsset[]
     const dir = join(this.exportDir, String(loaded.project.id), stampDir())
     const pageDir = join(dir, 'pages')
@@ -736,7 +833,10 @@ export class StudioRuntime {
       case 'deleteCard': return this.deleteCard(String(payload.cardId))
       case 'restoreCard': return this.restoreCard(String(payload.cardId))
       case 'textGate': return this.textGate(String(payload.cardId))
-      case 'previewPage': return { html: (await import('./render.ts')).renderPageHtml(payload.page as PageModel, String(payload.template || 'avatar-green'), this.previewAssets(), this.config.render.size, Number(payload.index || 0), Number(payload.total || 1)) }
+      case 'previewPage': {
+        const size = payload.size === 'small' || payload.size === 'large' || payload.size === 'standard' ? payload.size : this.config.render.size
+        return { html: (await import('./render.ts')).renderPageHtml(payload.page as PageModel, String(payload.template || 'avatar-green'), this.previewAssets(), size, Number(payload.index || 0), Number(payload.total || 1)) }
+      }
       case 'promote': {
         const cardId = String(payload.cardId)
         return this.promote(cardId, this.issueIntent(cardId, 'promote'))
@@ -747,7 +847,11 @@ export class StudioRuntime {
       }
       case 'getProject': return this.getProject(String(payload.cardId))
       case 'decideAsset': return this.decideAsset(String(payload.relationId), payload.decision as 'accepted' | 'rejected' | 'replaced', payload.replacementAssetId ? String(payload.replacementAssetId) : undefined, payload.crop as { x: number, y: number, scale: number } | undefined)
-      case 'saveDraft': return this.saveDraft(String(payload.draftId), { title: payload.title ? String(payload.title) : undefined, template: payload.template as TemplateId | undefined, pages: payload.pages as PageModel[] | undefined })
+      case 'saveDraft': return this.saveDraft(String(payload.draftId), { title: payload.title ? String(payload.title) : undefined, template: payload.template as TemplateId | undefined, pages: payload.pages as PageModel[] | undefined, pageSize: payload.pageSize ? String(payload.pageSize) : undefined })
+      case 'markMature': return this.markMature(String(payload.cardId))
+      case 'returnToTopics': return this.returnToTopics(String(payload.cardId))
+      case 'confirmForRender': return this.confirmForRender(String(payload.cardId))
+      case 'returnToDrafts': return this.returnToDrafts(String(payload.cardId))
       case 'snapshot': return this.snapshot(String(payload.draftId), String(payload.label ?? ''))
       case 'listVersions': return this.listVersions(String(payload.draftId))
       case 'restoreVersion': return this.restoreVersion(String(payload.versionId))

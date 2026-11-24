@@ -84,7 +84,7 @@ try {
   await page.waitForTimeout(2500)
   console.log('BODY', (await page.locator('body').innerText()).slice(0, 1800))
   await dismissOverlays(page)
-  const openStudio = page.getByRole('button', { name: '个人媒体工作室' })
+  const openStudio = page.getByRole('button', { name: '选题' })
   await openStudio.first().click({ timeout: 15000 })
   await page.getByTestId('studio-root').waitFor({ timeout: 30000 })
   await page.getByTestId('topic-card').first().waitFor()

@@ -242,6 +242,9 @@ export class StudioDb {
       CREATE INDEX IF NOT EXISTS idx_qa_items_cluster ON qa_items(cluster_key);
     `)
     this.mark(2)
+    const projectColumns = new Set((this.db.prepare(`PRAGMA table_info(projects)`).all() as Array<{ name: string }>).map(column => column.name))
+    if (!projectColumns.has('page_size')) this.db.exec(`ALTER TABLE projects ADD COLUMN page_size TEXT NOT NULL DEFAULT 'standard'`)
+    this.mark(3)
   }
 
   private mark(version: number) {

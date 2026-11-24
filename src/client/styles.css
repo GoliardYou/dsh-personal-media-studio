@@ -53,6 +53,54 @@
   color: var(--dsw-alias-label-primary, inherit);
 }
 .pms-badge.warn { background: color-mix(in srgb, var(--dsw-alias-state-warning-primary, #b45309) 22%, transparent); }
+.pms-stages {
+  display: flex;
+  gap: 8px;
+  padding: 12px 28px;
+  border-bottom: 1px solid var(--dsw-alias-border-default, color-mix(in srgb, currentColor 12%, transparent));
+}
+.pms-stages button {
+  border: 1px solid var(--dsw-alias-border-default, color-mix(in srgb, currentColor 16%, transparent));
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.pms-stages button.on {
+  background: var(--dsw-alias-label-primary, CanvasText);
+  color: var(--dsw-alias-bg-layer-1, Canvas);
+  border-color: transparent;
+}
+.pms-stages button span {
+  min-width: 1.4em;
+  text-align: center;
+  border-radius: 999px;
+  padding: 0 6px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-size: 12px;
+}
+.pms-stage-list { display: flex; flex-direction: column; gap: 8px; }
+.pms-stage-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  text-align: left;
+  width: 100%;
+  border: 1px solid var(--dsw-alias-border-default, color-mix(in srgb, currentColor 12%, transparent));
+  background: var(--dsw-alias-bg-module-platform, var(--dsw-alias-bg-layer-2, transparent));
+  color: inherit;
+  border-radius: 16px;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+.pms-stage-row strong { display: block; font-size: 16px; margin-bottom: 4px; }
+.pms-stage-row time { color: var(--dsw-alias-label-tertiary, color-mix(in srgb, currentColor 55%, transparent)); font-size: 12px; white-space: nowrap; }
 .pms-body { flex: 1; min-height: 0; overflow: auto; padding: 22px 28px 40px; }
 .pms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
 .pms-card {
@@ -209,6 +257,7 @@
 .pms-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 @media (max-width: 960px) {
   .pms-split, .pms-workbench { grid-template-columns: 1fr; }
-  .pms-top { flex-direction: column; align-items: flex-start; }
+  .pms-top, .pms-stages { flex-direction: column; align-items: flex-start; }
   .pms-stage { justify-content: start; }
+  .pms-stage-row { align-items: flex-start; flex-direction: column; }
 }

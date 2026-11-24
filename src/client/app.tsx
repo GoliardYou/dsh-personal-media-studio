@@ -1,14 +1,29 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import css from './styles.css'
 
-const PANEL_ID = 'personal-media'
+type StageId = 'topics' | 'drafts' | 'render'
 
 interface ClientCtx {
   effect(run: () => void | (() => void)): void
+  layout: { selectPanel(id: string | null): void }
   slots: {
     inject(name: string, register: () => unknown): void
     register(meta: Record<string, unknown>, component: (props: { size?: number, active?: boolean }) => ReactElement): unknown
   }
+}
+
+const PANELS: Record<StageId, string> = {
+  topics: 'personal-media',
+  drafts: 'personal-media-drafts',
+  render: 'personal-media-render',
+}
+const STAGE_LABEL: Record<StageId, string> = { topics: '选题', drafts: '生产改稿', render: '渲染' }
+
+function readRoute(fallback: StageId): { stage: StageId, cardId: string | null } {
+  const hash = location.hash.replace(/^#/, '')
+  const match = hash.match(/^pms\/(topics|drafts|render)(?:\/([A-Za-z0-9-]+))?$/)
+  if (!match) return { stage: fallback, cardId: null }
+  return { stage: match[1] as StageId, cardId: match[2] ?? null }
 }
 
 interface Span { text: string, bold?: boolean, highlight?: boolean }
@@ -39,6 +54,25 @@ interface CardRow {
   latestThesis?: string
   ask_count?: number
   updated_at: string
+  updatedAt?: string
+}
+interface StageRow {
+  id: string
+  title: string
+  status: string
+  maturity: string
+  source: string
+  stage: StageId
+  updatedAt: string
+  projectStatus: string
+  template: string
+  pageSize: string
+}
+interface StageBook {
+  counts: { topics: number, drafts: number, render: number }
+  topics: StageRow[]
+  drafts: StageRow[]
+  render: StageRow[]
 }
 interface PoolTopic {
   id: string
@@ -76,7 +110,7 @@ interface CardDetail {
   job: { status?: string } | null
 }
 interface ProjectView {
-  project: { id: string, template: string, status: string }
+  project: { id: string, template: string, status: string, page_size?: string }
   draft: { id: string, title: string, version: number }
   pages: Array<PageModel & { html?: string }>
   relations: Array<{ id: string, asset_id: string, status: string, rationale: string, source_path: string, draft_page_id: string }>
@@ -111,7 +145,7 @@ function spanText(spans?: Span[], fallback = '') {
 
 function statusLabel(status: string) {
   const map: Record<string, string> = {
-    open: '进行中', shelved: '已搁置', ready_for_production: '待生产', in_production: '生产中', reviewing: '审定中', exported: '已导出', deleted: '已删除',
+    open: '进行中', shelved: '已搁置', ready_for_production: '待写正文', in_production: '改稿中', drafting: '改稿中', reviewing: '待渲染', exported: '已导出', paused: '已退回选题', deleted: '已删除',
   }
   return map[status] ?? status
 }
@@ -139,13 +173,53 @@ export function apply(ctx: ClientCtx) {
   style.textContent = css
   document.head.appendChild(style)
   ctx.effect(() => () => style.remove())
-  ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID }, () => <StudioApp />))
-  ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
-    name: 'sidebar.panellist',
-    id: PANEL_ID,
-    order: 8,
-    label: () => '个人媒体工作室',
-  }, StudioIcon))
+  const openStage = (stage: StageId) => {
+    ctx.layout.selectPanel(PANELS[stage])
+  }
+  const stages: StageId[] = ['topics', 'drafts', 'render']
+  for (const stage of stages) {
+    ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANELS[stage] }, () => <StudioApp stage={stage} openStage={openStage} />))
+    ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+      name: 'sidebar.panellist',
+      id: PANELS[stage],
+      order: 8 + stages.indexOf(stage),
+      label: () => STAGE_LABEL[stage],
+    }, (props: { size?: number }) => <StageIcon stage={stage} size={props.size} />))
+  }
+  const syncHash = () => {
+    if (!location.hash.startsWith('#pms/')) return
+    openStage(readRoute('topics').stage)
+  }
+  window.addEventListener('hashchange', syncHash)
+  ctx.effect(() => () => window.removeEventListener('hashchange', syncHash))
+  if (location.hash.startsWith('#pms/')) {
+    let tries = 0
+    const boot = () => {
+      try { syncHash() } catch { if (tries++ < 20) window.setTimeout(boot, 250) }
+    }
+    window.setTimeout(boot, 0)
+  }
+}
+
+function StageIcon({ stage, size = 22 }: { stage: StageId, size?: number }) {
+  if (stage === 'drafts') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="6" y="5" width="16" height="22" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M10 12h8M10 17h8M10 22h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (stage === 'render') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="7" y="4" width="18" height="24" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+        <circle cx="16" cy="14" r="3" fill="currentColor" />
+        <path d="M11 23h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  return <StudioIcon size={size} />
 }
 
 function StudioIcon({ size = 22 }: { size?: number, active?: boolean }) {
@@ -158,12 +232,14 @@ function StudioIcon({ size = 22 }: { size?: number, active?: boolean }) {
   )
 }
 
-function StudioApp() {
-  const [boot, setBoot] = useState<{ engine: { mode: string, reason: string }, libraryCount: number, cards: CardRow[], pool?: { total: number, topics: PoolTopic[] } } | null>(null)
+function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: StageId) => void }) {
+  const [boot, setBoot] = useState<{ engine: { mode: string, reason: string }, libraryCount: number, cards: CardRow[], pool?: { total: number, topics: PoolTopic[] }, stages?: StageBook } | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<'home' | 'card' | 'text' | 'production' | 'review'>('home')
-  const [cardId, setCardId] = useState<string | null>(null)
+  const [cardId, setCardId] = useState<string | null>(() => {
+    const route = readRoute(stage)
+    return route.stage === stage ? route.cardId : null
+  })
   const [toast, setToast] = useState<{ id: string, title: string } | null>(null)
 
   async function refresh() {
@@ -172,22 +248,52 @@ function StudioApp() {
     return data
   }
 
+  function go(nextStage: StageId, nextCard: string | null) {
+    const hash = nextCard ? `#pms/${nextStage}/${nextCard}` : `#pms/${nextStage}`
+    if (location.hash !== hash) location.hash = hash
+    else openStage(nextStage)
+    if (nextStage === stage) setCardId(nextCard)
+  }
+
+  useEffect(() => {
+    if (!location.hash.startsWith('#pms/')) {
+      location.hash = `#pms/${stage}`
+      return
+    }
+    const route = readRoute(stage)
+    if (route.stage !== stage) {
+      location.hash = `#pms/${stage}`
+      return
+    }
+    setCardId(route.cardId)
+  }, [stage])
+
+  useEffect(() => {
+    const onHash = () => {
+      const route = readRoute(stage)
+      if (route.stage === stage) setCardId(route.cardId)
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [stage])
+
   useEffect(() => {
     refresh().catch(err => setError(err instanceof Error ? err.message : String(err))).finally(() => setLoading(false))
   }, [])
 
-  function openCard(id: string) {
-    setCardId(id)
-    setView('card')
-  }
+  const counts = boot?.stages?.counts ?? { topics: boot?.cards.length ?? 0, drafts: 0, render: 0 }
+  const topicCards = (boot?.stages?.topics ?? []).map(row => {
+    const card = boot?.cards.find(item => item.id === row.id)
+    return { ...(card ?? { id: row.id, title: row.title, status: row.status, maturity: row.maturity, source: row.source, updated_at: row.updatedAt }), updatedAt: row.updatedAt }
+  })
 
   return (
-    <div className="pms-root" data-testid="studio-root">
+    <div className="pms-root" data-testid="studio-root" data-stage={stage}>
       <header className="pms-top">
         <div>
           <p className="pms-kicker">Personal Media Studio</p>
           <h1>个人媒体工作室</h1>
-          <p className="pms-sub">先选一张选题卡，把判断写下来。分析在后台发生，你随时可以换一张。</p>
+          <p className="pms-sub">{stage === 'topics' ? '先把判断写下来。分析在后台发生，成熟了再送去改稿。' : stage === 'drafts' ? '成熟的选题和还在改的稿都在这里。先定文字，再谈版式。' : '文字已经定稿的稿件在这里看版、换主题、导出。'}</p>
         </div>
         <div className="pms-actions">
           {boot && (
@@ -195,27 +301,44 @@ function StudioApp() {
               {boot.engine.mode === 'llm' ? '模型已连接' : '本地预览引擎'}
             </span>
           )}
-          {view !== 'home' && <button className="pms-btn" onClick={() => { setView('home'); void refresh() }}>返回选题</button>}
-          {view === 'home' && <NewCard onCreated={id => { void refresh(); openCard(id) }} />}
+          {cardId && <button className="pms-btn" onClick={() => { go(stage, null); void refresh() }}>{stage === 'topics' ? '返回选题' : '返回列表'}</button>}
+          {stage === 'topics' && !cardId && <NewCard onCreated={id => { void refresh(); go('topics', id) }} />}
         </div>
       </header>
+      <nav className="pms-stages" data-testid="stage-nav" aria-label="工作室阶段">
+        {(['topics', 'drafts', 'render'] as const).map(item => (
+          <button key={item} type="button" className={item === stage ? 'on' : ''} data-testid={`stage-${item}`} aria-current={item === stage ? 'page' : undefined} onClick={() => go(item, null)}>
+            {STAGE_LABEL[item]}
+            <span data-testid="stage-count">{counts[item]}</span>
+          </button>
+        ))}
+      </nav>
       <div className="pms-body">
-        {loading && <div className="pms-empty" data-testid="loading">正在打开你的选题卡片…</div>}
+        {loading && <div className="pms-empty" data-testid="loading">正在打开这一阶段…</div>}
         {error && <div className="pms-error" data-testid="error">{error}</div>}
-        {!loading && !error && view === 'home' && boot && (
-          <Home cards={boot.cards} libraryCount={boot.libraryCount} pool={boot.pool ?? { total: 0, topics: [] }} onOpen={openCard} onChanged={() => { void refresh() }} />
+        {!loading && !error && stage === 'topics' && !cardId && boot && (
+          <Home cards={topicCards} libraryCount={boot.libraryCount} pool={boot.pool ?? { total: 0, topics: [] }} onOpen={id => go('topics', id)} onChanged={() => { void refresh() }} />
         )}
-        {view === 'card' && cardId && (
+        {!loading && !error && stage === 'drafts' && !cardId && (
+          <StageList testId="draft-center" rowTestId="draft-row" empty="还没有成熟的选题。在选题里把一张卡标为成熟后，它会出现在这里。" rows={boot?.stages?.drafts ?? []} onOpen={id => go('drafts', id)} />
+        )}
+        {!loading && !error && stage === 'render' && !cardId && (
+          <StageList testId="render-center" rowTestId="render-row" empty="还没有定稿。生产改稿里确认文字之后，稿件会送到这里渲染。" rows={boot?.stages?.render ?? []} onOpen={id => go('render', id)} />
+        )}
+        {stage === 'topics' && cardId && (
           <CardWorkspace
             cardId={cardId}
-            onShelved={() => { setView('home'); void refresh() }}
-            onDeleted={id => { setToast({ id, title: '卡片已删除' }); setView('home'); void refresh() }}
-            onProduce={() => setView('text')}
+            onShelved={() => { go('topics', null); void refresh() }}
+            onDeleted={id => { setToast({ id, title: '卡片已删除' }); go('topics', null); void refresh() }}
+            onMature={() => { go('drafts', cardId); void refresh() }}
           />
         )}
-        {view === 'text' && cardId && <TextGate cardId={cardId} onConfirmed={() => setView('production')} />}
-        {view === 'production' && cardId && <Production cardId={cardId} onReview={() => setView('review')} />}
-        {view === 'review' && cardId && <Workbench cardId={cardId} />}
+        {stage === 'drafts' && cardId && (
+          <DraftDetail cardId={cardId} onBack={() => { go('topics', cardId); void refresh() }} onRender={() => { go('render', cardId); void refresh() }} />
+        )}
+        {stage === 'render' && cardId && (
+          <Workbench cardId={cardId} onReturn={() => { go('drafts', cardId); void refresh() }} />
+        )}
       </div>
       {toast && (
         <div className="pms-toast" data-testid="undo-toast">
@@ -223,6 +346,49 @@ function StudioApp() {
           <button className="pms-btn" onClick={() => { void rpc('restoreCard', { cardId: toast.id }).then(() => refresh()); setToast(null) }}>撤销</button>
         </div>
       )}
+    </div>
+  )
+}
+
+function StageList({ rows, empty, testId, rowTestId, onOpen }: { rows: StageRow[], empty: string, testId: string, rowTestId: string, onOpen: (id: string) => void }) {
+  return (
+    <div data-testid={testId}>
+      {rows.length === 0 && <div className="pms-empty">{empty}</div>}
+      <div className="pms-stage-list">
+        {rows.map(row => (
+          <button key={row.id} className="pms-stage-row" data-testid={rowTestId} onClick={() => onOpen(row.id)}>
+            <div>
+              <strong>{row.title}</strong>
+              <span className="pms-meta">{statusLabel(row.projectStatus || row.status)} · {maturityLabel(row.maturity)}</span>
+            </div>
+            <time dateTime={row.updatedAt}>{formatWhen(row.updatedAt)}</time>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function formatWhen(value: string) {
+  return value.replace('T', ' ').slice(0, 16)
+}
+
+function DraftDetail({ cardId, onBack, onRender }: { cardId: string, onBack: () => void, onRender: () => void }) {
+  const [mode, setMode] = useState<'loading' | 'gate' | 'draft'>('loading')
+  const [error, setError] = useState('')
+  useEffect(() => {
+    void rpc<ProjectView | null>('getProject', { cardId }).then(project => setMode(project?.draft ? 'draft' : 'gate')).catch(err => setError(err instanceof Error ? err.message : String(err)))
+  }, [cardId])
+  if (error) return <div className="pms-error">{error}</div>
+  if (mode === 'loading') return <div className="pms-empty">正在打开这篇稿…</div>
+  if (mode === 'gate') return <TextGate cardId={cardId} onConfirmed={() => setMode('draft')} />
+  return (
+    <div>
+      <div className="pms-row" style={{ marginBottom: 12 }}>
+        <button className="pms-btn" onClick={() => { void rpc('returnToTopics', { cardId }).then(onBack) }}>退回选题</button>
+      </div>
+      <Production cardId={cardId} onReview={() => { void rpc('confirmForRender', { cardId }).then(onRender).catch(err => setError(err instanceof Error ? err.message : String(err))) }} />
+      {error && <div className="pms-error">{error}</div>}
     </div>
   )
 }
@@ -306,7 +472,7 @@ function Home({ cards, libraryCount, pool, onOpen, onChanged }: { cards: CardRow
   )
 }
 
-function CardWorkspace({ cardId, onShelved, onDeleted, onProduce }: { cardId: string, onShelved: () => void, onDeleted: (id: string) => void, onProduce: () => void }) {
+function CardWorkspace({ cardId, onShelved, onDeleted, onMature }: { cardId: string, onShelved: () => void, onDeleted: (id: string) => void, onMature: () => void }) {
   const [detail, setDetail] = useState<CardDetail | null>(null)
   const [body, setBody] = useState('')
   const [error, setError] = useState('')
@@ -345,11 +511,11 @@ function CardWorkspace({ cardId, onShelved, onDeleted, onProduce }: { cardId: st
     }
   }
 
-  async function produce() {
+  async function mature() {
     setBusy(true)
     try {
-      await rpc('promote', { cardId })
-      onProduce()
+      await rpc('markMature', { cardId })
+      onMature()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -395,7 +561,7 @@ function CardWorkspace({ cardId, onShelved, onDeleted, onProduce }: { cardId: st
           <div className="pms-row">
             <button className="pms-btn" disabled={busy} onClick={() => void save(false)}>追加保存</button>
             <button className="pms-btn primary" data-testid="shelve" disabled={busy} onClick={() => void save(true)}>暂存并换一张</button>
-            <button className="pms-btn" data-testid="promote" disabled={busy || detail.interactions.length === 0} onClick={() => void produce()}>我决定进入内容生产</button>
+            <button className="pms-btn" data-testid="promote" disabled={busy || detail.interactions.length === 0} onClick={() => void mature()}>标为成熟，送去生产改稿</button>
             <button className="pms-btn" data-testid="delete-card" onClick={() => { void rpc('deleteCard', { cardId }).then(() => onDeleted(cardId)) }}>删除</button>
           </div>
         </div>
@@ -449,6 +615,8 @@ function CardWorkspace({ cardId, onShelved, onDeleted, onProduce }: { cardId: st
 
 function Production({ cardId, onReview }: { cardId: string, onReview: () => void }) {
   const [project, setProject] = useState<ProjectView | null>(null)
+  const [pages, setPages] = useState<PageModel[]>([])
+  const [suggestions, setSuggestions] = useState<Array<{ id: string, text: string }>>([])
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
   const [found, setFound] = useState<AssetHit[]>([])
@@ -456,29 +624,58 @@ function Production({ cardId, onReview }: { cardId: string, onReview: () => void
   async function load() {
     const value = await rpc<ProjectView | null>('getProject', { cardId })
     setProject(value)
+    setPages(value?.pages ?? [])
+    const detail = await rpc<CardDetail>('getCard', { cardId })
+    setSuggestions(detail.suggestions.filter(item => item.status === 'open').map(item => ({ id: item.id, text: item.text })))
   }
   useEffect(() => { void load().catch(err => setError(err instanceof Error ? err.message : String(err))) }, [cardId])
+
+  function editPages(next: PageModel[]) {
+    setPages(next)
+    if (!project?.draft) return
+    void rpc('saveDraft', { draftId: project.draft.id, pages: next }).catch(err => setError(err instanceof Error ? err.message : String(err)))
+  }
+
   if (error) return <div className="pms-error">{error}</div>
   if (!project?.draft) return <div className="pms-empty">正在组织标题、小标题和可追溯的素材…</div>
   return (
     <div data-testid="production">
       <div className="pms-row">
         <h2 style={{ margin: 0 }}>{project.draft.title}</h2>
-        <span className="pms-badge">{project.pages.length} 页，随内容伸缩</span>
-        <button className="pms-btn primary" data-testid="enter-review" onClick={onReview}>进入最终审定</button>
+        <span className="pms-badge">{pages.length} 页，随内容伸缩</span>
+        <button className="pms-btn primary" data-testid="enter-review" onClick={onReview}>文字已定稿，送去渲染</button>
       </div>
       <div className="pms-split" style={{ marginTop: 16 }}>
-        <section className="pms-col">
-          {project.pages.map(page => (
+        <section className="pms-col" data-testid="draft-structure">
+          <h3>标题、小标题、金句</h3>
+          <p className="pms-note">这里只改结构。版式和导出在渲染阶段，不会改你已经写下的原句。</p>
+          {pages.map(page => (
             <article key={page.id} style={{ marginBottom: 16 }}>
-              <div className="pms-kicker">{page.kicker && page.kicker !== roleLabel(page.role) ? `${page.kicker} · ${roleLabel(page.role)}` : roleLabel(page.role)}</div>
-              <h3>{page.title}</h3>
-              {page.blocks.filter(block => block.type === 'paragraph').map(block => <p key={block.id}>{spanText(block.spans, block.text)}</p>)}
-              {page.blocks.filter(block => block.type === 'quote').map(block => <blockquote key={block.id}>「{block.text}」</blockquote>)}
+              <div className="pms-kicker">{roleLabel(page.role)}</div>
+              <label className="pms-field">
+                <span>{page.role === 'cover' ? '标题' : '小标题'}</span>
+                <input aria-label={page.role === 'cover' ? '标题' : '小标题'} value={page.title} onChange={event => editPages(pages.map(item => item.id === page.id ? { ...item, title: event.target.value } : item))} />
+              </label>
+              {page.blocks.filter(block => block.type === 'paragraph').map(block => (
+                <label key={block.id} className="pms-field">
+                  <span>正文</span>
+                  <textarea rows={3} value={spanText(block.spans, block.text)} onChange={event => editPages(pages.map(item => item.id === page.id ? { ...item, blocks: item.blocks.map(candidate => candidate.id === block.id ? { ...candidate, text: event.target.value, spans: [{ ...(candidate.spans?.[0] ?? {}), text: event.target.value }] } : candidate) } : item))} />
+                  <button className="pms-btn" type="button" onClick={() => editPages(pages.map(item => item.id === page.id ? { ...item, blocks: item.blocks.map(candidate => candidate.id === block.id ? { ...candidate, spans: [{ text: spanText(candidate.spans, candidate.text), bold: !candidate.spans?.[0]?.bold }] } : candidate) } : item))}>{block.spans?.[0]?.bold ? '取消加黑' : '加黑'}</button>
+                </label>
+              ))}
+              {page.blocks.filter(block => block.type === 'quote').map(block => (
+                <label key={block.id} className="pms-field">
+                  <span>金句</span>
+                  <textarea rows={2} value={block.text ?? ''} onChange={event => editPages(pages.map(item => item.id === page.id ? { ...item, blocks: item.blocks.map(candidate => candidate.id === block.id ? { ...candidate, text: event.target.value } : candidate) } : item))} />
+                </label>
+              ))}
             </article>
           ))}
         </section>
         <aside className="pms-panel" data-testid="asset-matching">
+          <h3>可以参考的建议</h3>
+          {suggestions.length === 0 && <p className="pms-note">分析追问会出现在这里，不会自动改你的句子。</p>}
+          <ul>{suggestions.map(item => <li key={item.id}>{item.text}</li>)}</ul>
           <h3>真实本地素材</h3>
           <p className="pms-sub">建议来自你的素材库，带源文件路径。接受、拒绝或换成另一张，都由你点。</p>
           {project.relations.map(relation => (
@@ -513,10 +710,11 @@ function Production({ cardId, onReview }: { cardId: string, onReview: () => void
   )
 }
 
-function Workbench({ cardId }: { cardId: string }) {
+function Workbench({ cardId, onReturn }: { cardId: string, onReturn?: () => void }) {
   const [project, setProject] = useState<ProjectView | null>(null)
   const [pages, setPages] = useState<PageModel[]>([])
   const [template, setTemplate] = useState<keyof typeof THEMES>('avatar-green')
+  const [pageSize, setPageSize] = useState<'small' | 'standard' | 'large'>('standard')
   const [current, setCurrent] = useState(0)
   const [past, setPast] = useState<PageModel[][]>([])
   const [future, setFuture] = useState<PageModel[][]>([])
@@ -534,6 +732,7 @@ function Workbench({ cardId }: { cardId: string }) {
       setPages(value.pages)
       const incoming = value.project.template === 'tech' ? 'navy-gold' : value.project.template === 'knowledge' ? 'avatar-green' : value.project.template === 'opinion' ? 'gongwen' : value.project.template
       if (incoming in THEMES) setTemplate(incoming as keyof typeof THEMES)
+      if (value.project.page_size === 'small' || value.project.page_size === 'large' || value.project.page_size === 'standard') setPageSize(value.project.page_size)
     }).catch(err => setError(err instanceof Error ? err.message : String(err)))
   }, [cardId])
 
@@ -557,10 +756,10 @@ function Workbench({ cardId }: { cardId: string }) {
     if (!project?.draft || pages.length === 0) return
     const handle = window.setTimeout(() => {
       setSaved('保存中…')
-      void rpc('saveDraft', { draftId: project.draft.id, pages, template }).then(() => setSaved('已自动保存')).catch(err => setSaved(err instanceof Error ? err.message : '保存失败'))
+      void rpc('saveDraft', { draftId: project.draft.id, pages, template, pageSize }).then(() => setSaved('已自动保存')).catch(err => setSaved(err instanceof Error ? err.message : '保存失败'))
     }, 700)
     return () => window.clearTimeout(handle)
-  }, [pages, template])
+  }, [pages, template, pageSize])
 
   const page = pages[current]
   const theme = THEMES[template]
@@ -574,6 +773,7 @@ function Workbench({ cardId }: { cardId: string }) {
   return (
     <div className="pms-workbench" data-testid="workbench">
       <aside className="pms-col pms-thumbs" data-testid="page-list">
+        {onReturn && <button className="pms-btn" onClick={() => { void rpc('returnToDrafts', { cardId }).then(onReturn) }}>退回生产改稿</button>}
         {pages.map((item, index) => (
           <button
             key={item.id}
@@ -602,7 +802,7 @@ function Workbench({ cardId }: { cardId: string }) {
       <section className="pms-stage" ref={stageRef} data-testid="page-canvas">
         <div className="pms-canvas-wrap" style={{ width: 1080 * scale, height: 1440 * scale }}>
           <div style={{ width: 1080, height: 1440, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
-            <BrandFrame page={page} template={template} index={current} total={pages.length} />
+            <BrandFrame page={page} template={template} size={pageSize} index={current} total={pages.length} />
           </div>
         </div>
       </section>
@@ -618,6 +818,12 @@ function Workbench({ cardId }: { cardId: string }) {
             <option value="avatar-green">头像绿（默认）</option>
             <option value="navy-gold">深蓝金</option>
             <option value="gongwen">公文风</option>
+          </select>
+          <label htmlFor="page-size">字号（画布保持 1080×1440）</label>
+          <select id="page-size" data-testid="page-size" value={pageSize} onChange={event => setPageSize(event.target.value as 'small' | 'standard' | 'large')}>
+            <option value="small">小</option>
+            <option value="standard">标准</option>
+            <option value="large">大</option>
           </select>
           <label htmlFor="page-title">这一页标题</label>
           <input id="page-title" data-testid="page-title" value={page.title} onChange={event => updatePage({ title: event.target.value })} />
@@ -659,7 +865,7 @@ function Workbench({ cardId }: { cardId: string }) {
         </div>
         <button className="pms-btn" onClick={() => void rpc('snapshot', { draftId: project.draft.id, label: '手动版本' })}>保存版本</button>
         <VersionList draftId={project.draft.id} token={versions} onRestore={() => void rpc<ProjectView>('getProject', { cardId }).then(value => setPages(value.pages))} />
-        <button className="pms-btn primary" data-testid="export" onClick={() => void rpc<{ dir: string }>('exportProject', { cardId }).then(result => setSaved(`已导出 ${result.dir}`)).catch(err => setError(err instanceof Error ? err.message : String(err)))}>导出 1242×1660</button>
+        <button className="pms-btn primary" data-testid="export" onClick={() => void rpc<{ dir: string }>('exportProject', { cardId }).then(result => setSaved(`已导出 ${result.dir}`)).catch(err => setError(err instanceof Error ? err.message : String(err)))}>导出 PNG、正文和 article.md</button>
         {error && <div className="pms-error">{error}</div>}
       </aside>
     </div>
@@ -701,14 +907,14 @@ function TextGate({ cardId, onConfirmed }: { cardId: string, onConfirmed: () => 
   )
 }
 
-function BrandFrame({ page, template, index, total }: { page: PageModel, template: string, index: number, total: number }) {
+function BrandFrame({ page, template, size, index, total }: { page: PageModel, template: string, size: string, index: number, total: number }) {
   const [html, setHtml] = useState('')
   useEffect(() => {
     const handle = window.setTimeout(() => {
-      void rpc<{ html: string }>('previewPage', { page, template, index, total }).then(result => setHtml(result.html)).catch(() => undefined)
+      void rpc<{ html: string }>('previewPage', { page, template, size, index, total }).then(result => setHtml(result.html)).catch(() => undefined)
     }, 180)
     return () => window.clearTimeout(handle)
-  }, [page, template, index, total])
+  }, [page, template, size, index, total])
   return <iframe title="1080×1440 预览" data-testid="brand-frame" srcDoc={html} style={{ width: 1080, height: 1440, border: 0, background: '#F5F6F0' }} />
 }
 
