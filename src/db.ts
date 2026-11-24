@@ -253,6 +253,59 @@ export class StudioDb {
     const editableColumns = new Set((this.db.prepare(`PRAGMA table_info(interactions)`).all() as Array<{ name: string }>).map(column => column.name))
     if (!editableColumns.has('edited_at')) this.db.exec(`ALTER TABLE interactions ADD COLUMN edited_at TEXT`)
     this.mark(4)
+    // 灵感收件箱：来源、原始条目、待作者判断的候选。条目只存引用和原文，
+    // 不复制素材库文件；候选通过后才创建选题卡。
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS inspiration_sources (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL,
+        detail TEXT NOT NULL DEFAULT '',
+        last_sync_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS inspiration_items (
+        id TEXT PRIMARY KEY,
+        source_id TEXT NOT NULL REFERENCES inspiration_sources(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL DEFAULT '',
+        url TEXT NOT NULL DEFAULT '',
+        provenance TEXT NOT NULL DEFAULT '',
+        captured_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_inspiration_items_source ON inspiration_items(source_id, captured_at);
+      CREATE TABLE IF NOT EXISTS inspiration_candidates (
+        id TEXT PRIMARY KEY,
+        item_id TEXT NOT NULL REFERENCES inspiration_items(id) ON DELETE CASCADE,
+        angle TEXT NOT NULL,
+        why TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'pending',
+        card_id TEXT,
+        created_at TEXT NOT NULL,
+        decided_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_inspiration_candidates_status ON inspiration_candidates(status, created_at);
+    `)
+    this.seedInspirationSources()
+    this.mark(5)
+  }
+
+  private seedInspirationSources() {
+    const stamp = new Date().toISOString()
+    const insert = this.db.prepare(`
+      INSERT OR IGNORE INTO inspiration_sources(id, kind, name, status, detail, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+    const sources = [
+      ['manual', 'manual', '手动收件箱', 'connected', '你贴进来的句子、链接和想法'],
+      ['library', 'library', '素材库', 'not_connected', '只读索引；尚未接入本地素材库'],
+      ['qianfan-notes', 'qianfan', '千帆 · 互动', 'not_connected', '帖子曝光、观看、收藏、评论'],
+      ['qianfan-orders', 'qianfan', '千帆 · 交易', 'not_connected', '订单、退款、客单'],
+    ] as const
+    for (const [id, kind, name, status, detail] of sources) insert.run(id, kind, name, status, detail, stamp, stamp)
   }
 
   private mark(version: number) {

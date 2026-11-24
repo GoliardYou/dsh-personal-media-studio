@@ -25,6 +25,44 @@ interface Intent {
   at: number
 }
 
+interface InspirationSourceRow {
+  id: string
+  kind: string
+  name: string
+  status: string
+  detail: string
+  lastSyncAt: string | null
+}
+
+interface InspirationItemRow {
+  id: string
+  sourceId: string
+  title: string
+  body: string
+  url: string
+  provenance: string
+  capturedAt: string
+}
+
+interface InspirationCandidateRow {
+  id: string
+  itemId: string
+  angle: string
+  why: string
+  status: 'pending' | 'approved' | 'rejected'
+  cardId: string | null
+  createdAt: string
+  decidedAt: string | null
+  itemTitle: string
+  itemBody: string
+  itemUrl: string
+  itemProvenance: string
+  itemCapturedAt: string
+  sourceId: string
+  sourceName: string
+  sourceKind: string
+}
+
 const RECOMMENDED = [
   ['为什么我愿意为「慢」付钱', '把一个被当成缺点的体验，写成你自己的判断。'],
   ['产品图拍完，评论区却在说另一件事', '画面和读者真正记住的句子，往往不是同一件。'],
@@ -114,7 +152,84 @@ export class StudioRuntime {
       cards: this.listCards(),
       pool: this.searchPool(''),
       stages: this.listStages(),
+      inspiration: this.listInspiration(),
     }
+  }
+
+  listInspiration() {
+    const sources = this.db.db.prepare(`
+      SELECT id, kind, name, status, detail, last_sync_at AS lastSyncAt
+      FROM inspiration_sources ORDER BY created_at ASC
+    `).all() as InspirationSourceRow[]
+    const items = this.db.db.prepare(`
+      SELECT id, source_id AS sourceId, title, body, url, provenance, captured_at AS capturedAt
+      FROM inspiration_items ORDER BY captured_at DESC LIMIT 200
+    `).all() as InspirationItemRow[]
+    const candidates = this.db.db.prepare(`
+      SELECT c.id, c.item_id AS itemId, c.angle, c.why, c.status, c.card_id AS cardId,
+             c.created_at AS createdAt, c.decided_at AS decidedAt,
+             i.title AS itemTitle, i.body AS itemBody, i.url AS itemUrl,
+             i.provenance AS itemProvenance, i.captured_at AS itemCapturedAt,
+             s.id AS sourceId, s.name AS sourceName, s.kind AS sourceKind
+      FROM inspiration_candidates c
+      JOIN inspiration_items i ON i.id = c.item_id
+      JOIN inspiration_sources s ON s.id = i.source_id
+      ORDER BY c.created_at DESC
+    `).all() as InspirationCandidateRow[]
+    const counts = { pending: 0, approved: 0, rejected: 0 }
+    for (const candidate of candidates) {
+      if (candidate.status === 'approved') counts.approved++
+      else if (candidate.status === 'rejected') counts.rejected++
+      else counts.pending++
+    }
+    return { sources, items, candidates, counts }
+  }
+
+  captureInspiration(body: string, url = '') {
+    const text = body.trim()
+    if (!text) throw new StudioError('empty_inspiration', '先写一句再收下。')
+    const stamp = nowIso()
+    const title = text.split(/\r?\n/).map(line => line.trim()).find(Boolean)?.slice(0, 80) ?? '未命名灵感'
+    // 只接受可点击的 http(s) 链接，避免把 javascript: 之类塞进 href。
+    const rawUrl = url.trim().slice(0, 2048)
+    const safeUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : ''
+    const itemId = uid()
+    const candidateId = uid()
+    this.db.tx(() => {
+      this.db.db.prepare(`
+        INSERT INTO inspiration_items(id, source_id, title, body, url, provenance, captured_at, created_at)
+        VALUES (?, 'manual', ?, ?, ?, ?, ?, ?)
+      `).run(itemId, title, text, safeUrl, `手动收件箱 · ${stamp.slice(0, 10)}`, stamp, stamp)
+      this.db.db.prepare(`
+        INSERT INTO inspiration_candidates(id, item_id, angle, why, status, created_at)
+        VALUES (?, ?, ?, ?, 'pending', ?)
+      `).run(candidateId, itemId, title, '你手动收下的原话，未做改写；通过后才进入选题。', stamp)
+    })
+    return this.listInspiration()
+  }
+
+  decideInspiration(candidateId: string, decision: 'approved' | 'rejected') {
+    const candidate = this.db.db.prepare(`
+      SELECT id, angle, status, card_id FROM inspiration_candidates WHERE id = ?
+    `).get(candidateId) as { id: string, angle: string, status: string, card_id: string | null } | undefined
+    if (!candidate) throw new StudioError('missing_inspiration', '这条灵感不在了。')
+    const stamp = nowIso()
+    if (candidate.status === decision) return { ...this.listInspiration(), cardId: candidate.card_id }
+    if (decision === 'approved') {
+      let cardId = candidate.card_id
+      if (!cardId) {
+        const created = this.createCard(candidate.angle)
+        cardId = String((created as { card?: { id?: string } }).card?.id ?? '')
+      }
+      this.db.db.prepare(`
+        UPDATE inspiration_candidates SET status = 'approved', card_id = ?, decided_at = ? WHERE id = ?
+      `).run(cardId, stamp, candidateId)
+      return { ...this.listInspiration(), cardId }
+    }
+    this.db.db.prepare(`
+      UPDATE inspiration_candidates SET status = 'rejected', decided_at = ? WHERE id = ?
+    `).run(stamp, candidateId)
+    return { ...this.listInspiration(), cardId: null }
   }
 
   listStages() {
@@ -150,8 +265,11 @@ export class StudioRuntime {
     const topics = rows.filter(row => row.stage === 'topics')
     const draftRows = rows.filter(row => row.stage === 'drafts')
     const render = rows.filter(row => row.stage === 'render')
+    const pendingInspiration = (this.db.db.prepare(`
+      SELECT COUNT(*) AS n FROM inspiration_candidates WHERE status = 'pending'
+    `).get() as { n: number }).n
     return {
-      counts: { topics: topics.length, drafts: draftRows.length, render: render.length },
+      counts: { topics: topics.length, drafts: draftRows.length, render: render.length, inspiration: pendingInspiration },
       topics,
       drafts: draftRows,
       render,
@@ -1123,6 +1241,9 @@ export class StudioRuntime {
         const cardId = String(payload.cardId)
         return this.startProduction(cardId, this.issueIntent(cardId, 'produce'))
       }
+      case 'listInspiration': return this.listInspiration()
+      case 'captureInspiration': return this.captureInspiration(String(payload.body ?? ''), String(payload.url ?? ''))
+      case 'decideInspiration': return this.decideInspiration(String(payload.candidateId ?? ''), payload.decision === 'approved' ? 'approved' : 'rejected')
       case 'getProject': return this.getProject(String(payload.cardId))
       case 'decideAsset': return this.decideAsset(String(payload.relationId), payload.decision as 'accepted' | 'rejected' | 'replaced', payload.replacementAssetId ? String(payload.replacementAssetId) : undefined, payload.crop as { x: number, y: number, scale: number } | undefined)
       case 'saveDraft': return this.saveDraft(String(payload.draftId), { title: payload.title ? String(payload.title) : undefined, template: payload.template as TemplateId | undefined, pages: payload.pages as PageModel[] | undefined, pageSize: payload.pageSize ? String(payload.pageSize) : undefined })

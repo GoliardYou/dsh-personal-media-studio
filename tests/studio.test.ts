@@ -49,13 +49,13 @@ async function openStudio(dir: string, library: string, engine?: StudioConfig['r
 }
 
 describe('database', () => {
-  it('migrates the 17 business tables and searches Chinese with FTS5', () => {
+  it('migrates the business tables and searches Chinese with FTS5', () => {
     const db = new StudioDb(join(temp(), 'studio.sqlite'))
     const names = (db.db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all() as Array<{ name: string }>).map(row => row.name)
-    for (const table of ['assets', 'asset_chunks', 'asset_tags', 'asset_embeddings', 'topics', 'cards', 'interactions', 'ai_analyses', 'ai_suggestions', 'jobs', 'projects', 'drafts', 'draft_pages', 'asset_relations', 'style_profiles', 'versions', 'exports']) {
+    for (const table of ['assets', 'asset_chunks', 'asset_tags', 'asset_embeddings', 'topics', 'cards', 'interactions', 'ai_analyses', 'ai_suggestions', 'jobs', 'projects', 'drafts', 'draft_pages', 'asset_relations', 'style_profiles', 'versions', 'exports', 'inspiration_sources', 'inspiration_items', 'inspiration_candidates']) {
       expect(names).toContain(table)
     }
-    expect((db.db.prepare(`SELECT COUNT(*) AS n FROM schema_migrations`).get() as { n: number }).n).toBe(4)
+    expect((db.db.prepare(`SELECT COUNT(*) AS n FROM schema_migrations`).get() as { n: number }).n).toBe(5)
     expect((db.db.prepare(`SELECT COUNT(*) AS n FROM style_profiles`).get() as { n: number }).n).toBe(3)
     db.indexText('asset', 'a1', '个人媒体工作室的选题卡片与金句提取')
     const hit = db.searchText('金句提')
@@ -64,6 +64,33 @@ describe('database', () => {
     db.backup(backup)
     expect(statSync(backup).size).toBeGreaterThan(1000)
     db.close()
+  })
+})
+
+describe('inspiration inbox', () => {
+  it('captures an author note and only creates a topic after approval', async () => {
+    const dir = temp()
+    const studio = await openStudio(dir, join(dir, 'library'))
+    const before = studio.listCards().length
+    const captured = studio.captureInspiration('面试时脑子空白，不是没背，是没练过“开口”。', 'https://example.com/note')
+    expect(captured.counts.pending).toBe(1)
+    expect(captured.candidates).toHaveLength(1)
+    const candidate = captured.candidates[0]
+    expect(candidate.sourceName).toBe('手动收件箱')
+    expect(candidate.cardId).toBeNull()
+    expect(studio.listCards()).toHaveLength(before)
+
+    const approved = studio.decideInspiration(candidate.id, 'approved')
+    expect(approved.counts.approved).toBe(1)
+    expect(approved.cardId).toBeTruthy()
+    expect(studio.listCards()).toHaveLength(before + 1)
+    expect(studio.getCard(approved.cardId as string).card.title).toContain('面试时脑子空白')
+
+    const rejected = studio.captureInspiration('这条不想要。')
+    const noCard = studio.decideInspiration(rejected.candidates[0].id, 'rejected')
+    expect(noCard.counts.rejected).toBe(1)
+    expect(noCard.cardId).toBeNull()
+    await studio.dispose()
   })
 })
 

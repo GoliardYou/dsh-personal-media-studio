@@ -5,7 +5,7 @@ import tokens from './tokens.css'
 import components from './components.css'
 import css from './styles.css'
 
-type StageId = 'topics' | 'drafts' | 'render'
+type StageId = 'topics' | 'drafts' | 'render' | 'inspiration'
 
 interface ClientCtx {
   effect(run: () => void | (() => void)): void
@@ -20,12 +20,13 @@ const PANELS: Record<StageId, string> = {
   topics: 'personal-media',
   drafts: 'personal-media-drafts',
   render: 'personal-media-render',
+  inspiration: 'personal-media-inspiration',
 }
-const STAGE_LABEL: Record<StageId, string> = { topics: '选题', drafts: '生产改稿', render: '渲染' }
+const STAGE_LABEL: Record<StageId, string> = { topics: '选题', drafts: '草稿', render: '渲染', inspiration: '灵感' }
 
 function readRoute(fallback: StageId): { stage: StageId, cardId: string | null } {
   const hash = location.hash.replace(/^#/, '')
-  const match = hash.match(/^pms\/(topics|drafts|render)(?:\/([A-Za-z0-9-]+))?$/)
+  const match = hash.match(/^pms\/(topics|drafts|render|inspiration)(?:\/([A-Za-z0-9-]+))?$/)
   if (!match) return { stage: fallback, cardId: null }
   return { stage: match[1] as StageId, cardId: match[2] ?? null }
 }
@@ -79,10 +80,51 @@ interface StageRow {
   pageSize: string
 }
 interface StageBook {
-  counts: { topics: number, drafts: number, render: number }
+  counts: { topics: number, drafts: number, render: number, inspiration?: number }
   topics: StageRow[]
   drafts: StageRow[]
   render: StageRow[]
+}
+interface InspirationSource {
+  id: string
+  kind: string
+  name: string
+  status: 'connected' | 'not_connected' | string
+  detail: string
+  lastSyncAt?: string | null
+}
+interface InspirationItem {
+  id: string
+  sourceId: string
+  title: string
+  body: string
+  url: string
+  provenance: string
+  capturedAt: string
+}
+interface InspirationCandidate {
+  id: string
+  itemId: string
+  angle: string
+  why: string
+  status: 'pending' | 'approved' | 'rejected'
+  cardId?: string | null
+  createdAt: string
+  decidedAt?: string | null
+  itemTitle: string
+  itemBody: string
+  itemUrl: string
+  itemProvenance: string
+  itemCapturedAt: string
+  sourceId: string
+  sourceName: string
+  sourceKind: string
+}
+interface InspirationView {
+  sources: InspirationSource[]
+  items: InspirationItem[]
+  candidates: InspirationCandidate[]
+  counts: { pending: number, approved: number, rejected: number }
 }
 interface PoolTopic {
   id: string
@@ -312,7 +354,7 @@ export function apply(ctx: ClientCtx) {
   const openStage = (stage: StageId) => {
     ctx.layout.selectPanel(PANELS[stage])
   }
-  const stages: StageId[] = ['topics', 'drafts', 'render']
+  const stages: StageId[] = ['topics', 'drafts', 'render', 'inspiration']
   for (const stage of stages) {
     ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANELS[stage] }, () => <StudioApp stage={stage} openStage={openStage} />))
   }
@@ -349,7 +391,7 @@ function StudioIcon({ size = 22 }: { size?: number, active?: boolean }) {
 }
 
 function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: StageId) => void }) {
-  const [boot, setBoot] = useState<{ engine: { mode: string, reason: string }, libraryCount: number, cards: CardRow[], pool?: { total: number, topics: PoolTopic[] }, stages?: StageBook } | null>(null)
+  const [boot, setBoot] = useState<{ engine: { mode: string, reason: string }, libraryCount: number, cards: CardRow[], pool?: { total: number, topics: PoolTopic[] }, stages?: StageBook, inspiration?: InspirationView } | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [cardId, setCardId] = useState<string | null>(() => {
@@ -458,7 +500,7 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
     refresh().catch(err => setError(err instanceof Error ? err.message : String(err))).finally(() => setLoading(false))
   }, [])
 
-  const counts = boot?.stages?.counts ?? { topics: boot?.cards.length ?? 0, drafts: 0, render: 0 }
+  const counts = boot?.stages?.counts ?? { topics: boot?.cards.length ?? 0, drafts: 0, render: 0, inspiration: 0 }
   const topicCards = (boot?.stages?.topics ?? []).map(row => {
     const card = boot?.cards.find(item => item.id === row.id)
     return { ...(card ?? { id: row.id, title: row.title, status: row.status, maturity: row.maturity, source: row.source, updated_at: row.updatedAt }), updatedAt: row.updatedAt }
@@ -474,7 +516,7 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
           <span>个人媒体工作室</span>
         </span>
         <nav className="pms-segmented" data-testid="stage-nav" aria-label="工作室阶段">
-          {(['topics', 'drafts', 'render'] as const).map(item => (
+          {(['topics', 'drafts', 'render', 'inspiration'] as const).map(item => (
             <button
               key={item}
               type="button"
@@ -536,6 +578,14 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
         )}
         {!loading && !error && stage === 'render' && !cardId && (
           <StageList testId="render-center" rowTestId="render-row" empty="还没有定稿。生产改稿里确认文字之后，稿件会送到这里渲染。" rows={boot?.stages?.render ?? []} onOpen={id => go('render', id)} />
+        )}
+        {!loading && !error && stage === 'inspiration' && boot && (
+          <InspirationStage
+            data={boot.inspiration ?? { sources: [], items: [], candidates: [], counts: { pending: 0, approved: 0, rejected: 0 } }}
+            onChanged={async () => { await refresh() }}
+            onNotice={notify}
+            onTopics={() => go('topics', null)}
+          />
         )}
         {stage === 'drafts' && cardId && (
           <ArticleStudio
@@ -613,6 +663,156 @@ function StageList({ rows, empty, testId, rowTestId, onOpen }: { rows: StageRow[
               </button>
             ))}
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function InspirationStage({ data, onChanged, onNotice, onTopics }: {
+  data: InspirationView
+  onChanged: () => Promise<void> | void
+  onNotice: (notice: Notice) => void
+  onTopics: () => void
+}) {
+  const [body, setBody] = useState('')
+  const [url, setUrl] = useState('')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'rejected'>('pending')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const rows = data.candidates.filter(candidate => candidate.status === tab)
+
+  async function capture() {
+    if (!body.trim() || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      await rpc('captureInspiration', { body, url })
+      setBody('')
+      setUrl('')
+      setTab('pending')
+      await onChanged()
+      onNotice({ title: '收进来了。等你判断，不替你通过。' })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function decide(candidate: InspirationCandidate, decision: 'approved' | 'rejected') {
+    setBusy(true)
+    setError('')
+    try {
+      await rpc('decideInspiration', { candidateId: candidate.id, decision })
+      await onChanged()
+      onNotice({ title: decision === 'approved' ? '已进入选题。它现在是一张待写的卡。' : '已略过。没有进入选题。' })
+      if (decision === 'approved') setTab('approved')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="pms-view pms-paper-screens" data-testid="inspiration-center">
+      <div className="pms-scroll">
+        <div className="pms-paper-page">
+          <header className="pms-paper-pagehead">
+            <p className="pms-paper-kicker">灵感 · {data.counts.pending} 条待判断</p>
+            <h1>先把东西丢进来</h1>
+            <p className="pms-paper-lede">
+              一句原话、一个链接、一段观察都可以。系统只收下，不替你改写，也不替你判断；你点了通过，它才进选题。
+            </p>
+          </header>
+
+          <div className="pms-source-strip" aria-label="来源状态">
+            {data.sources.map(source => (
+              <span key={source.id} className="pms-source-chip" data-status={source.status} title={source.detail}>
+                <span className="pms-source-chip__dot" aria-hidden="true" />
+                {source.name} · {source.status === 'connected' ? '已接' : '未接'}
+              </span>
+            ))}
+          </div>
+
+          <div className="pms-inspiration-compose">
+            <textarea
+              value={body}
+              onChange={event => setBody(event.target.value)}
+              onKeyDown={event => {
+                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                  event.preventDefault()
+                  void capture()
+                }
+              }}
+              rows={3}
+              placeholder="贴一句你真正想说的话，或一个链接、一段观察……"
+              aria-label="收进灵感"
+            />
+            <div className="pms-inspiration-compose__foot">
+              <input value={url} onChange={event => setUrl(event.target.value)} placeholder="来源链接（可选）" aria-label="来源链接" />
+              <span className="pms-inspiration-compose__hint">⌘↵ 收下</span>
+              <button className="pms-btn pms-btn--primary pms-btn--sm" type="button" disabled={!body.trim() || busy} onClick={() => void capture()}>
+                {busy ? '收下…' : '收下'}
+              </button>
+            </div>
+          </div>
+          {error && <div className="pms-error">{error}</div>}
+          <p className="pms-inspiration-note">自动提取还没开。现在只收下你主动丢进来的东西；素材库和千帆还没接，状态不装成“已同步”。</p>
+
+          <div className="pms-inspiration-tabs" role="tablist" aria-label="灵感状态">
+            {(['pending', 'approved', 'rejected'] as const).map(item => (
+              <button
+                key={item}
+                type="button"
+                role="tab"
+                aria-selected={tab === item}
+                className="pms-inspiration-tab"
+                onClick={() => setTab(item)}
+              >
+                {item === 'pending' ? '待确认' : item === 'approved' ? '已通过' : '已略过'}
+                <span>{data.counts[item]}</span>
+              </button>
+            ))}
+          </div>
+
+          {rows.length === 0 ? (
+            <div className="pms-paper-empty">
+              <strong>{tab === 'pending' ? '还没有待判断的灵感' : tab === 'approved' ? '还没有通过的灵感' : '还没有略过的灵感'}</strong>
+              <span>{tab === 'pending' ? '把一句原话丢进上面的框里，先收下。' : '你做的判断会留在这里，之后可以回看。'}</span>
+            </div>
+          ) : (
+            <div className="pms-inspiration-list">
+              {rows.map(candidate => (
+                <article key={candidate.id} className="pms-inspiration-row" data-testid="inspiration-row">
+                  <div className="pms-inspiration-row__main">
+                    <h2 className="pms-inspiration-row__angle">{candidate.angle}</h2>
+                    <p className="pms-inspiration-row__why">{candidate.why}</p>
+                    <p className="pms-inspiration-row__meta">
+                      {candidate.sourceName} · {formatWhen(candidate.createdAt).slice(5, 16)} · {candidate.itemProvenance}
+                    </p>
+                    {candidate.itemUrl && <a className="pms-inspiration-row__link" href={candidate.itemUrl} target="_blank" rel="noreferrer">看来源</a>}
+                  </div>
+                  <div className="pms-inspiration-row__actions">
+                    {candidate.status === 'pending' && (
+                      <>
+                        <button className="pms-btn pms-btn--sm pms-btn--primary" type="button" disabled={busy} onClick={() => void decide(candidate, 'approved')}>通过，进选题</button>
+                        <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" disabled={busy} onClick={() => void decide(candidate, 'rejected')}>略过</button>
+                      </>
+                    )}
+                    {candidate.status === 'approved' && (
+                      <>
+                        <span className="pms-inspiration-row__done">已进选题</span>
+                        <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={onTopics}>去选题</button>
+                      </>
+                    )}
+                    {candidate.status === 'rejected' && <span className="pms-inspiration-row__done">已略过</span>}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
