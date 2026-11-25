@@ -1552,10 +1552,39 @@ label.pms-asset:hover { background: var(--pms-interactive-bg-hover); }
 .pms-paper-quiet--danger:hover { color: var(--pms-state-danger); }
 
 .pms-paper-back {
+  display: inline-flex;
   flex: 0 0 auto;
-  margin-top: 2px;
-  padding-inline: 0;
+  align-items: center;
+  gap: 5px;
+  margin-top: 1px;
+  padding: 5px 9px 5px 6px;
+  border: var(--pms-border-hairline) solid var(--paper-rule);
+  border-radius: var(--pms-radius-sm);
+  background: var(--paper-sheet);
+  color: var(--paper-ink-soft);
   white-space: nowrap;
+}
+
+.pms-paper-back svg {
+  flex: none;
+  color: var(--paper-ink-faint);
+  transition: color 120ms ease, transform 120ms ease;
+}
+
+.pms-paper-back:hover {
+  border-color: color-mix(in srgb, var(--paper-ink) 18%, var(--paper-rule));
+  background: var(--paper-hover);
+  color: var(--paper-ink);
+}
+
+.pms-paper-back:hover svg {
+  color: var(--paper-ink);
+  transform: translateX(-1px);
+}
+
+.pms-paper-back:focus-visible {
+  outline: 2px solid var(--paper-accent);
+  outline-offset: 1px;
 }
 
 .pms-paper-head__copy { flex: 1 1 auto; min-width: 0; }
@@ -1978,6 +2007,16 @@ label.pms-asset:hover { background: var(--pms-interactive-bg-hover); }
 .pms-paper-topic__arrow { padding-top: 4px; color: var(--paper-ink-faint); font-size: 15px; opacity: 0; transition: opacity 120ms ease, transform 120ms ease; }
 .pms-paper-topic:hover .pms-paper-topic__arrow, .pms-paper-topic:focus-visible .pms-paper-topic__arrow { opacity: 1; transform: translateX(2px); }
 
+.pms-paper-skeleton-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 14px;
+  padding: 18px 2px;
+  border-bottom: var(--pms-border-hairline) solid var(--paper-rule);
+}
+
+.pms-paper-skeleton-row > div:last-child { min-width: 0; }
+
 .pms-paper-topic--static { grid-template-columns: minmax(0, 1fr) auto; cursor: default; }
 .pms-paper-topic--static:hover { background: transparent; }
 .pms-paper-topic__action {
@@ -2396,6 +2435,7 @@ label.pms-asset:hover { background: var(--pms-interactive-bg-hover); }
   .pms-paper-page { padding: 26px 16px 56px; }
   .pms-paper-pagehead h1 { font-size: 25px; }
   .pms-paper-topic { grid-template-columns: 52px minmax(0, 1fr); gap: 10px; padding: 15px 2px; }
+  .pms-paper-skeleton-row { grid-template-columns: 52px minmax(0, 1fr); gap: 10px; padding: 15px 2px; }
   .pms-paper-topic__title { font-size: 19px; }
   .pms-paper-topic__arrow { display: none; }
   .pms-paper-topic--static { grid-template-columns: minmax(0, 1fr); }
@@ -2404,4 +2444,11 @@ label.pms-asset:hover { background: var(--pms-interactive-bg-hover); }
   .pms-inspiration-compose__foot input { flex-basis: 100%; }
   .pms-inspiration-row { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 18px 2px; }
   .pms-inspiration-row__actions { flex-wrap: wrap; padding-top: 0; }
+}
+
+/* DSH 的全局焦点环是蓝色；纸面输入改用容器的 focus-within 表示焦点。 */
+.pms-root :is(input, textarea):focus,
+.pms-root :is(input, textarea):focus-visible {
+  outline: 0 !important;
+  box-shadow: none !important;
 }

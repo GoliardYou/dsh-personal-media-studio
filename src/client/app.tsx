@@ -147,6 +147,14 @@ interface AssetHit {
   rationale: string
   score: number
 }
+interface BootView {
+  engine: { mode: string, reason: string }
+  libraryCount: number
+  cards: CardRow[]
+  pool?: { total: number, topics: PoolTopic[] }
+  stages?: StageBook
+  inspiration?: InspirationView
+}
 interface AnalysisView {
   engine: string
   thesis: string
@@ -402,10 +410,13 @@ function StudioIcon({ size = 22 }: { size?: number, active?: boolean }) {
   )
 }
 
+/** 阶段切换会挂载新的 StudioApp；缓存首屏数据，避免每次切 tab 都闪一次旧骨架。 */
+let bootCache: BootView | null = null
+
 function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: StageId) => void }) {
-  const [boot, setBoot] = useState<{ engine: { mode: string, reason: string }, libraryCount: number, cards: CardRow[], pool?: { total: number, topics: PoolTopic[] }, stages?: StageBook, inspiration?: InspirationView } | null>(null)
+  const [boot, setBoot] = useState<BootView | null>(() => bootCache)
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!bootCache)
   const [cardId, setCardId] = useState<string | null>(() => {
     const route = readRoute(stage)
     return route.stage === stage ? route.cardId : null
@@ -416,7 +427,8 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
   const [focusStart, setFocusStart] = useState<string | null>(() => stage === 'topics' ? focusRouteId() : null)
 
   async function refresh() {
-    const data = await rpc<NonNullable<typeof boot>>('bootstrap')
+    const data = await rpc<BootView>('bootstrap')
+    bootCache = data
     setBoot(data)
     return data
   }
@@ -632,19 +644,27 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
   )
 }
 
-/** 加载态用骨架而非一行文字：保留版式轮廓，避免内容区高度塌陷后跳动。 */
+/** 首屏才用骨架；形状跟着纸感列表走，不再是旧的选题卡片墙。 */
 function StudioSkeleton() {
   return (
-    <div className="pms-view pms-view--padded" data-testid="loading" role="status" aria-label="正在打开这一阶段">
-      <div className="pms-board">
-        {[0, 1, 2, 3, 4, 5].map(i => (
-          <div key={i} className="pms-skeleton-card" aria-hidden="true">
-            <div className="pms-skeleton" style={{ height: 18, width: `${40 + (i % 3) * 14}%` }} />
-            <div className="pms-skeleton" style={{ height: 13, width: '92%' }} />
-            <div className="pms-skeleton" style={{ height: 13, width: '78%' }} />
-            <div className="pms-skeleton" style={{ height: 13, width: '52%', marginTop: 'auto' }} />
+    <div className="pms-view pms-paper-screens" data-testid="loading" role="status" aria-label="正在打开这一阶段">
+      <div className="pms-scroll">
+        <div className="pms-paper-page">
+          <div className="pms-skeleton" style={{ height: 11, width: 112 }} />
+          <div className="pms-skeleton" style={{ height: 30, width: '56%', marginTop: 14 }} />
+          <div className="pms-skeleton" style={{ height: 13, width: '84%', marginTop: 14 }} />
+          <div className="pms-paper-list">
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} className="pms-paper-skeleton-row" aria-hidden="true">
+                <div className="pms-skeleton" style={{ height: 12, width: 38 }} />
+                <div>
+                  <div className="pms-skeleton" style={{ height: 20, width: `${52 + (i % 3) * 14}%` }} />
+                  <div className="pms-skeleton" style={{ height: 12, width: '34%', marginTop: 10 }} />
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
     </div>
   )
@@ -1766,7 +1786,12 @@ function FocusWorkbench({ cards, startId, onExit, onBoard, onPool, onChanged, on
               data-testid="exit-focus"
               title="退出聚焦（Esc）"
               onClick={onExit}
-            >← <span>回看板</span></button>
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M10.5 3.5 5.5 8l5 4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>回看板</span>
+            </button>
             <div className="pms-paper-head__copy">
               <div className="pms-paper-head__kicker">选题 · 聚焦处理</div>
               <h1 className="pms-paper-head__title" data-testid="focus-title">
