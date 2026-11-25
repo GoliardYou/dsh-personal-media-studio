@@ -681,6 +681,9 @@ function InspirationStage({ data, onChanged, onNotice, onTopics }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
+  const [libraryQuery, setLibraryQuery] = useState('')
+  const [libraryHits, setLibraryHits] = useState<AssetHit[]>([])
+  const [libraryBusy, setLibraryBusy] = useState(false)
   const needle = query.trim().toLowerCase()
   const rows = data.candidates
     .filter(candidate => candidate.status === tab)
@@ -701,6 +704,35 @@ function InspirationStage({ data, onChanged, onNotice, onTopics }: {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function searchLibrary() {
+    if (libraryBusy) return
+    setLibraryBusy(true)
+    setError('')
+    try {
+      setLibraryHits(await rpc<AssetHit[]>('searchInspirationAssets', { query: libraryQuery }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLibraryBusy(false)
+    }
+  }
+
+  async function takeLibrary(assetId: string) {
+    if (libraryBusy) return
+    setLibraryBusy(true)
+    setError('')
+    try {
+      await rpc('captureLibraryInspiration', { assetId })
+      setTab('pending')
+      await onChanged()
+      onNotice({ title: '素材收进来了。它还是待确认，不替你通过。' })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLibraryBusy(false)
     }
   }
 
@@ -763,7 +795,47 @@ function InspirationStage({ data, onChanged, onNotice, onTopics }: {
             </div>
           </div>
           {error && <div className="pms-error">{error}</div>}
-          <p className="pms-inspiration-note">自动提取还没开。现在只收下你主动丢进来的东西，也可以让 DSH 助手用 <code>media_propose_inspiration</code> 提议；素材库和千帆还没接，状态不装成“已同步”。</p>
+          <p className="pms-inspiration-note">自动提取还没开。现在只收下你主动丢进来的东西，也可以让 DSH 助手用 <code>media_propose_inspiration</code> 提议；素材库是只读索引，千帆互动和交易还没接，状态不装成“已同步”。</p>
+
+          <details className="pms-library-pick">
+            <summary>从素材库挑一条 <span>只读索引</span></summary>
+            <div className="pms-library-pick__body">
+              <div className="pms-library-pick__search">
+                <input
+                  value={libraryQuery}
+                  onChange={event => setLibraryQuery(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      void searchLibrary()
+                    }
+                  }}
+                  placeholder="搜素材标题、正文或路径，留空看最近"
+                  aria-label="搜索素材库"
+                />
+                <button className="pms-btn pms-btn--sm" type="button" disabled={libraryBusy} onClick={() => void searchLibrary()}>
+                  {libraryBusy ? '找…' : '找'}
+                </button>
+              </div>
+              {libraryHits.length > 0 ? (
+                <div className="pms-library-pick__hits">
+                  {libraryHits.map(hit => (
+                    <div key={hit.assetId} className="pms-library-pick__hit">
+                      <div className="pms-library-pick__text">
+                        <strong>{hit.title || '未命名素材'}</strong>
+                        <span title={hit.sourcePath}>{hit.sourcePath}</span>
+                      </div>
+                      <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" disabled={libraryBusy} onClick={() => void takeLibrary(hit.assetId)}>
+                        收下
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="pms-library-pick__empty">只读取索引，不复制原文件；收下后仍是待确认。</p>
+              )}
+            </div>
+          </details>
 
           <div className="pms-inspiration-search">
             <input

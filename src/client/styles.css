@@ -2102,6 +2102,113 @@ label.pms-asset:hover { background: var(--pms-interactive-bg-hover); }
   line-height: 1.7;
 }
 
+.pms-library-pick {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: var(--pms-border-hairline) solid var(--paper-rule);
+}
+
+.pms-library-pick summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--paper-ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.pms-library-pick summary::-webkit-details-marker { display: none; }
+
+.pms-library-pick summary::before {
+  content: '+';
+  color: var(--paper-ink-faint);
+  font-size: 15px;
+}
+
+.pms-library-pick[open] summary::before { content: '−'; }
+
+.pms-library-pick summary span {
+  color: var(--paper-ink-faint);
+  font-size: 11.5px;
+}
+
+.pms-library-pick__body { padding-top: 12px; }
+
+.pms-library-pick__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pms-library-pick__search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 11px;
+  border: var(--pms-border-hairline) solid var(--paper-rule);
+  border-radius: var(--pms-radius-md);
+  background: transparent;
+  color: var(--paper-ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.pms-library-pick__search input:focus {
+  outline: none;
+  border-color: var(--paper-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--paper-accent) 12%, transparent);
+}
+
+.pms-library-pick__search input::placeholder { color: var(--paper-ink-faint); }
+
+.pms-library-pick__hits {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.pms-library-pick__hit {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: var(--pms-border-hairline) solid var(--paper-rule);
+}
+
+.pms-library-pick__text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pms-library-pick__text strong {
+  overflow: hidden;
+  color: var(--paper-ink);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pms-library-pick__text span {
+  overflow: hidden;
+  color: var(--paper-ink-faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pms-library-pick__empty {
+  margin: 10px 0 0;
+  color: var(--paper-ink-faint);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
 .pms-inspiration-search {
   display: flex;
   align-items: center;

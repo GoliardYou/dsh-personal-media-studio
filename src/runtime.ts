@@ -145,15 +145,28 @@ export class StudioRuntime {
   }
 
   bootstrap() {
+    const libraryCount = (this.db.db.prepare(`SELECT COUNT(*) AS n FROM assets WHERE deleted_at IS NULL`).get() as { n: number }).n
+    this.syncLibrarySource(libraryCount)
     return {
       engine: this.engineInfo(),
-      libraryCount: (this.db.db.prepare(`SELECT COUNT(*) AS n FROM assets WHERE deleted_at IS NULL`).get() as { n: number }).n,
+      libraryCount,
       templates: this.db.db.prepare(`SELECT id, name, template, tokens_json, builtin FROM style_profiles ORDER BY builtin DESC, name`).all(),
       cards: this.listCards(),
       pool: this.searchPool(''),
       stages: this.listStages(),
       inspiration: this.listInspiration(),
     }
+  }
+
+  private syncLibrarySource(count: number) {
+    const connected = count > 0
+    this.db.db.prepare(`
+      UPDATE inspiration_sources SET status = ?, detail = ?, last_sync_at = ? WHERE id = 'library'
+    `).run(
+      connected ? 'connected' : 'not_connected',
+      connected ? `${count} 个只读素材已索引；不是自动选题` : '只读索引；素材库还没有扫描到文件',
+      connected ? nowIso() : null,
+    )
   }
 
   listInspiration() {
@@ -223,6 +236,34 @@ export class StudioRuntime {
       candidates: all.candidates.filter(candidate =>
         hits(candidate.angle) || hits(candidate.why) || hits(candidate.itemTitle) || hits(candidate.itemBody) || hits(candidate.sourceName)),
     }
+  }
+
+  searchInspirationAssets(query: string) {
+    return this.assets.search(query.trim(), 8)
+  }
+
+  captureLibraryInspiration(assetId: string) {
+    const asset = this.db.db.prepare(`
+      SELECT id, title, abs_path FROM assets WHERE id = ? AND deleted_at IS NULL
+    `).get(assetId) as { id: string, title: string, abs_path: string } | undefined
+    if (!asset) throw new StudioError('missing_asset', '这个素材不在索引里。')
+    const stamp = nowIso()
+    const title = asset.title.trim() || asset.abs_path.split(/[\\/]/).pop() || '素材库文件'
+    const itemId = uid()
+    const candidateId = uid()
+    const count = (this.db.db.prepare(`SELECT COUNT(*) AS n FROM assets WHERE deleted_at IS NULL`).get() as { n: number }).n
+    this.db.tx(() => {
+      this.db.db.prepare(`
+        INSERT INTO inspiration_items(id, source_id, title, body, url, provenance, captured_at, created_at)
+        VALUES (?, 'library', ?, ?, '', ?, ?, ?)
+      `).run(itemId, title, title, `素材库 · ${asset.abs_path}`, stamp, stamp)
+      this.db.db.prepare(`
+        INSERT INTO inspiration_candidates(id, item_id, angle, why, status, created_at)
+        VALUES (?, ?, ?, ?, 'pending', ?)
+      `).run(candidateId, itemId, title, '从素材库收下的引子；它是素材，不是结论。', stamp)
+      this.syncLibrarySource(count)
+    })
+    return this.listInspiration()
   }
 
   decideInspiration(candidateId: string, decision: 'approved' | 'rejected') {
@@ -1260,6 +1301,8 @@ export class StudioRuntime {
       }
       case 'listInspiration': return this.listInspiration()
       case 'captureInspiration': return this.captureInspiration(String(payload.body ?? ''), String(payload.url ?? ''))
+      case 'searchInspirationAssets': return this.searchInspirationAssets(String(payload.query ?? ''))
+      case 'captureLibraryInspiration': return this.captureLibraryInspiration(String(payload.assetId ?? ''))
       case 'decideInspiration': return this.decideInspiration(String(payload.candidateId ?? ''), payload.decision === 'approved' ? 'approved' : 'rejected')
       case 'getProject': return this.getProject(String(payload.cardId))
       case 'decideAsset': return this.decideAsset(String(payload.relationId), payload.decision as 'accepted' | 'rejected' | 'replaced', payload.replacementAssetId ? String(payload.replacementAssetId) : undefined, payload.crop as { x: number, y: number, scale: number } | undefined)

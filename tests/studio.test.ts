@@ -93,6 +93,23 @@ describe('inspiration inbox', () => {
     await studio.dispose()
   })
 
+  it('lets a material-library asset enter the inbox without copying or approving it', async () => {
+    const dir = temp()
+    const library = join(dir, 'library')
+    seed(library)
+    const studio = await openStudio(dir, library)
+    const hits = studio.searchInspirationAssets('澄白')
+    expect(hits.length).toBeGreaterThan(0)
+    const before = studio.listCards().length
+    const captured = studio.captureLibraryInspiration(hits[0].assetId)
+    const candidate = captured.candidates.find(item => item.sourceName === '素材库')
+    expect(candidate?.status).toBe('pending')
+    expect(candidate?.itemProvenance).toContain('素材库 ·')
+    expect(captured.sources.find(source => source.id === 'library')?.status).toBe('connected')
+    expect(studio.listCards()).toHaveLength(before)
+    await studio.dispose()
+  })
+
   it('lets the assistant propose without approving or creating a card', async () => {
     const dir = temp()
     const studio = await openStudio(dir, join(dir, 'library'))
