@@ -315,6 +315,10 @@ export class StudioRuntime {
           (id, source_id, title, body, url, provenance, captured_at, created_at, meta_json, external_key)
         VALUES (?, 'qianfan-notes', ?, ?, '', ?, ?, ?, ?, ?)
       `)
+      const insertCandidate = this.db.db.prepare(`
+        INSERT INTO inspiration_candidates(id, item_id, angle, why, status, created_at)
+        VALUES (?, ?, ?, ?, 'pending', ?)
+      `)
       const cell = (row: string[], index: number) => index >= 0 ? String(row[index] ?? '').trim() : ''
       const metric = (row: string[], index: number) => {
         const raw = cell(row, index).replace(/[%,¥,\s]/g, '')
@@ -355,9 +359,20 @@ export class StudioRuntime {
           file: sourceName,
         })
         const externalKey = `${sourceName}|${published || ''}|${title}`
-        const result = insert.run(uid(), title, body, `千帆 · ${sourceName} · 第 ${index + 1} 行`, stamp, stamp, meta, externalKey)
-        if (result.changes > 0) imported += 1
-        else skipped += 1
+        const itemId = uid()
+        const result = insert.run(itemId, title, body, `千帆 · ${sourceName} · 第 ${index + 1} 行`, stamp, stamp, meta, externalKey)
+        if (result.changes > 0) {
+          imported += 1
+          const saveRate = views && saves !== null ? `，收藏率 ${(saves / views * 100).toFixed(1)}%` : ''
+          const why = [
+            '千帆笔记',
+            views === null ? '' : `观看 ${views}`,
+            saves === null ? '' : `收藏 ${saves}${saveRate}`,
+            paidAmount === null ? '' : `营收 ${paidAmount}`,
+            '只作证据，不证明因果。',
+          ].filter(Boolean).join(' · ')
+          insertCandidate.run(uid(), itemId, title, why, stamp)
+        } else skipped += 1
       }
       this.db.db.prepare(`
         UPDATE inspiration_sources SET status = 'connected', detail = ?, last_sync_at = ?, updated_at = ?

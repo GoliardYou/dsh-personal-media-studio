@@ -296,6 +296,13 @@ export class StudioDb {
     if (!itemColumns.has('meta_json')) this.db.exec(`ALTER TABLE inspiration_items ADD COLUMN meta_json TEXT`)
     if (!itemColumns.has('external_key')) this.db.exec(`ALTER TABLE inspiration_items ADD COLUMN external_key TEXT`)
     this.db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_inspiration_items_external ON inspiration_items(source_id, external_key)`)
+    // 早期导入的条目可能只有原文、没有候选；补一条 pending，仍由作者判断。
+    this.db.exec(`
+      INSERT OR IGNORE INTO inspiration_candidates(id, item_id, angle, why, status, created_at)
+      SELECT 'backfill-' || i.id, i.id, i.title, '从已有来源补收的引子；仍要你判断。', 'pending', i.created_at
+      FROM inspiration_items i
+      WHERE NOT EXISTS (SELECT 1 FROM inspiration_candidates c WHERE c.item_id = i.id)
+    `)
     this.mark(6)
   }
 

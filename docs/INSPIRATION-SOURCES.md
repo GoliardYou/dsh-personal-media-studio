@@ -13,7 +13,7 @@
 - 作者门：`通过，进选题` 才调用 `createCard`；`略过` 不建卡；
 - 搜索：按角度、理由、原话、来源名过滤；
 - 素材库只读：从 `assets` 索引里搜标题/正文/路径，`收下` 只建 pending 候选，不复制原文件；素材库来源会显示「已接」并带文件数；
-- 千帆笔记指标：灵感页可直接选 CSV 导入（也可用 `media_import_qianfan_notes` 指定素材库内路径），按标题+发布时间去重，指标写入 `meta_json`，只作为证据；交易数据还没接；
+- 千帆笔记指标：灵感页可直接选 CSV 导入（也可用 `media_import_qianfan_notes` 指定素材库内路径），按标题+发布时间去重，指标写入 `meta_json`，并生成 pending 候选（带收藏率/观看/营收的理由）；只作为证据，不建卡；交易数据还没接；
 - DSH 工具：`media_list_inspiration`、`media_search_inspiration`、`media_propose_inspiration`；助手只能提议，不能通过。
 
 还没有做的部分，文档后面是目标设计而不是既成事实：
