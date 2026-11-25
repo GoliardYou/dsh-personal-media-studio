@@ -155,6 +155,16 @@ interface BootView {
   stages?: StageBook
   inspiration?: InspirationView
 }
+interface LlmProvider {
+  id: string
+  name?: string
+}
+interface SettingsView {
+  ai: { provider: string, model: string, configured: boolean, reason: string }
+  providers: LlmProvider[]
+  brand: { author: string, role: string }
+  workspace: { dataDir: string, exportDir: string, libraryCount: number, watch: boolean, renderEngine: string }
+}
 interface AnalysisView {
   engine: string
   thesis: string
@@ -413,6 +423,146 @@ function StudioIcon({ size = 22 }: { size?: number, active?: boolean }) {
 /** 阶段切换会挂载新的 StudioApp；缓存首屏数据，避免每次切 tab 都闪一次旧骨架。 */
 let bootCache: BootView | null = null
 
+function SettingsPage({ onClose, onNotice }: { onClose: () => void, onNotice: (notice: Notice) => void }) {
+  const [view, setView] = useState<SettingsView | null>(null)
+  const [provider, setProvider] = useState('')
+  const [model, setModel] = useState('')
+  const [author, setAuthor] = useState('')
+  const [role, setRole] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [tested, setTested] = useState<{ ok: boolean, reason: string, latencyMs: number, sample: string } | null>(null)
+
+  useEffect(() => {
+    let live = true
+    void rpc<SettingsView>('getSettings').then(value => {
+      if (!live) return
+      setView(value)
+      setProvider(value.ai.provider)
+      setModel(value.ai.model)
+      setAuthor(value.brand.author)
+      setRole(value.brand.role)
+    }).catch(err => { if (live) setError(err instanceof Error ? err.message : String(err)) })
+    return () => { live = false }
+  }, [])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  async function save() {
+    if (busy) return
+    setBusy(true)
+    setError('')
+    setTested(null)
+    try {
+      const next = await rpc<SettingsView>('saveSettings', { ai: { provider, model }, brand: { author, role } })
+      setView(next)
+      onNotice({ title: '设置已保存。下一次分析会使用新的模型。' })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function test() {
+    if (busy) return
+    setBusy(true)
+    setError('')
+    try {
+      setTested(await rpc<{ ok: boolean, reason: string, latencyMs: number, sample: string }>('testLlm'))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="pms-settings" role="dialog" aria-modal="true" aria-label="设置" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
+      <div className="pms-settings__panel">
+        <header className="pms-settings__head">
+          <div>
+            <p className="pms-paper-kicker">设置</p>
+            <h1>模型与工作区</h1>
+          </div>
+          <button className="pms-icon-btn" type="button" aria-label="关闭设置" onClick={onClose}>×</button>
+        </header>
+        <div className="pms-settings__scroll">
+          {!view ? (
+            <p className="pms-settings__loading">{error || '正在读取设置…'}</p>
+          ) : (
+            <>
+              <section className="pms-settings__section">
+                <div className="pms-settings__section-head">
+                  <h2>模型连接</h2>
+                  <span className={view.ai.configured ? 'pms-settings__state pms-settings__state--on' : 'pms-settings__state'}>
+                    {view.ai.configured ? '已连接' : '本地预览'}
+                  </span>
+                </div>
+                <p className="pms-settings__hint">Provider 和模型由 DSH 提供，插件不保存 API Key。留空则使用本地预览引擎。</p>
+                <div className="pms-settings__grid">
+                  <label className="pms-settings__field">
+                    <span>Provider</span>
+                    <select value={provider} onChange={event => { setProvider(event.target.value); setTested(null) }}>
+                      <option value="">跟随 DSH 配置</option>
+                      {provider && !view.providers.some(item => item.id === provider) && <option value={provider}>{provider}（未注册）</option>}
+                      {view.providers.map(item => <option key={item.id} value={item.id}>{item.name || item.id}</option>)}
+                    </select>
+                  </label>
+                  <label className="pms-settings__field">
+                    <span>Model</span>
+                    <input value={model} onChange={event => { setModel(event.target.value); setTested(null) }} placeholder="例如 deepseek-flash" autoComplete="off" spellCheck={false} />
+                  </label>
+                </div>
+                <div className="pms-settings__line">
+                  <code>{view.ai.reason || '使用 DSH 当前注册的模型'}</code>
+                  <button className="pms-btn pms-btn--sm" type="button" disabled={busy} onClick={() => void test()}>测试当前连接</button>
+                </div>
+                {tested && (
+                  <p className={tested.ok ? 'pms-settings__test pms-settings__test--ok' : 'pms-settings__test'}>
+                    {tested.ok ? `连接正常 · ${tested.latencyMs}ms · ${tested.sample || '已返回'}` : `未连接 · ${tested.reason}`}
+                  </p>
+                )}
+              </section>
+
+              <section className="pms-settings__section">
+                <div className="pms-settings__section-head"><h2>品牌默认</h2></div>
+                <p className="pms-settings__hint">新页面的默认署名。单页仍可在渲染页里单独改。</p>
+                <div className="pms-settings__grid">
+                  <label className="pms-settings__field"><span>署名</span><input value={author} onChange={event => setAuthor(event.target.value)} maxLength={80} /></label>
+                  <label className="pms-settings__field"><span>身份</span><input value={role} onChange={event => setRole(event.target.value)} maxLength={120} /></label>
+                </div>
+              </section>
+
+              <section className="pms-settings__section">
+                <div className="pms-settings__section-head"><h2>工作区</h2><span className="pms-settings__state">只读</span></div>
+                <dl className="pms-settings__facts">
+                  <div><dt>数据目录</dt><dd title={view.workspace.dataDir}>{view.workspace.dataDir}</dd></div>
+                  <div><dt>导出目录</dt><dd title={view.workspace.exportDir}>{view.workspace.exportDir}</dd></div>
+                  <div><dt>素材库</dt><dd>{view.workspace.libraryCount} 个文件已索引 · {view.workspace.watch ? '监听中' : '不监听'}</dd></div>
+                  <div><dt>渲染引擎</dt><dd>{view.workspace.renderEngine}</dd></div>
+                </dl>
+              </section>
+            </>
+          )}
+          {error && <div className="pms-error">{error}</div>}
+        </div>
+        <footer className="pms-settings__foot">
+          <span>设置保存在本机数据目录，不写入 DSH 的密钥。</span>
+          <div>
+            <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={onClose}>取消</button>
+            <button className="pms-btn pms-btn--sm pms-btn--primary" type="button" disabled={!view || busy} onClick={() => void save()}>{busy ? '保存中…' : '保存'}</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  )
+}
+
 function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: StageId) => void }) {
   const [boot, setBoot] = useState<BootView | null>(() => bootCache)
   const [error, setError] = useState('')
@@ -423,6 +573,7 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
   })
   const [toast, setToast] = useState<(Notice & { id: string }) | null>(null)
   const [topicView, setTopicView] = useState<'board' | 'pool'>('board')
+  const [settingsOpen, setSettingsOpen] = useState(false)
   // 聚焦模式的起点由「从哪张卡进来」决定；哈希直达时也在这里恢复。
   const [focusStart, setFocusStart] = useState<string | null>(() => stage === 'topics' ? focusRouteId() : null)
 
@@ -557,6 +708,12 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
         </nav>
         <span className="pms-spacer" />
         <div className="pms-toolbar__actions">
+          <button className="pms-icon-btn pms-icon-btn--quiet" type="button" aria-label="设置" title="设置" data-testid="open-settings" onClick={() => setSettingsOpen(true)}>
+            <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+              <circle cx="8" cy="8" r="2.2" />
+              <path d="M8 1.5v1.4M8 13.1v1.4M1.5 8h1.4M13.1 8h1.4M3.4 3.4l1 1M11.6 11.6l1 1M12.6 3.4l-1 1M4.4 11.6l-1 1" strokeLinecap="round" />
+            </svg>
+          </button>
           {boot && (
             <span className={boot.engine.mode === 'llm' ? 'pms-badge pms-badge--accent' : 'pms-badge pms-badge--warn'} data-testid="engine-badge" title={boot.engine.reason}>
               {boot.engine.mode === 'llm' ? '模型已连接' : '本地预览引擎'}
@@ -627,6 +784,7 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
           <XhsStage cardId={cardId} onReturn={() => { go('drafts', cardId); void refresh() }} />
         )}
       </div>
+      {settingsOpen && <SettingsPage onClose={() => setSettingsOpen(false)} onNotice={notify} />}
       {toast && (
         <div className="pms-toast" role="status" data-testid="undo-toast">
           {toast.seal && <span className="pms-toast__seal" aria-hidden="true">{toast.seal}</span>}

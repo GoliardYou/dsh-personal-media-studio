@@ -195,6 +195,33 @@ describe('inspiration inbox', () => {
   })
 })
 
+describe('settings', () => {
+  it('persists safe AI and brand settings without storing a key', async () => {
+    const dir = temp()
+    const studio = await openStudio(dir, join(dir, 'library'))
+    expect(studio.settingsView().ai.configured).toBe(false)
+    const saved = studio.saveSettings({ ai: { provider: '', model: '' }, brand: { author: '测试作者', role: '写作者' } })
+    expect(saved.brand.author).toBe('测试作者')
+    const file = join(dir, 'data', 'settings.json')
+    const raw = JSON.parse(readFileSync(file, 'utf8')) as { ai: { provider: string }, brand: { author: string } }
+    expect(raw.ai.provider).toBe('')
+    expect(raw.brand.author).toBe('测试作者')
+    expect(JSON.stringify(raw)).not.toContain('apiKey')
+    await studio.dispose()
+
+    const reopened = await openStudio(dir, join(dir, 'library'))
+    expect(reopened.settingsView().brand.author).toBe('测试作者')
+    await reopened.dispose()
+  })
+
+  it('rejects an unknown provider instead of silently falling back', async () => {
+    const dir = temp()
+    const studio = await openStudio(dir, join(dir, 'library'))
+    expect(() => studio.saveSettings({ ai: { provider: 'not-registered', model: 'x' } })).toThrow(/provider/)
+    await studio.dispose()
+  })
+})
+
 describe('atomic focus advance', () => {
   it('advances in one transaction and ignores a retried client op', async () => {
     const dir = temp()

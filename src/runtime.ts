@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, isAbsolute, join, relative, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -23,6 +23,11 @@ interface Intent {
   cardId: string
   action: 'promote' | 'produce'
   at: number
+}
+
+interface PersistedSettings {
+  ai?: { provider?: string, model?: string }
+  brand?: { author?: string, role?: string }
 }
 
 interface InspirationSourceRow {
@@ -78,7 +83,7 @@ const RECOMMENDED = [
 export class StudioRuntime {
   readonly db: StudioDb
   readonly assets: AssetLibrary
-  readonly llm: LlmBridge
+  llm: LlmBridge
   private timer: NodeJS.Timeout | undefined
   private busy = false
   private closed = false
@@ -88,6 +93,7 @@ export class StudioRuntime {
   readonly knowledgeDir: string
 
   private constructor(
+    private readonly ctx: Context,
     db: StudioDb,
     assets: AssetLibrary,
     llm: LlmBridge,
@@ -117,7 +123,8 @@ export class StudioRuntime {
     const assets = new AssetLibrary(db, scanRoots, mergeExcludes(config.libraryProfile, config.excludeGlobs), join(dataDir, 'thumbs'), config.ocr.command)
     await assets.start(config.watch)
     const llm = createLlmBridge(ctx, config.llm.provider, config.llm.model)
-    const runtime = new StudioRuntime(db, assets, llm, dataDir, exportDir, knowledgeDir, config)
+    const runtime = new StudioRuntime(ctx, db, assets, llm, dataDir, exportDir, knowledgeDir, config)
+    runtime.loadStoredSettings()
     assets.setOnScanned(() => runtime.seedTopics())
     runtime.seedTopics()
     runtime.timer = setInterval(() => { void runtime.pump() }, 400)
@@ -141,10 +148,90 @@ export class StudioRuntime {
   engineInfo() {
     return {
       mode: this.llm.configured ? 'llm' as const : 'heuristic' as const,
-      provider: this.config.llm.provider,
-      model: this.config.llm.model,
+      provider: this.llm.provider,
+      model: this.llm.model,
       reason: this.llm.reason,
       sendImagesToCloud: this.config.privacy.sendImagesToCloud,
+    }
+  }
+
+  private settingsFile() {
+    return join(this.dataDir, 'settings.json')
+  }
+
+  /** 只读的本地覆盖层；provider/model 仍由 DSH 提供，插件不保存密钥。 */
+  loadStoredSettings() {
+    const file = this.settingsFile()
+    if (!existsSync(file)) return
+    try {
+      const raw = JSON.parse(readFileSync(file, 'utf8')) as PersistedSettings
+      if (typeof raw.ai?.provider === 'string') this.config.llm.provider = raw.ai.provider
+      if (typeof raw.ai?.model === 'string') this.config.llm.model = raw.ai.model
+      if (typeof raw.brand?.author === 'string') this.config.brand.author = raw.brand.author
+      if (typeof raw.brand?.role === 'string') this.config.brand.role = raw.brand.role
+      this.llm = createLlmBridge(this.ctx, this.config.llm.provider, this.config.llm.model)
+    } catch {
+      /* 坏文件不阻塞启动；设置页会重新写回。 */
+    }
+  }
+
+  settingsView() {
+    let providers: Array<{ id: string, name?: string }> = []
+    try {
+      providers = this.ctx.llm.listProviders().map(item => ({ id: item.id, name: item.name }))
+    } catch {
+      providers = []
+    }
+    const libraryCount = (this.db.db.prepare(`SELECT COUNT(*) AS n FROM assets WHERE deleted_at IS NULL`).get() as { n: number }).n
+    return {
+      ai: {
+        provider: this.llm.provider,
+        model: this.llm.model,
+        configured: this.llm.configured,
+        reason: this.llm.reason,
+      },
+      providers,
+      brand: { ...this.config.brand },
+      workspace: {
+        dataDir: this.dataDir,
+        exportDir: this.exportDir,
+        libraryCount,
+        watch: this.config.watch,
+        renderEngine: this.config.render.engine,
+      },
+    }
+  }
+
+  saveSettings(payload: { ai?: { provider?: string, model?: string }, brand?: { author?: string, role?: string } }) {
+    const provider = String(payload.ai?.provider ?? '').trim()
+    const model = String(payload.ai?.model ?? '').trim()
+    if (provider) {
+      const known = this.ctx.llm.listProviders().some(item => item.id === provider)
+      if (!known) throw new StudioError('unknown_provider', `DSH 里还没有注册 provider「${provider}」。`)
+    }
+    if (Boolean(provider) !== Boolean(model)) throw new StudioError('incomplete_ai', 'provider 和 model 要么都填，要么都留空。')
+    const author = String(payload.brand?.author ?? this.config.brand.author).trim().slice(0, 80)
+    const role = String(payload.brand?.role ?? this.config.brand.role).trim().slice(0, 120)
+    this.config.llm.provider = provider
+    this.config.llm.model = model
+    this.config.brand.author = author
+    this.config.brand.role = role
+    writeFileSync(this.settingsFile(), JSON.stringify({
+      ai: { provider, model },
+      brand: { author, role },
+    } satisfies PersistedSettings, null, 2), 'utf8')
+    this.llm = createLlmBridge(this.ctx, provider, model)
+    return this.settingsView()
+  }
+
+  async testLlm() {
+    if (!this.llm.configured) return { ok: false, reason: this.llm.reason, latencyMs: 0, sample: '' }
+    const started = Date.now()
+    try {
+      const text = await this.llm.complete('topic', '这是一次连接测试，只回复四个字：连接正常。', '回复：连接正常')
+      return { ok: true, reason: '', latencyMs: Date.now() - started, sample: (text ?? '').trim().slice(0, 120) }
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : String(error), latencyMs: Date.now() - started, sample: '' }
     }
   }
 
@@ -1509,6 +1596,9 @@ export class StudioRuntime {
   private async dispatch(op: string, payload: Record<string, unknown>) {
     switch (op) {
       case 'bootstrap': return this.bootstrap()
+      case 'getSettings': return this.settingsView()
+      case 'saveSettings': return this.saveSettings(payload as { ai?: { provider?: string, model?: string }, brand?: { author?: string, role?: string } })
+      case 'testLlm': return this.testLlm()
       case 'createCard': return this.createCard(String(payload.title ?? ''))
       case 'getCard': return this.getCard(String(payload.cardId))
       case 'appendThought': return this.appendThought(String(payload.cardId), String(payload.body ?? ''), arrayOf(payload.attachmentAssetIds))
