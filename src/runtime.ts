@@ -727,17 +727,19 @@ export class StudioRuntime {
       this.db.db.prepare(`UPDATE cards SET maturity = 'mature', status = ?, updated_at = ? WHERE id = ?`).run(status, stamp, cardId)
       if (project?.status === 'paused') this.db.db.prepare(`UPDATE projects SET status = 'drafting', updated_at = ? WHERE id = ?`).run(stamp, project.id)
     })
+    this.enqueueAnalyze(cardId, Number(card.input_version))
     return this.getCard(cardId)
   }
 
   returnToTopics(cardId: string) {
-    this.requireCard(cardId)
+    const card = this.requireCard(cardId)
     const stamp = nowIso()
     const project = this.latestProject(cardId)
     this.db.tx(() => {
       this.db.db.prepare(`UPDATE cards SET maturity = 'forming', status = 'open', updated_at = ? WHERE id = ?`).run(stamp, cardId)
       if (project && project.status !== 'exported') this.db.db.prepare(`UPDATE projects SET status = 'paused', updated_at = ? WHERE id = ?`).run(stamp, project.id)
     })
+    this.enqueueAnalyze(cardId, Number(card.input_version))
     return this.getCard(cardId)
   }
 
@@ -1062,6 +1064,7 @@ export class StudioRuntime {
     const text = this.rawText(cardId)
     const { plan, engine } = await planDraft(this.llm, `${card.title}\n${text}`)
     const hits = this.assets.search(`${card.title}\n${text}`, 6)
+    const sourceVersion = (this.db.db.prepare(`SELECT COUNT(*) AS n FROM interactions WHERE card_id = ? AND kind = 'thought'`).get(cardId) as { n: number }).n
     const stamp = nowIso()
     const existing = this.db.db.prepare(`SELECT id FROM projects WHERE card_id = ? ORDER BY created_at DESC LIMIT 1`).get(cardId) as { id: string } | undefined
     const projectId = existing?.id ?? uid()
@@ -1073,8 +1076,8 @@ export class StudioRuntime {
       } else {
         this.db.db.prepare(`UPDATE projects SET status = 'drafting', updated_at = ? WHERE id = ?`).run(stamp, projectId)
       }
-      this.db.db.prepare(`INSERT INTO drafts(id, project_id, title, body_md, structure_json, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)`).run(
-        draftId, projectId, plan.title, text, JSON.stringify({ plan, engine, highlights: plan.highlights }), stamp, stamp,
+      this.db.db.prepare(`INSERT INTO drafts(id, project_id, title, body_md, structure_json, source_version, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`).run(
+        draftId, projectId, plan.title, text, JSON.stringify({ plan, engine, highlights: plan.highlights }), sourceVersion, stamp, stamp,
       )
       const insertPage = this.db.db.prepare(`INSERT INTO draft_pages(id, draft_id, ordinal, role, title, blocks_json, style_json) VALUES (?, ?, ?, ?, ?, ?, '{}')`)
       for (const page of pages) insertPage.run(page.id, draftId, page.ordinal, page.role, page.title, JSON.stringify(page.blocks))
@@ -1189,24 +1192,43 @@ export class StudioRuntime {
     } else if (project.status === 'paused' || project.status === 'open') {
       this.db.db.prepare(`UPDATE projects SET status = 'drafting', updated_at = ? WHERE id = ?`).run(stamp, project.id)
     }
-    let draft = this.db.db.prepare(`SELECT id, title, body_md, structure_json FROM drafts WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`).get(project.id) as { id: string, title: string, body_md: string, structure_json: string } | undefined
+    let draft = this.db.db.prepare(`SELECT id, title, body_md, structure_json, source_version FROM drafts WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`).get(project.id) as { id: string, title: string, body_md: string, structure_json: string, source_version: number } | undefined
+    const sourceVersion = thoughts.length
     if (!draft) {
       const draftId = uid()
-      this.db.db.prepare(`INSERT INTO drafts(id, project_id, title, body_md, structure_json, version, created_at, updated_at) VALUES (?, ?, ?, ?, '{}', 1, ?, ?)`).run(draftId, project.id, card.title, composed, stamp, stamp)
+      this.db.db.prepare(`INSERT INTO drafts(id, project_id, title, body_md, structure_json, source_version, version, created_at, updated_at) VALUES (?, ?, ?, ?, '{}', ?, 1, ?, ?)`).run(draftId, project.id, card.title, composed, sourceVersion, stamp, stamp)
       this.snapshot(draftId, '生成文稿')
-      draft = { id: draftId, title: String(card.title), body_md: composed, structure_json: '{}' }
+      draft = { id: draftId, title: String(card.title), body_md: composed, structure_json: '{}', source_version: sourceVersion }
     } else if (!draft.body_md.trim() || draft.body_md.trim() === raw) {
-      this.db.db.prepare(`UPDATE drafts SET body_md = ?, updated_at = ? WHERE id = ?`).run(composed, stamp, draft.id)
+      this.db.db.prepare(`UPDATE drafts SET body_md = ?, source_version = ?, updated_at = ? WHERE id = ?`).run(composed, sourceVersion, stamp, draft.id)
       draft.body_md = composed
+      draft.source_version = sourceVersion
     }
     return {
       cardId,
       draftId: draft.id,
       title: draft.title || card.title,
       markdown: draft.body_md,
+      newThoughtCount: Math.max(0, sourceVersion - Number(draft.source_version ?? 0)),
       suggestions,
       versions: this.listVersions(draft.id),
     }
+  }
+
+  appendArticleThoughts(cardId: string) {
+    const draft = this.articleDraft(cardId)
+    const thoughts = (this.db.db.prepare(`SELECT body FROM interactions WHERE card_id = ? AND kind = 'thought' ORDER BY created_at ASC`).all(cardId) as Array<{ body: string }>)
+      .map(row => row.body.trim())
+      .filter(Boolean)
+    const start = Math.max(0, Number(draft.source_version ?? 0))
+    const addition = thoughts.slice(start).join('\n\n')
+    if (!addition) return this.openArticle(cardId)
+    this.snapshot(draft.id, '补入后记原话')
+    const body = `${draft.body_md.trimEnd()}\n\n${addition}\n`
+    const stamp = nowIso()
+    this.db.db.prepare(`UPDATE drafts SET body_md = ?, source_version = ?, version = version + 1, updated_at = ? WHERE id = ?`).run(body, thoughts.length, stamp, draft.id)
+    this.db.db.prepare(`UPDATE projects SET updated_at = ? WHERE id = ?`).run(stamp, draft.project_id)
+    return this.openArticle(cardId)
   }
 
   saveArticle(cardId: string, markdown: string) {
@@ -1276,7 +1298,7 @@ export class StudioRuntime {
   private articleDraft(cardId: string) {
     const project = this.latestProject(cardId)
     if (!project) throw new StudioError('missing_project', '还没有稿件。')
-    const draft = this.db.db.prepare(`SELECT id, project_id, body_md, structure_json FROM drafts WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`).get(project.id) as { id: string, project_id: string, body_md: string, structure_json: string } | undefined
+    const draft = this.db.db.prepare(`SELECT id, project_id, body_md, structure_json, source_version FROM drafts WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`).get(project.id) as { id: string, project_id: string, body_md: string, structure_json: string, source_version: number } | undefined
     if (!draft) throw new StudioError('missing_project', '还没有稿件。')
     return draft
   }
@@ -1708,6 +1730,7 @@ export class StudioRuntime {
       case 'confirmEdit': return this.confirmEdit(String(payload.draftId), String(payload.pageId), arrayOf(payload.paragraphs))
       case 'exportProject': return this.exportProject(String(payload.cardId))
       case 'openArticle': return this.openArticle(String(payload.cardId))
+      case 'appendArticleThoughts': return this.appendArticleThoughts(String(payload.cardId))
       case 'saveArticle': return this.saveArticle(String(payload.cardId), String(payload.markdown ?? ''))
       case 'snapshotArticle': return this.snapshotArticle(String(payload.cardId), String(payload.label ?? '版本'))
       case 'renderDocument': return this.renderDocument(String(payload.cardId))

@@ -497,6 +497,26 @@
 
 /* ══ 改稿工作室 ═══════════════════════════════════════════════════════════ */
 
+.pms-article-new {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pms-space-3);
+  margin: var(--pms-space-4) var(--pms-inset-page) 0;
+  padding: var(--pms-space-3) var(--pms-space-4);
+  border: var(--pms-border-hairline) solid var(--pms-border-subtle);
+  border-radius: var(--pms-radius-lg);
+  background: var(--pms-surface-raised);
+  color: var(--pms-text-secondary);
+  font-size: var(--pms-text-sm);
+  line-height: var(--pms-leading-normal);
+}
+
+.pms-article-new span {
+  flex: 1;
+  min-width: 200px;
+}
+
 /* 编辑器列：正文居中限宽，两侧留白自然形成呼吸区 */
 .pms-editor {
   display: flex;

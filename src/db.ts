@@ -304,6 +304,17 @@ export class StudioDb {
       WHERE NOT EXISTS (SELECT 1 FROM inspiration_candidates c WHERE c.item_id = i.id)
     `)
     this.mark(6)
+    // 稿件记录它生成时吃进了多少条原话；之后新记的原话不静默改写正文。
+    const draftColumns = new Set((this.db.prepare(`PRAGMA table_info(drafts)`).all() as Array<{ name: string }>).map(column => column.name))
+    if (!draftColumns.has('source_version')) this.db.exec(`ALTER TABLE drafts ADD COLUMN source_version INTEGER NOT NULL DEFAULT 0`)
+    this.db.exec(`
+      UPDATE drafts SET source_version = COALESCE((
+        SELECT COUNT(*) FROM interactions i JOIN projects p ON p.card_id = i.card_id
+        WHERE p.id = drafts.project_id AND i.kind = 'thought'
+      ), 0)
+      WHERE source_version = 0
+    `)
+    this.mark(7)
   }
 
   private seedInspirationSources() {

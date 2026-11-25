@@ -1261,6 +1261,7 @@ interface ArticleDoc {
   draftId: string
   title: string
   markdown: string
+  newThoughtCount?: number
   suggestions: Array<{ id: string, text: string, status: string }>
   versions: Array<{ id: string, label: string, created_at: string }>
 }
@@ -1289,6 +1290,22 @@ function ArticleStudio({ cardId, onBack, onRender }: { cardId: string, onBack: (
     }, 700)
     return () => window.clearTimeout(handle)
   }, [markdown, doc, cardId])
+  async function appendNewThoughts() {
+    if (!doc || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const next = await rpc<ArticleDoc>('appendArticleThoughts', { cardId })
+      setDoc(next)
+      setMarkdown(next.markdown)
+      setSaved('已补到文末，没有改动你写过的句子')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const outline = markdown.split('\n').filter(line => /^#{1,3}\s/.test(line))
   if (error) return <div className="pms-error">{error}</div>
   if (!doc) return <div className="pms-empty">正在把你的原话收成一篇稿…</div>
@@ -1308,6 +1325,14 @@ function ArticleStudio({ cardId, onBack, onRender }: { cardId: string, onBack: (
           void rpc('saveArticle', { cardId, markdown }).then(() => rpc('confirmForRender', { cardId })).then(onRender).catch(err => setError(err instanceof Error ? err.message : String(err))).finally(() => setBusy(false))
         }}>定稿，送去渲染</button>
       </div>
+
+      {doc.newThoughtCount ? (
+        <div className="pms-article-new" data-testid="article-new-thoughts">
+          <span>这篇稿生成后，你又记了 {doc.newThoughtCount} 条原话。</span>
+          <button className="pms-btn pms-btn--sm" type="button" disabled={busy} onClick={() => void appendNewThoughts()}>补到文末</button>
+          <button className="pms-btn pms-btn--sm pms-btn--ghost" type="button" onClick={() => setDoc({ ...doc, newThoughtCount: 0 })}>先不管</button>
+        </div>
+      ) : null}
 
       <div className="pms-workarea">
         {view === 'write' ? (

@@ -55,7 +55,7 @@ describe('database', () => {
     for (const table of ['assets', 'asset_chunks', 'asset_tags', 'asset_embeddings', 'topics', 'cards', 'interactions', 'ai_analyses', 'ai_suggestions', 'jobs', 'projects', 'drafts', 'draft_pages', 'asset_relations', 'style_profiles', 'versions', 'exports', 'inspiration_sources', 'inspiration_items', 'inspiration_candidates']) {
       expect(names).toContain(table)
     }
-    expect((db.db.prepare(`SELECT COUNT(*) AS n FROM schema_migrations`).get() as { n: number }).n).toBe(6)
+    expect((db.db.prepare(`SELECT COUNT(*) AS n FROM schema_migrations`).get() as { n: number }).n).toBe(7)
     expect((db.db.prepare(`SELECT COUNT(*) AS n FROM style_profiles`).get() as { n: number }).n).toBe(3)
     db.indexText('asset', 'a1', '个人媒体工作室的选题卡片与金句提取')
     const hit = db.searchText('金句提')
@@ -320,6 +320,32 @@ describe('library and cards', () => {
     expect(ids()).toContain(id)
     const found = studio.searchAssets('差评')
     expect(found.some(hit => hit.sourcePath.endsWith('一次差评的原话.md'))).toBe(true)
+    await studio.dispose()
+  })
+})
+
+describe('draft merging', () => {
+  it('reports new thoughts instead of silently rewriting a draft', async () => {
+    const dir = temp()
+    const library = join(dir, 'library')
+    seed(library)
+    const studio = await openStudio(dir, library)
+    const id = studio.createCard('后记不能丢').card.id as string
+    studio.appendThought(id, '第一段原话，先把它写成稿。')
+    const first = studio.openArticle(id)
+    expect(first.newThoughtCount).toBe(0)
+    studio.appendThought(id, '第二段原话，是生成之后才记的。')
+    const second = studio.openArticle(id)
+    expect(second.newThoughtCount).toBe(1)
+    expect(second.markdown).not.toContain('第二段原话')
+    const merged = studio.appendArticleThoughts(id)
+    expect(merged.markdown).toContain('第二段原话')
+    expect(merged.newThoughtCount).toBe(0)
+    await studio.drain()
+    const version = Number(studio.getCard(id).card.input_version)
+    studio.returnToTopics(id)
+    const queued = studio.db.db.prepare(`SELECT id FROM jobs WHERE card_id = ? AND type = 'analyze' AND input_version = ? AND status IN ('queued','running')`).get(id, version)
+    expect(queued).toBeTruthy()
     await studio.dispose()
   })
 })
