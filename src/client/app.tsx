@@ -687,6 +687,7 @@ function InspirationStage({ data, onChanged, onNotice, onTopics }: {
   const [libraryHits, setLibraryHits] = useState<AssetHit[]>([])
   const [libraryBusy, setLibraryBusy] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [importingOrders, setImportingOrders] = useState(false)
   const needle = query.trim().toLowerCase()
   const rows = data.candidates
     .filter(candidate => candidate.status === tab)
@@ -754,6 +755,24 @@ function InspirationStage({ data, onChanged, onNotice, onTopics }: {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setImporting(false)
+    }
+  }
+
+  async function importOrders(file: File) {
+    if (importingOrders) return
+    setImportingOrders(true)
+    setError('')
+    try {
+      const result = await rpc<{ imported: number, skipped: number, candidates: number }>('importQianfanOrdersText', {
+        text: await file.text(),
+        fileName: file.name,
+      })
+      await onChanged()
+      onNotice({ title: `导入了 ${result.imported} 笔订单，生成 ${result.candidates} 条待判断候选，跳过 ${result.skipped} 笔重复。` })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setImportingOrders(false)
     }
   }
 
@@ -873,6 +892,24 @@ function InspirationStage({ data, onChanged, onNotice, onTopics }: {
                 }}
               />
               <p className="pms-library-pick__empty">按标题和发布时间去重；指标只作为证据，不建卡，也不替你判断。</p>
+            </div>
+          </details>
+
+          <details className="pms-library-pick pms-qianfan-import">
+            <summary>导入千帆交易数据 <span>CSV · 订单证据</span></summary>
+            <div className="pms-library-pick__body">
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                disabled={importingOrders}
+                aria-label="选择千帆订单 CSV"
+                onChange={event => {
+                  const file = event.target.files?.[0]
+                  if (file) void importOrders(file)
+                  event.target.value = ''
+                }}
+              />
+              <p className="pms-library-pick__empty">按订单号和商品汇总；成交额只作为结果证据，不证明因果，也不建卡。</p>
             </div>
           </details>
 

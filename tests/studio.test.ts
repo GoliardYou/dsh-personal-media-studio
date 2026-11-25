@@ -144,6 +144,33 @@ describe('inspiration inbox', () => {
     await studio.dispose()
   })
 
+  it('imports Qianfan orders as product-level evidence without creating cards', async () => {
+    const dir = temp()
+    const studio = await openStudio(dir, join(dir, 'library'))
+    const csv = [
+      '订单号,商品名称,实付金额,退款金额,订单状态,成交时间,笔记标题',
+      'A1,澄白Mini,128.12,0,已完成,2026-10-01 10:00,面试开口卡壳',
+      'A2,澄白Mini,99.00,20,部分退款,2026-10-02 11:00,面试开口卡壳',
+      'A3,手冲壶,58.00,0,已完成,2026-10-03 12:00,背了金句不会用',
+    ].join('\n')
+    const before = studio.listCards().length
+    const first = studio.importQianfanOrdersText(csv, 'qianfan-orders.csv')
+    expect(first.imported).toBe(3)
+    expect(first.candidates).toBe(2)
+    const view = studio.listInspiration()
+    expect(view.sources.find(source => source.id === 'qianfan-orders')?.status).toBe('connected')
+    const product = view.candidates.find(candidate => candidate.angle.includes('澄白Mini'))
+    expect(product?.status).toBe('pending')
+    expect(product?.why).toContain('本批成交 2 笔')
+    expect(product?.why).toContain('退款 1 笔')
+    expect(studio.listCards()).toHaveLength(before)
+    const second = studio.importQianfanOrdersText(csv, 'qianfan-orders.csv')
+    expect(second.imported).toBe(0)
+    expect(second.skipped).toBe(3)
+    expect(studio.listInspiration().counts.pending).toBe(2)
+    await studio.dispose()
+  })
+
   it('lets the assistant propose without approving or creating a card', async () => {
     const dir = temp()
     const studio = await openStudio(dir, join(dir, 'library'))

@@ -399,6 +399,112 @@ export class StudioRuntime {
     return { imported, skipped, total: rows.length - 1, file: sourceName }
   }
 
+  importQianfanOrders(filePath: string) {
+    const file = resolve(filePath)
+    if (!isInsideLibrary(file, this.config.libraryRoots)) {
+      throw new StudioError('outside_library', '只导入素材库目录里的千帆订单 CSV。')
+    }
+    let text = ''
+    try {
+      text = readFileSync(file, 'utf8')
+    } catch {
+      throw new StudioError('missing_csv', '这个 CSV 读不到。')
+    }
+    return this.importQianfanOrdersText(text, basename(file))
+  }
+
+  importQianfanOrdersText(text: string, sourceName: string) {
+    const rows = parseCsvRows(text)
+    if (rows.length < 2) throw new StudioError('empty_csv', 'CSV 里没有数据行。')
+    const header = rows[0].map(cell => cell.replace(/^\uFEFF/, '').trim())
+    const column = (...names: string[]) => {
+      for (const name of names) {
+        const index = header.indexOf(name)
+        if (index >= 0) return index
+      }
+      return -1
+    }
+    const orderAt = column('订单号', '订单编号', 'order_id', 'orderId')
+    const productAt = column('商品名称', '商品', 'product', 'product_title')
+    const amountAt = column('实付金额', '支付金额', '金额', 'paid_amount', 'amount', '营收')
+    const refundAt = column('退款金额', 'refund_amount', 'refund')
+    const statusAt = column('订单状态', '状态', 'status')
+    const createdat = column('成交时间', '订单时间', '创建时间', 'created_at', 'pay_time')
+    const noteAt = column('笔记标题', 'note_title', 'post_title')
+    if (amountAt < 0 && orderAt < 0) throw new StudioError('missing_order_fields', 'CSV 里找不到订单号或金额列。')
+    const stamp = nowIso()
+    let imported = 0
+    let skipped = 0
+    let candidates = 0
+    const groups = new Map<string, { orders: number, revenue: number, refunds: number }>()
+    this.db.tx(() => {
+      const insertItem = this.db.db.prepare(`
+        INSERT OR IGNORE INTO inspiration_items
+          (id, source_id, title, body, url, provenance, captured_at, created_at, meta_json, external_key)
+        VALUES (?, 'qianfan-orders', ?, ?, '', ?, ?, ?, ?, ?)
+      `)
+      const insertCandidate = this.db.db.prepare(`
+        INSERT INTO inspiration_candidates(id, item_id, angle, why, status, created_at)
+        VALUES (?, ?, ?, ?, 'pending', ?)
+      `)
+      const cell = (row: string[], index: number) => index >= 0 ? String(row[index] ?? '').trim() : ''
+      const amountOf = (row: string[], index: number) => {
+        const raw = cell(row, index).replace(/[¥,\s]/g, '')
+        const value = Number(raw)
+        return Number.isFinite(value) ? value : 0
+      }
+      for (let index = 1; index < rows.length; index += 1) {
+        const row = rows[index]
+        const product = cell(row, productAt) || '未命名商品'
+        const amount = amountOf(row, amountAt)
+        const refund = amountOf(row, refundAt)
+        const orderId = cell(row, orderAt) || `row-${index + 1}`
+        const status = cell(row, statusAt)
+        const createdAt = cell(row, createdat)
+        const noteTitle = cell(row, noteAt)
+        const body = [status, `实付 ${amount}`, refund > 0 ? `退款 ${refund}` : '', noteTitle ? `笔记 ${noteTitle}` : '']
+          .filter(Boolean).join(' · ')
+        const meta = JSON.stringify({ attribution: 'order', orderId, product, amount, refund, status, createdAt, noteTitle, file: sourceName })
+        const result = insertItem.run(uid(), `订单 · ${product}`, body, `千帆 · ${sourceName} · 第 ${index + 1} 行`, stamp, stamp, meta, `order|${orderId}`)
+        if (result.changes > 0) {
+          imported += 1
+          const group = groups.get(product) ?? { orders: 0, revenue: 0, refunds: 0 }
+          group.orders += 1
+          group.revenue += amount - refund
+          if (refund > 0 || status.includes('退款')) group.refunds += 1
+          groups.set(product, group)
+        } else skipped += 1
+      }
+      for (const [product, group] of groups) {
+        const itemId = uid()
+        const angle = `复盘：${product} 为什么被买走？`
+        const why = `本批成交 ${group.orders} 笔 · 营收 ¥${group.revenue.toFixed(2)} · 退款 ${group.refunds} 笔；订单是结果证据，不是内容。`
+        const aggregate = insertItem.run(
+          itemId,
+          `成交 · ${product}`,
+          why,
+          `千帆 · ${sourceName} · 汇总`,
+          stamp,
+          stamp,
+          JSON.stringify({ attribution: 'order', product, orders: group.orders, revenue: group.revenue, refunds: group.refunds, file: sourceName }),
+          `product|${product}`,
+        )
+        if (aggregate.changes > 0) {
+          insertCandidate.run(uid(), itemId, angle, why, stamp)
+          candidates += 1
+        }
+      }
+      const revenue = [...groups.values()].reduce((sum, group) => sum + group.revenue, 0)
+      if (imported > 0) {
+        this.db.db.prepare(`
+          UPDATE inspiration_sources SET status = 'connected', detail = ?, last_sync_at = ?, updated_at = ?
+          WHERE id = 'qianfan-orders'
+        `).run(`${imported} 笔订单 · 营收 ¥${revenue.toFixed(2)}`, stamp, stamp)
+      }
+    })
+    return { imported, skipped, candidates, file: sourceName }
+  }
+
   decideInspiration(candidateId: string, decision: 'approved' | 'rejected') {
     const candidate = this.db.db.prepare(`
       SELECT id, angle, status, card_id FROM inspiration_candidates WHERE id = ?
@@ -1437,6 +1543,8 @@ export class StudioRuntime {
       case 'searchInspirationAssets': return this.searchInspirationAssets(String(payload.query ?? ''))
       case 'captureLibraryInspiration': return this.captureLibraryInspiration(String(payload.assetId ?? ''))
       case 'importQianfanNotes': return this.importQianfanNotes(String(payload.path ?? ''))
+      case 'importQianfanOrders': return this.importQianfanOrders(String(payload.path ?? ''))
+      case 'importQianfanOrdersText': return this.importQianfanOrdersText(String(payload.text ?? ''), String(payload.fileName ?? '粘贴的订单数据'))
       case 'importQianfanNotesText': return this.importQianfanNotesText(String(payload.text ?? ''), String(payload.fileName ?? '浏览器选择的 CSV'))
       case 'decideInspiration': return this.decideInspiration(String(payload.candidateId ?? ''), payload.decision === 'approved' ? 'approved' : 'rejected')
       case 'getProject': return this.getProject(String(payload.cardId))
