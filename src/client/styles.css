@@ -2316,6 +2316,16 @@ label.pms-asset:hover { background: var(--pms-interactive-bg-hover); }
   font-variant-numeric: tabular-nums;
 }
 
+.pms-inspiration-row__signal {
+  margin-right: 8px;
+  padding: 1px 6px;
+  border: var(--pms-border-hairline) solid var(--paper-rule);
+  border-radius: 999px;
+  color: var(--paper-ink-soft);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
 .pms-inspiration-row__link {
   display: inline-block;
   margin-top: 5px;

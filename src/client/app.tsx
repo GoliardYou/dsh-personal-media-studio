@@ -119,6 +119,8 @@ interface InspirationCandidate {
   sourceId: string
   sourceName: string
   sourceKind: string
+  score: number
+  signal: string
 }
 interface InspirationView {
   sources: InspirationSource[]
@@ -913,6 +915,7 @@ function InspirationStage({ data, onChanged, onNotice, onTopics }: {
                     <h2 className="pms-inspiration-row__angle">{candidate.angle}</h2>
                     <p className="pms-inspiration-row__why">{candidate.why}</p>
                     <p className="pms-inspiration-row__meta">
+                      {candidate.signal && <span className="pms-inspiration-row__signal">{candidate.signal}</span>}
                       {candidate.sourceName} · {formatWhen(candidate.createdAt).slice(5, 16)} · {candidate.itemProvenance}
                     </p>
                     {candidate.itemUrl && <a className="pms-inspiration-row__link" href={candidate.itemUrl} target="_blank" rel="noreferrer">看来源</a>}

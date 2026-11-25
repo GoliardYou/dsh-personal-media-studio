@@ -59,9 +59,12 @@ interface InspirationCandidateRow {
   itemUrl: string
   itemProvenance: string
   itemCapturedAt: string
+  itemMetaJson: string | null
   sourceId: string
   sourceName: string
   sourceKind: string
+  score: number
+  signal: string
 }
 
 const RECOMMENDED = [
@@ -184,6 +187,7 @@ export class StudioRuntime {
              c.created_at AS createdAt, c.decided_at AS decidedAt,
              i.title AS itemTitle, i.body AS itemBody, i.url AS itemUrl,
              i.provenance AS itemProvenance, i.captured_at AS itemCapturedAt,
+             i.meta_json AS itemMetaJson,
              s.id AS sourceId, s.name AS sourceName, s.kind AS sourceKind
       FROM inspiration_candidates c
       JOIN inspiration_items i ON i.id = c.item_id
@@ -192,10 +196,23 @@ export class StudioRuntime {
     `).all() as InspirationCandidateRow[]
     const counts = { pending: 0, approved: 0, rejected: 0 }
     for (const candidate of candidates) {
+      const meta = parseJson<Record<string, unknown>>(candidate.itemMetaJson ?? '{}', {})
+      const views = Number(meta.views ?? 0)
+      const saves = Number(meta.saves ?? 0)
+      const paid = Number(meta.paidAmount ?? 0)
+      const saveRate = views > 0 ? saves / views : 0
+      candidate.score = candidate.sourceId === 'qianfan-notes'
+        ? saveRate * 100 + Math.log10(views + 1) * 2 + (paid > 0 ? 3 : 0)
+        : candidate.sourceId === 'library' ? 2 : 1
+      candidate.signal = candidate.sourceId === 'qianfan-notes' && views > 0
+        ? `收藏率 ${(saveRate * 100).toFixed(1)}%`
+        : candidate.sourceId === 'library' ? '素材' : candidate.sourceId === 'agent' ? '助手提议' : ''
       if (candidate.status === 'approved') counts.approved++
       else if (candidate.status === 'rejected') counts.rejected++
       else counts.pending++
     }
+    // 候选按证据强度排序；同分时保留导入顺序。
+    candidates.sort((a, b) => b.score - a.score)
     return { sources, items, candidates, counts }
   }
 
