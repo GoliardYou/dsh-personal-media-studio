@@ -15,13 +15,14 @@
 - 素材库只读：从 `assets` 索引里搜标题/正文/路径，`收下` 只建 pending 候选，不复制原文件；素材库来源会显示「已接」并带文件数；
 - 千帆笔记指标：灵感页可直接选 CSV 导入（也可用 `media_import_qianfan_notes` 指定素材库内路径），按标题+发布时间去重，指标写入 `meta_json`，并生成 pending 候选（带收藏率/观看/营收的理由）；只作为证据，不建卡；
 - 千帆交易：灵感页可直接选订单 CSV 导入（也可用 `media_import_qianfan_orders` 指定素材库内路径），按订单号去重；逐笔订单作为证据，按商品汇总生成 pending 候选（成交笔数/营收/退款），不导入买家信息，不建卡；
-- DSH 工具：`media_list_inspiration`、`media_search_inspiration`、`media_propose_inspiration`、`media_import_qianfan_notes`、`media_import_qianfan_orders`；助手只能提议，不能通过。
+- DSH 工具：`media_list_inspiration`、`media_search_inspiration`、`media_propose_inspiration`、`media_import_qianfan_notes`、`media_import_qianfan_orders`；助手只能提议，不能通过；
+- 助手入口：灵感页的“问灵感助手”和每条候选的“问助手”会调用 `uiWorkspace.startSession()`，打开带当前收件箱摘要的 DSH 原生会话，不另做聊天界面。
 
 还没有做的部分，文档后面是目标设计而不是既成事实：
 
 - 千帆互动/千帆交易的定时同步；素材库目前是只读索引，不是定时增量同步；
 - 文本/数据/交叉来源的自动提取与更复杂的推荐排序；
-- 插件内的助手对话面板；当前助手入口是 DSH 原生会话 + 上述工具；
+- 插件内的常驻助手对话面板；当前用 DSH 原生会话 + 上述工具，不做第二套流式聊天；
 - 订单级买家信息与退款原因；当前只导入成交金额/退款金额/状态。
 
 ## 1. 先定一条底线
