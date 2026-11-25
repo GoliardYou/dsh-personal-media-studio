@@ -48,7 +48,7 @@ dsh web --no-open
 
 侧栏图标打开全页工作台。未配置模型时，顶部徽标是「本地预览引擎」，整条流程仍然可以走完。配好 DSH 里已经注册的 `llm.provider` 与 `llm.model` 后，后台任务改走 `ctx.llm.stream`，四个角色（访谈、写作、素材、审定，加上选题）共用这一对 provider/model。
 
-顶部的齿轮按钮打开「模型与工作区」：可以选 provider / 填 model、测试连接、改默认署名，并查看数据目录、素材库数量和渲染引擎。保存后写在 `$DSH_HOME/personal-media-studio/settings.json`，覆盖 profile 里的 `llm` / `brand`，但不保存任何 API Key；留空 provider/model 会回到本地预览引擎。
+顶部的齿轮按钮打开「模型与工作区」：可以选 DSH 里已经注册的 provider、从模型列表里选或手填 model、测试连接、改默认署名，并直接改素材库目录。素材库保存后会停掉旧索引，按新目录只读重扫，不复制原文件；数据目录、已索引数量、渲染引擎只读展示。保存后写在 `$DSH_HOME/personal-media-studio/settings.json`，覆盖 profile 里的 `llm` / `brand` / `libraryRoot`，但不保存任何 API Key；留空 provider/model 会回到本地预览引擎。
 
 数据在 `$DSH_HOME/personal-media-studio/studio.sqlite`（或 `dataDir`），不写进会话日志。
 

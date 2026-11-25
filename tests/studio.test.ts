@@ -200,7 +200,7 @@ describe('settings', () => {
     const dir = temp()
     const studio = await openStudio(dir, join(dir, 'library'))
     expect(studio.settingsView().ai.configured).toBe(false)
-    const saved = studio.saveSettings({ ai: { provider: '', model: '' }, brand: { author: '测试作者', role: '写作者' } })
+    const saved = await studio.saveSettings({ ai: { provider: '', model: '' }, brand: { author: '测试作者', role: '写作者' } })
     expect(saved.brand.author).toBe('测试作者')
     const file = join(dir, 'data', 'settings.json')
     const raw = JSON.parse(readFileSync(file, 'utf8')) as { ai: { provider: string }, brand: { author: string } }
@@ -217,8 +217,25 @@ describe('settings', () => {
   it('rejects an unknown provider instead of silently falling back', async () => {
     const dir = temp()
     const studio = await openStudio(dir, join(dir, 'library'))
-    expect(() => studio.saveSettings({ ai: { provider: 'not-registered', model: 'x' } })).toThrow(/provider/)
+    await expect(studio.saveSettings({ ai: { provider: 'not-registered', model: 'x' } })).rejects.toThrow(/provider/)
     await studio.dispose()
+  })
+
+  it('persists and reindexes a manually chosen library root', async () => {
+    const dir = temp()
+    const library = join(dir, 'manual-library')
+    seed(library)
+    const studio = await openStudio(dir, join(dir, 'empty'))
+    const saved = await studio.saveSettings({ ai: { provider: '', model: '' }, brand: { author: '一个路人甲', role: '自学面试上岸' }, libraryRoot: library })
+    expect(saved.workspace.libraryRoots[0]).toContain('manual-library')
+    expect(saved.workspace.libraryCount).toBeGreaterThan(0)
+    expect(studio.listInspiration().sources.find(source => source.id === 'library')?.status).toBe('connected')
+    await studio.dispose()
+
+    const reopened = await openStudio(dir, join(dir, 'empty'))
+    expect(reopened.settingsView().workspace.libraryRoots[0]).toContain('manual-library')
+    expect(reopened.settingsView().workspace.libraryCount).toBeGreaterThan(0)
+    await reopened.dispose()
   })
 })
 

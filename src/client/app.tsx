@@ -159,11 +159,15 @@ interface LlmProvider {
   id: string
   name?: string
 }
+interface LlmModel {
+  id: string
+  name?: string
+}
 interface SettingsView {
   ai: { provider: string, model: string, configured: boolean, reason: string }
   providers: LlmProvider[]
   brand: { author: string, role: string }
-  workspace: { dataDir: string, exportDir: string, libraryCount: number, watch: boolean, renderEngine: string }
+  workspace: { dataDir: string, exportDir: string, libraryCount: number, libraryRoots: string[], watch: boolean, renderEngine: string }
 }
 interface AnalysisView {
   engine: string
@@ -429,6 +433,8 @@ function SettingsPage({ onClose, onNotice }: { onClose: () => void, onNotice: (n
   const [model, setModel] = useState('')
   const [author, setAuthor] = useState('')
   const [role, setRole] = useState('')
+  const [libraryRoot, setLibraryRoot] = useState('')
+  const [models, setModels] = useState<LlmModel[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [tested, setTested] = useState<{ ok: boolean, reason: string, latencyMs: number, sample: string } | null>(null)
@@ -442,9 +448,20 @@ function SettingsPage({ onClose, onNotice }: { onClose: () => void, onNotice: (n
       setModel(value.ai.model)
       setAuthor(value.brand.author)
       setRole(value.brand.role)
+      setLibraryRoot(value.workspace.libraryRoots[0] ?? '')
     }).catch(err => { if (live) setError(err instanceof Error ? err.message : String(err)) })
     return () => { live = false }
   }, [])
+
+  useEffect(() => {
+    if (!provider) {
+      setModels([])
+      return
+    }
+    let live = true
+    void rpc<LlmModel[]>('listLlmModels', { provider }).then(value => { if (live) setModels(value) }).catch(() => { if (live) setModels([]) })
+    return () => { live = false }
+  }, [provider])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
@@ -458,9 +475,10 @@ function SettingsPage({ onClose, onNotice }: { onClose: () => void, onNotice: (n
     setError('')
     setTested(null)
     try {
-      const next = await rpc<SettingsView>('saveSettings', { ai: { provider, model }, brand: { author, role } })
+      const next = await rpc<SettingsView>('saveSettings', { ai: { provider, model }, brand: { author, role }, libraryRoot })
       setView(next)
-      onNotice({ title: '设置已保存。下一次分析会使用新的模型。' })
+      setLibraryRoot(next.workspace.libraryRoots[0] ?? '')
+      onNotice({ title: libraryRoot.trim() ? '设置已保存，素材库正在重新索引。' : '设置已保存。下一次分析会使用新的模型。' })
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -503,21 +521,29 @@ function SettingsPage({ onClose, onNotice }: { onClose: () => void, onNotice: (n
                     {view.ai.configured ? '已连接' : '本地预览'}
                   </span>
                 </div>
-                <p className="pms-settings__hint">Provider 和模型由 DSH 提供，插件不保存 API Key。留空则使用本地预览引擎。</p>
+                <p className="pms-settings__hint">Provider 和模型由 DSH 提供，插件不保存 API Key。选空的 Provider 就只用本地预览引擎，不会偷偷调用模型。</p>
                 <div className="pms-settings__grid">
                   <label className="pms-settings__field">
                     <span>Provider</span>
                     <select value={provider} onChange={event => { setProvider(event.target.value); setTested(null) }}>
-                      <option value="">跟随 DSH 配置</option>
+                      <option value="">本地预览（不调用模型）</option>
                       {provider && !view.providers.some(item => item.id === provider) && <option value={provider}>{provider}（未注册）</option>}
                       {view.providers.map(item => <option key={item.id} value={item.id}>{item.name || item.id}</option>)}
                     </select>
                   </label>
                   <label className="pms-settings__field">
                     <span>Model</span>
-                    <input value={model} onChange={event => { setModel(event.target.value); setTested(null) }} placeholder="例如 deepseek-flash" autoComplete="off" spellCheck={false} />
+                    <input list="pms-model-options" value={model} onChange={event => { setModel(event.target.value); setTested(null) }} placeholder={models[0]?.id || '例如 deepseek-flash'} autoComplete="off" spellCheck={false} />
+                    <datalist id="pms-model-options">
+                      {models.map(item => <option key={item.id} value={item.id}>{item.name || item.id}</option>)}
+                    </datalist>
                   </label>
                 </div>
+                {provider && (
+                  <p className="pms-settings__hint">
+                    {models.length > 0 ? `这个 Provider 可用：${models.slice(0, 4).map(item => item.id).join(' / ')}` : '没有读到模型列表；仍可手填模型 id。'}
+                  </p>
+                )}
                 <div className="pms-settings__line">
                   <code>{view.ai.reason || '使用 DSH 当前注册的模型'}</code>
                   <button className="pms-btn pms-btn--sm" type="button" disabled={busy} onClick={() => void test()}>测试当前连接</button>
@@ -539,11 +565,21 @@ function SettingsPage({ onClose, onNotice }: { onClose: () => void, onNotice: (n
               </section>
 
               <section className="pms-settings__section">
-                <div className="pms-settings__section-head"><h2>工作区</h2><span className="pms-settings__state">只读</span></div>
+                <div className="pms-settings__section-head"><h2>工作区</h2><span className="pms-settings__state">{view.workspace.watch ? '监听中' : '只读索引'}</span></div>
+                <label className="pms-settings__field">
+                  <span>素材库目录</span>
+                  <input
+                    value={libraryRoot}
+                    onChange={event => setLibraryRoot(event.target.value)}
+                    placeholder="例如 D:\\Coding\\一个路人甲小红书素材库"
+                    spellCheck={false}
+                  />
+                </label>
+                <p className="pms-settings__hint">保存后会停掉旧索引，按新目录重新扫描；只读，不复制原文件。留空则保留当前目录。</p>
                 <dl className="pms-settings__facts">
+                  <div><dt>已索引</dt><dd>{view.workspace.libraryCount} 个文件 · {view.workspace.watch ? '监听中' : '不监听'}</dd></div>
                   <div><dt>数据目录</dt><dd title={view.workspace.dataDir}>{view.workspace.dataDir}</dd></div>
                   <div><dt>导出目录</dt><dd title={view.workspace.exportDir}>{view.workspace.exportDir}</dd></div>
-                  <div><dt>素材库</dt><dd>{view.workspace.libraryCount} 个文件已索引 · {view.workspace.watch ? '监听中' : '不监听'}</dd></div>
                   <div><dt>渲染引擎</dt><dd>{view.workspace.renderEngine}</dd></div>
                 </dl>
               </section>

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, isAbsolute, join, relative, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -28,6 +28,7 @@ interface Intent {
 interface PersistedSettings {
   ai?: { provider?: string, model?: string }
   brand?: { author?: string, role?: string }
+  libraryRoot?: string
 }
 
 interface InspirationSourceRow {
@@ -82,7 +83,7 @@ const RECOMMENDED = [
 
 export class StudioRuntime {
   readonly db: StudioDb
-  readonly assets: AssetLibrary
+  assets: AssetLibrary
   llm: LlmBridge
   private timer: NodeJS.Timeout | undefined
   private busy = false
@@ -119,6 +120,17 @@ export class StudioRuntime {
     mkdirSync(knowledgeDir, { recursive: true })
     const db = new StudioDb(join(dataDir, 'studio.sqlite'))
     recoverJobs(db)
+    const settingsPath = join(dataDir, 'settings.json')
+    try {
+      if (existsSync(settingsPath)) {
+        const stored = JSON.parse(readFileSync(settingsPath, 'utf8')) as PersistedSettings
+        if (typeof stored.libraryRoot === 'string' && stored.libraryRoot.trim()) {
+          config.libraryRoots = [resolve(stored.libraryRoot.trim())]
+        }
+      }
+    } catch {
+      /* 坏设置文件不阻塞启动；设置页会重新写回。 */
+    }
     const scanRoots = [...new Set([...config.libraryRoots.map(root => resolve(root)), knowledgeDir])]
     const assets = new AssetLibrary(db, scanRoots, mergeExcludes(config.libraryProfile, config.excludeGlobs), join(dataDir, 'thumbs'), config.ocr.command)
     await assets.start(config.watch)
@@ -175,6 +187,34 @@ export class StudioRuntime {
     }
   }
 
+  async setLibraryRoot(root: string) {
+    const text = root.trim()
+    if (!text) throw new StudioError('empty_library', '填一个本地素材库目录。')
+    const next = resolve(text)
+    let stat
+    try {
+      stat = statSync(next)
+    } catch {
+      throw new StudioError('missing_library', '这个目录不存在，或当前账号读不到。')
+    }
+    if (!stat.isDirectory()) throw new StudioError('invalid_library', '素材库地址必须是文件夹，不是单个文件。')
+    if (this.config.libraryRoots.length === 1 && resolve(this.config.libraryRoots[0] as string) === next) return this.settingsView()
+    await this.assets.stop()
+    this.config.libraryRoots = [next]
+    this.assets = new AssetLibrary(
+      this.db,
+      [...new Set([next, this.knowledgeDir])],
+      mergeExcludes(this.config.libraryProfile, this.config.excludeGlobs),
+      join(this.dataDir, 'thumbs'),
+      this.config.ocr.command,
+    )
+    this.assets.setOnScanned(() => this.seedTopics())
+    await this.assets.start(this.config.watch)
+    const count = (this.db.db.prepare(`SELECT COUNT(*) AS n FROM assets WHERE deleted_at IS NULL`).get() as { n: number }).n
+    this.syncLibrarySource(count)
+    return this.settingsView()
+  }
+
   settingsView() {
     let providers: Array<{ id: string, name?: string }> = []
     try {
@@ -196,13 +236,14 @@ export class StudioRuntime {
         dataDir: this.dataDir,
         exportDir: this.exportDir,
         libraryCount,
+        libraryRoots: [...this.config.libraryRoots],
         watch: this.config.watch,
         renderEngine: this.config.render.engine,
       },
     }
   }
 
-  saveSettings(payload: { ai?: { provider?: string, model?: string }, brand?: { author?: string, role?: string } }) {
+  async saveSettings(payload: { ai?: { provider?: string, model?: string }, brand?: { author?: string, role?: string }, libraryRoot?: string }) {
     const provider = String(payload.ai?.provider ?? '').trim()
     const model = String(payload.ai?.model ?? '').trim()
     if (provider) {
@@ -210,6 +251,8 @@ export class StudioRuntime {
       if (!known) throw new StudioError('unknown_provider', `DSH 里还没有注册 provider「${provider}」。`)
     }
     if (Boolean(provider) !== Boolean(model)) throw new StudioError('incomplete_ai', 'provider 和 model 要么都填，要么都留空。')
+    const root = String(payload.libraryRoot ?? '').trim()
+    if (root) await this.setLibraryRoot(root)
     const author = String(payload.brand?.author ?? this.config.brand.author).trim().slice(0, 80)
     const role = String(payload.brand?.role ?? this.config.brand.role).trim().slice(0, 120)
     this.config.llm.provider = provider
@@ -219,9 +262,21 @@ export class StudioRuntime {
     writeFileSync(this.settingsFile(), JSON.stringify({
       ai: { provider, model },
       brand: { author, role },
+      libraryRoot: this.config.libraryRoots[0] ?? '',
     } satisfies PersistedSettings, null, 2), 'utf8')
     this.llm = createLlmBridge(this.ctx, provider, model)
     return this.settingsView()
+  }
+
+  async listLlmModels(provider: string) {
+    const id = provider.trim()
+    if (!id) return []
+    try {
+      const models = await this.ctx.llm.listModels(id)
+      return models.map(item => ({ id: item.id, name: item.name }))
+    } catch {
+      return []
+    }
   }
 
   async testLlm() {
@@ -1597,8 +1652,9 @@ export class StudioRuntime {
     switch (op) {
       case 'bootstrap': return this.bootstrap()
       case 'getSettings': return this.settingsView()
-      case 'saveSettings': return this.saveSettings(payload as { ai?: { provider?: string, model?: string }, brand?: { author?: string, role?: string } })
+      case 'saveSettings': return this.saveSettings(payload as { ai?: { provider?: string, model?: string }, brand?: { author?: string, role?: string }, libraryRoot?: string })
       case 'testLlm': return this.testLlm()
+      case 'listLlmModels': return this.listLlmModels(String(payload.provider ?? ''))
       case 'createCard': return this.createCard(String(payload.title ?? ''))
       case 'getCard': return this.getCard(String(payload.cardId))
       case 'appendThought': return this.appendThought(String(payload.cardId), String(payload.body ?? ''), arrayOf(payload.attachmentAssetIds))
