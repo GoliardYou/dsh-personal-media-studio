@@ -14,7 +14,12 @@ interface ClientCtx {
     inject(name: string, register: () => unknown): void
     register(meta: Record<string, unknown>, component: (props: { size?: number, active?: boolean }) => ReactElement): unknown
   }
+  uiWorkspace?: {
+    startSession(workspaceId: string | undefined, options: { prompt: string }): void
+  }
 }
+
+let askInspirationAssistant: ((prompt: string) => boolean) | undefined
 
 const PANELS: Record<StageId, string> = {
   topics: 'personal-media',
@@ -340,7 +345,7 @@ interface Notice {
   seal?: string
 }
 
-export const inject = ['slots', 'layout']
+export const inject = ['slots', 'layout', 'uiWorkspace']
 
 /** 由 scripts/build.mjs 注入；dev 下 tsc 也需要一个声明。 */
 declare const __PMS_BUILD_STAMP__: string | undefined
@@ -355,6 +360,11 @@ export function apply(ctx: ClientCtx) {
   ctx.effect(() => () => style.remove())
   const openStage = (stage: StageId) => {
     ctx.layout.selectPanel(PANELS[stage])
+  }
+  askInspirationAssistant = (prompt: string) => {
+    if (!ctx.uiWorkspace) return false
+    ctx.uiWorkspace.startSession(undefined, { prompt })
+    return true
   }
   const stages: StageId[] = ['topics', 'drafts', 'render', 'inspiration']
   for (const stage of stages) {
@@ -587,6 +597,7 @@ function StudioApp({ stage, openStage }: { stage: StageId, openStage: (stage: St
             onChanged={async () => { await refresh() }}
             onNotice={notify}
             onTopics={() => go('topics', null)}
+            onAskAssistant={prompt => askInspirationAssistant?.(prompt) ?? false}
           />
         )}
         {stage === 'drafts' && cardId && (
@@ -671,11 +682,27 @@ function StageList({ rows, empty, testId, rowTestId, onOpen }: { rows: StageRow[
   )
 }
 
-function InspirationStage({ data, onChanged, onNotice, onTopics }: {
+function inspirationAssistantPrompt(data: InspirationView, focus?: InspirationCandidate): string {
+  const pending = data.candidates.filter(item => item.status === 'pending').slice(0, 6)
+  const lines = pending.map((item, index) => `${index + 1}. ${item.angle}\n   为什么：${item.why}\n   来源：${item.sourceName} · ${item.itemProvenance}`)
+  const sources = data.sources.map(source => `- ${source.name}：${source.status === 'connected' ? '已接' : '未接'}${source.detail ? `（${source.detail}）` : ''}`)
+  return [
+    '你是「灵感助手」，在一个小红书内容工作室里工作。',
+    '先用 media_list_inspiration 读取收件箱，再用 media_search_inspiration 搜索相关证据；需要时用 media_search_assets 查素材。',
+    '规则：你只能提议和解释，不能替用户通过候选、不能创建选题卡。每条判断都要引用来源；数据不足就直说，不要编。',
+    focus
+      ? `请围绕这一条灵感，找出关联素材，并判断它是否值得进入选题：\n${focus.angle}\n${focus.why}`
+      : `请从下面这些待判断的灵感里，挑出最值得先写的 1-2 条，并说明证据：\n${lines.join('\n')}`,
+    `来源状态：\n${sources.join('\n')}`,
+  ].join('\n\n')
+}
+
+function InspirationStage({ data, onChanged, onNotice, onTopics, onAskAssistant }: {
   data: InspirationView
   onChanged: () => Promise<void> | void
   onNotice: (notice: Notice) => void
   onTopics: () => void
+  onAskAssistant: (prompt: string) => boolean
 }) {
   const [body, setBody] = useState('')
   const [url, setUrl] = useState('')
@@ -791,6 +818,10 @@ function InspirationStage({ data, onChanged, onNotice, onTopics }: {
     }
   }
 
+  function ask(prompt: string) {
+    if (!onAskAssistant(prompt)) onNotice({ title: '当前界面还不能打开新会话，请从 DSH 新会话里叫灵感助手。' })
+  }
+
   return (
     <div className="pms-view pms-paper-screens" data-testid="inspiration-center">
       <div className="pms-scroll">
@@ -801,6 +832,9 @@ function InspirationStage({ data, onChanged, onNotice, onTopics }: {
             <p className="pms-paper-lede">
               一句原话、一个链接、一段观察都可以。系统只收下，不替你改写，也不替你判断；你点了通过，它才进选题。
             </p>
+            <button className="pms-btn pms-btn--sm pms-inspiration-ask" type="button" onClick={() => ask(inspirationAssistantPrompt(data))}>
+              问灵感助手
+            </button>
           </header>
 
           <div className="pms-source-strip" aria-label="来源状态">
@@ -972,6 +1006,9 @@ function InspirationStage({ data, onChanged, onNotice, onTopics }: {
                     {candidate.itemUrl && <a className="pms-inspiration-row__link" href={candidate.itemUrl} target="_blank" rel="noreferrer">看来源</a>}
                   </div>
                   <div className="pms-inspiration-row__actions">
+                    <button className="pms-inspiration-ask-link" type="button" onClick={() => ask(inspirationAssistantPrompt(data, candidate))}>
+                      问助手
+                    </button>
                     {candidate.status === 'pending' && (
                       <>
                         <button className="pms-btn pms-btn--sm pms-btn--primary" type="button" disabled={busy} onClick={() => void decide(candidate, 'approved')}>通过，进选题</button>

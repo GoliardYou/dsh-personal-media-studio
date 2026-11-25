@@ -2109,6 +2109,20 @@ label.pms-asset:hover { background: var(--pms-interactive-bg-hover); }
   font-size: 11.5px;
 }
 
+.pms-inspiration-ask { margin-top: 12px; }
+
+.pms-inspiration-ask-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--paper-ink-faint);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pms-inspiration-ask-link:hover { color: var(--paper-accent); }
+
 .pms-inspiration-note {
   margin: 12px 0 0;
   color: var(--paper-ink-faint);
