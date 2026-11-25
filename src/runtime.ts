@@ -123,7 +123,7 @@ export class StudioRuntime {
     const settingsPath = join(dataDir, 'settings.json')
     try {
       if (existsSync(settingsPath)) {
-        const stored = JSON.parse(readFileSync(settingsPath, 'utf8')) as PersistedSettings
+        const stored = JSON.parse(readFileSync(settingsPath, 'utf8').replace(/^\uFEFF/, '')) as PersistedSettings
         if (typeof stored.libraryRoot === 'string' && stored.libraryRoot.trim()) {
           config.libraryRoots = [resolve(stored.libraryRoot.trim())]
         }
