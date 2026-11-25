@@ -214,6 +214,18 @@ describe('settings', () => {
     await reopened.dispose()
   })
 
+  it('reads a settings file written with a UTF-8 BOM', async () => {
+    const dir = temp()
+    mkdirSync(join(dir, 'data'), { recursive: true })
+    writeFileSync(join(dir, 'data', 'settings.json'), `\uFEFF${JSON.stringify({
+      ai: { provider: '', model: '' },
+      brand: { author: 'BOM 作者', role: '写作者' },
+    })}`, 'utf8')
+    const studio = await openStudio(dir, join(dir, 'library'))
+    expect(studio.settingsView().brand.author).toBe('BOM 作者')
+    await studio.dispose()
+  })
+
   it('rejects an unknown provider instead of silently falling back', async () => {
     const dir = temp()
     const studio = await openStudio(dir, join(dir, 'library'))

@@ -176,7 +176,8 @@ export class StudioRuntime {
     const file = this.settingsFile()
     if (!existsSync(file)) return
     try {
-      const raw = JSON.parse(readFileSync(file, 'utf8')) as PersistedSettings
+      const text = readFileSync(file, 'utf8').replace(/^\uFEFF/, '')
+      const raw = JSON.parse(text) as PersistedSettings
       if (typeof raw.ai?.provider === 'string') this.config.llm.provider = raw.ai.provider
       if (typeof raw.ai?.model === 'string') this.config.llm.model = raw.ai.model
       if (typeof raw.brand?.author === 'string') this.config.brand.author = raw.brand.author
