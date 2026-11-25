@@ -55,7 +55,7 @@ describe('database', () => {
     for (const table of ['assets', 'asset_chunks', 'asset_tags', 'asset_embeddings', 'topics', 'cards', 'interactions', 'ai_analyses', 'ai_suggestions', 'jobs', 'projects', 'drafts', 'draft_pages', 'asset_relations', 'style_profiles', 'versions', 'exports', 'inspiration_sources', 'inspiration_items', 'inspiration_candidates']) {
       expect(names).toContain(table)
     }
-    expect((db.db.prepare(`SELECT COUNT(*) AS n FROM schema_migrations`).get() as { n: number }).n).toBe(5)
+    expect((db.db.prepare(`SELECT COUNT(*) AS n FROM schema_migrations`).get() as { n: number }).n).toBe(6)
     expect((db.db.prepare(`SELECT COUNT(*) AS n FROM style_profiles`).get() as { n: number }).n).toBe(3)
     db.indexText('asset', 'a1', '个人媒体工作室的选题卡片与金句提取')
     const hit = db.searchText('金句提')
@@ -107,6 +107,33 @@ describe('inspiration inbox', () => {
     expect(candidate?.itemProvenance).toContain('素材库 ·')
     expect(captured.sources.find(source => source.id === 'library')?.status).toBe('connected')
     expect(studio.listCards()).toHaveLength(before)
+    await studio.dispose()
+  })
+
+  it('imports Qianfan note metrics as evidence without creating cards', async () => {
+    const dir = temp()
+    const library = join(dir, 'library')
+    seed(library)
+    const csv = join(library, 'qianfan-notes.csv')
+    writeFileSync(csv, [
+      '笔记标题,首次发布时间,观看量,点赞,收藏,评论,分享,涨粉,曝光,封面点击率,人均观看时长,商品点击,营收',
+      '面试开口卡壳,2026-10-01,1983,105,111,6,10,12,12000,10.9%,30.25,206,128.12',
+      '背了金句不会用,2026-10-02,624,26,13,2,1,3,5821,10.7%,18,0,0',
+    ].join('\n'), 'utf8')
+    const studio = await openStudio(dir, library)
+    const before = studio.listCards().length
+    const first = studio.importQianfanNotes(csv)
+    expect(first.imported).toBe(2)
+    expect(first.skipped).toBe(0)
+    const view = studio.listInspiration()
+    expect(view.sources.find(source => source.id === 'qianfan-notes')?.status).toBe('connected')
+    const imported = view.items.filter(item => item.sourceId === 'qianfan-notes')
+    expect(imported).toHaveLength(2)
+    expect(imported[0].metaJson).toContain('"attribution":"note"')
+    expect(studio.listCards()).toHaveLength(before)
+    const second = studio.importQianfanNotes(csv)
+    expect(second.imported).toBe(0)
+    expect(second.skipped).toBe(2)
     await studio.dispose()
   })
 
@@ -393,6 +420,7 @@ describe('cordis plugin', () => {
     expect(toolService.defs.has('media_list_inspiration')).toBe(true)
     expect(toolService.defs.has('media_search_inspiration')).toBe(true)
     expect(toolService.defs.has('media_propose_inspiration')).toBe(true)
+    expect(toolService.defs.has('media_import_qianfan_notes')).toBe(true)
     const propose = toolService.defs.get('media_propose_inspiration')!
     const proposed = JSON.parse(String(await propose.execute({ body: '先把开口练熟，再背答案。', why: '口述角度' }))) as { ok: boolean, inspiration: { candidates: Array<{ id: string, sourceName: string, status: string }> } }
     expect(proposed.ok).toBe(true)

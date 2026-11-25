@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, isAbsolute, join, relative, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { AssetLibrary, type AssetHit } from './assets.ts'
 import { analyzeCard, createLlmBridge, planDraft, reviewEdit, type LlmBridge, type Maturity } from './ai.ts'
@@ -42,6 +42,7 @@ interface InspirationItemRow {
   url: string
   provenance: string
   capturedAt: string
+  metaJson: string | null
 }
 
 interface InspirationCandidateRow {
@@ -175,7 +176,7 @@ export class StudioRuntime {
       FROM inspiration_sources ORDER BY created_at ASC
     `).all() as InspirationSourceRow[]
     const items = this.db.db.prepare(`
-      SELECT id, source_id AS sourceId, title, body, url, provenance, captured_at AS capturedAt
+      SELECT id, source_id AS sourceId, title, body, url, provenance, captured_at AS capturedAt, meta_json AS metaJson
       FROM inspiration_items ORDER BY captured_at DESC LIMIT 200
     `).all() as InspirationItemRow[]
     const candidates = this.db.db.prepare(`
@@ -264,6 +265,103 @@ export class StudioRuntime {
       this.syncLibrarySource(count)
     })
     return this.listInspiration()
+  }
+
+  importQianfanNotes(filePath: string) {
+    const file = resolve(filePath)
+    if (!isInsideLibrary(file, this.config.libraryRoots)) {
+      throw new StudioError('outside_library', '只导入素材库目录里的千帆 CSV。')
+    }
+    let text = ''
+    try {
+      text = readFileSync(file, 'utf8')
+    } catch {
+      throw new StudioError('missing_csv', '这个 CSV 读不到。')
+    }
+    const rows = parseCsvRows(text)
+    if (rows.length < 2) throw new StudioError('empty_csv', 'CSV 里没有数据行。')
+    const header = rows[0].map(cell => cell.replace(/^\uFEFF/, '').trim())
+    const column = (...names: string[]) => {
+      for (const name of names) {
+        const index = header.indexOf(name)
+        if (index >= 0) return index
+      }
+      return -1
+    }
+    const titleAt = column('笔记标题', 'post_title', 'title')
+    if (titleAt < 0) throw new StudioError('missing_title', 'CSV 里找不到「笔记标题」列。')
+    const publishedAt = column('首次发布时间', 'publish_time', 'publishTime')
+    const viewsAt = column('观看量', 'views')
+    const likesAt = column('点赞', 'likes')
+    const savesAt = column('收藏', 'collections')
+    const commentsAt = column('评论', 'comments')
+    const sharesAt = column('分享', 'shares')
+    const followsAt = column('涨粉', 'follow_increase')
+    const impressionsAt = column('曝光', 'impressions')
+    const ctrAt = column('封面点击率', 'cover_ctr')
+    const avgAt = column('人均观看时长', 'avg_view_duration')
+    const shopAt = column('商品点击', 'shop_visit_count')
+    const paidAt = column('营收', 'shop_paid_amount', 'revenue')
+    const stamp = nowIso()
+    const sourceName = basename(file)
+    let imported = 0
+    let skipped = 0
+    this.db.tx(() => {
+      const insert = this.db.db.prepare(`
+        INSERT OR IGNORE INTO inspiration_items
+          (id, source_id, title, body, url, provenance, captured_at, created_at, meta_json, external_key)
+        VALUES (?, 'qianfan-notes', ?, ?, '', ?, ?, ?, ?, ?)
+      `)
+      const cell = (row: string[], index: number) => index >= 0 ? String(row[index] ?? '').trim() : ''
+      const metric = (row: string[], index: number) => {
+        const raw = cell(row, index).replace(/[%,¥,\s]/g, '')
+        if (!raw) return null
+        const value = Number(raw)
+        return Number.isFinite(value) ? value : null
+      }
+      for (let index = 1; index < rows.length; index += 1) {
+        const row = rows[index]
+        const title = cell(row, titleAt)
+        if (!title) {
+          skipped += 1
+          continue
+        }
+        const published = cell(row, publishedAt)
+        const views = metric(row, viewsAt)
+        const likes = metric(row, likesAt)
+        const saves = metric(row, savesAt)
+        const comments = metric(row, commentsAt)
+        const shares = metric(row, sharesAt)
+        const follows = metric(row, followsAt)
+        const impressions = metric(row, impressionsAt)
+        const ctr = metric(row, ctrAt)
+        const avgViewDuration = metric(row, avgAt)
+        const shopVisits = metric(row, shopAt)
+        const paidAmount = metric(row, paidAt)
+        const body = [
+          views === null ? '' : `观看 ${views}`,
+          saves === null ? '' : `收藏 ${saves}`,
+          comments === null ? '' : `评论 ${comments}`,
+          shopVisits === null ? '' : `商品点击 ${shopVisits}`,
+          paidAmount === null ? '' : `营收 ${paidAmount}`,
+        ].filter(Boolean).join(' · ')
+        const meta = JSON.stringify({
+          views, likes, saves, comments, shares, follows, impressions, ctr, avgViewDuration, shopVisits, paidAmount,
+          publishedAt: published || null,
+          attribution: 'note',
+          file: sourceName,
+        })
+        const externalKey = `${sourceName}|${published || ''}|${title}`
+        const result = insert.run(uid(), title, body, `千帆 · ${sourceName} · 第 ${index + 1} 行`, stamp, stamp, meta, externalKey)
+        if (result.changes > 0) imported += 1
+        else skipped += 1
+      }
+      this.db.db.prepare(`
+        UPDATE inspiration_sources SET status = 'connected', detail = ?, last_sync_at = ?, updated_at = ?
+        WHERE id = 'qianfan-notes'
+      `).run(`${imported} 条笔记 · ${stamp.slice(0, 10)}`, stamp, stamp)
+    })
+    return { imported, skipped, total: rows.length - 1, file: sourceName }
   }
 
   decideInspiration(candidateId: string, decision: 'approved' | 'rejected') {
@@ -1303,6 +1401,7 @@ export class StudioRuntime {
       case 'captureInspiration': return this.captureInspiration(String(payload.body ?? ''), String(payload.url ?? ''))
       case 'searchInspirationAssets': return this.searchInspirationAssets(String(payload.query ?? ''))
       case 'captureLibraryInspiration': return this.captureLibraryInspiration(String(payload.assetId ?? ''))
+      case 'importQianfanNotes': return this.importQianfanNotes(String(payload.path ?? ''))
       case 'decideInspiration': return this.decideInspiration(String(payload.candidateId ?? ''), payload.decision === 'approved' ? 'approved' : 'rejected')
       case 'getProject': return this.getProject(String(payload.cardId))
       case 'decideAsset': return this.decideAsset(String(payload.relationId), payload.decision as 'accepted' | 'rejected' | 'replaced', payload.replacementAssetId ? String(payload.replacementAssetId) : undefined, payload.crop as { x: number, y: number, scale: number } | undefined)
@@ -1404,4 +1503,43 @@ function readFileSyncSafe(file: string): Buffer | null {
   } catch {
     return null
   }
+}
+
+function parseCsvRows(input: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let quoted = false
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index]
+    if (quoted) {
+      if (char === '"' && input[index + 1] === '"') {
+        field += '"'
+        index += 1
+      } else if (char === '"') {
+        quoted = false
+      } else {
+        field += char
+      }
+      continue
+    }
+    if (char === '"') {
+      quoted = true
+    } else if (char === ',') {
+      row.push(field)
+      field = ''
+    } else if (char === '\n') {
+      row.push(field)
+      rows.push(row)
+      row = []
+      field = ''
+    } else if (char !== '\r') {
+      field += char
+    }
+  }
+  if (field.length > 0 || row.length > 0) {
+    row.push(field)
+    rows.push(row)
+  }
+  return rows.filter(cells => cells.some(cell => cell.trim().length > 0))
 }

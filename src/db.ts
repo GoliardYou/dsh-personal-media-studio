@@ -291,6 +291,12 @@ export class StudioDb {
     `)
     this.seedInspirationSources()
     this.mark(5)
+    // 平台数据的去重键和指标快照。指标不覆盖历史，只保留导入时的样子。
+    const itemColumns = new Set((this.db.prepare(`PRAGMA table_info(inspiration_items)`).all() as Array<{ name: string }>).map(column => column.name))
+    if (!itemColumns.has('meta_json')) this.db.exec(`ALTER TABLE inspiration_items ADD COLUMN meta_json TEXT`)
+    if (!itemColumns.has('external_key')) this.db.exec(`ALTER TABLE inspiration_items ADD COLUMN external_key TEXT`)
+    this.db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_inspiration_items_external ON inspiration_items(source_id, external_key)`)
+    this.mark(6)
   }
 
   private seedInspirationSources() {

@@ -87,6 +87,7 @@ node scripts/seed-library.mjs examples/library
 | `media_list_inspiration` | 读灵感来源、收件和待确认/已通过/已略过候选 |
 | `media_search_inspiration` | 按原话、理由、来源名搜索候选 |
 | `media_propose_inspiration` | 以「助手提议」身份放进一条 pending 候选；不通过、不建卡 |
+| `media_import_qianfan_notes` | 从素材库内导入千帆笔记指标 CSV；只作为证据，不建卡 |
 
 完整的来源分层、归因和后续连接器设计见 [docs/INSPIRATION-SOURCES.md](docs/INSPIRATION-SOURCES.md)。
 
