@@ -278,6 +278,10 @@ export class StudioRuntime {
     } catch {
       throw new StudioError('missing_csv', '这个 CSV 读不到。')
     }
+    return this.importQianfanNotesText(text, basename(file))
+  }
+
+  importQianfanNotesText(text: string, sourceName: string) {
     const rows = parseCsvRows(text)
     if (rows.length < 2) throw new StudioError('empty_csv', 'CSV 里没有数据行。')
     const header = rows[0].map(cell => cell.replace(/^\uFEFF/, '').trim())
@@ -303,7 +307,6 @@ export class StudioRuntime {
     const shopAt = column('商品点击', 'shop_visit_count')
     const paidAt = column('营收', 'shop_paid_amount', 'revenue')
     const stamp = nowIso()
-    const sourceName = basename(file)
     let imported = 0
     let skipped = 0
     this.db.tx(() => {
@@ -1402,6 +1405,7 @@ export class StudioRuntime {
       case 'searchInspirationAssets': return this.searchInspirationAssets(String(payload.query ?? ''))
       case 'captureLibraryInspiration': return this.captureLibraryInspiration(String(payload.assetId ?? ''))
       case 'importQianfanNotes': return this.importQianfanNotes(String(payload.path ?? ''))
+      case 'importQianfanNotesText': return this.importQianfanNotesText(String(payload.text ?? ''), String(payload.fileName ?? '浏览器选择的 CSV'))
       case 'decideInspiration': return this.decideInspiration(String(payload.candidateId ?? ''), payload.decision === 'approved' ? 'approved' : 'rejected')
       case 'getProject': return this.getProject(String(payload.cardId))
       case 'decideAsset': return this.decideAsset(String(payload.relationId), payload.decision as 'accepted' | 'rejected' | 'replaced', payload.replacementAssetId ? String(payload.replacementAssetId) : undefined, payload.crop as { x: number, y: number, scale: number } | undefined)
