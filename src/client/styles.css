@@ -2037,6 +2037,20 @@ label.pms-asset:hover { background: var(--pms-interactive-bg-hover); }
 .pms-source-chip[data-status='connected'] { color: var(--paper-ink); }
 .pms-source-chip[data-status='connected'] .pms-source-chip__dot { background: var(--pms-status-green, #4f8f6f); }
 
+.pms-source-alert {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 12px;
+  padding: 9px 12px;
+  border: var(--pms-border-hairline) solid color-mix(in srgb, var(--paper-accent) 24%, var(--paper-rule));
+  border-radius: var(--pms-radius-md);
+  background: color-mix(in srgb, var(--paper-accent) 5%, transparent);
+  color: var(--paper-ink-soft);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .pms-inspiration-compose {
   margin-top: 24px;
   border: var(--pms-border-hairline) solid var(--paper-rule);

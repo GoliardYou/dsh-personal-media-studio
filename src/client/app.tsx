@@ -812,6 +812,20 @@ function InspirationStage({ data, onChanged, onNotice, onTopics }: {
             ))}
           </div>
 
+          {(() => {
+            const notes = data.sources.find(source => source.id === 'qianfan-notes')
+            const orders = data.sources.find(source => source.id === 'qianfan-orders')
+            const aged = notes?.lastSyncAt ? Math.floor((Date.now() - new Date(notes.lastSyncAt).getTime()) / 86_400_000) : null
+            const stale = aged !== null && aged > 30
+            if (!stale && orders?.status === 'connected') return null
+            return (
+              <div className="pms-source-alert" role="status">
+                {stale && notes?.lastSyncAt ? <span>互动数据停在 {formatWhen(notes.lastSyncAt).slice(0, 10)}，已 {aged} 天没更新。</span> : null}
+                {orders?.status !== 'connected' ? <span>交易数据还没导入，成交证据为空。</span> : null}
+              </div>
+            )
+          })()}
+
           <div className="pms-inspiration-compose">
             <textarea
               value={body}
